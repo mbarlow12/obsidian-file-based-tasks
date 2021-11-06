@@ -1,27 +1,29 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {App, debounce, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
 
-interface MyPluginSettings {
-	mySetting: string;
-}
+const backlog = 'Backlog.md';
+const completed = 'Completed.md';
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: TaskManagerSettings = {
 	mySetting: 'default'
 }
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+/**
+ * on startup, process all the files in the vault, looking for the checklist regex
+ */
+export default class TaskManagerPlugin extends Plugin {
+	settings: TaskManagerSettings;
 
 	async onload() {
-		console.log('loading plugin');
+		console.log(this);
 
 		await this.loadSettings();
 
-		this.addRibbonIcon('dice', 'Sample Plugin', () => {
-			new Notice('This is a notice!');
-		});
+		// this.addRibbonIcon('dice', 'Sample Plugin', () => {
+		// 	new Notice('This is a notice!');
+		// });
 
-		this.addStatusBarItem().setText('Status Bar Text');
+		// this.addStatusBarItem().setText('Status Bar Text');
 
+		/*
 		this.addCommand({
 			id: 'open-sample-modal',
 			name: 'Open Sample Modal',
@@ -39,18 +41,18 @@ export default class MyPlugin extends Plugin {
 				return false;
 			}
 		});
+		 */
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		// this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		this.registerCodeMirror((cm: CodeMirror.Editor) => {
-			console.log('codemirror', cm);
-		});
+		// this.registerCodeMirror((cm: CodeMirror.Editor) => {
+		// 	console.log('codemirror', cm);
+		// });
 
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		this.registerDomEvent(document, 'keyup', debounce(handlKeyup, 300, true));
 
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		// set some code to run on interval, may be good for backing the data up
+		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -66,6 +68,11 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
+function handlKeyup(event: KeyboardEvent) {
+	console.log('keyupping!');
+}
+
+/*
 class SampleModal extends Modal {
 	constructor(app: App) {
 		super(app);
@@ -83,9 +90,9 @@ class SampleModal extends Modal {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: TaskManagerPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: TaskManagerPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -109,4 +116,4 @@ class SampleSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 	}
-}
+}*/

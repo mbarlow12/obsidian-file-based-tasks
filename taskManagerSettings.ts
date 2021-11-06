@@ -1,0 +1,3 @@
+interface TaskManagerSettings {
+    mySetting: string;
+}
