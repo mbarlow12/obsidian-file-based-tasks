@@ -1,75 +1,157 @@
-import {App, debounce, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
-
-const backlog = 'Backlog.md';
-const completed = 'Completed.md';
+import {
+    App,
+    debounce,
+    FileManager,
+    Modal,
+    Notice, parseFrontMatterEntry,
+    Plugin,
+    PluginManifest,
+    PluginSettingTab,
+    Setting,
+    TAbstractFile, TFile, TFolder
+} from 'obsidian';
+import {TaskIndex} from "./src/TaskIndex";
+import TaskParser, {TaskLine} from "./src/TaskParser";
+import {BaseTask} from "./src/Task";
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
-	mySetting: 'default'
+    indexFile: 'taskIndex.txt',
+    backlogFileName: 'backlog',
+    completedFileName: 'completed',
+    taskTitlePrefix: '',
 }
 /**
  * on startup, process all the files in the vault, looking for the checklist regex
  */
-export default class TaskManagerPlugin extends Plugin {
-	settings: TaskManagerSettings;
+export default class ObsidianTaskManager extends Plugin {
+    settings: TaskManagerSettings;
+    index: TaskIndex;
+    private initialized = false;
 
-	async onload() {
-		console.log(this);
+    constructor(app: App, manifest: PluginManifest) {
+        super(app, manifest);
+    }
 
-		await this.loadSettings();
+    async onload() {
 
-		// this.addRibbonIcon('dice', 'Sample Plugin', () => {
-		// 	new Notice('This is a notice!');
-		// });
+        this.app.workspace.onLayoutReady(() => {
+            if (!this.initialized) {
+                this.loadSettings()
+                    .then(() => {
+                        this.index = new TaskIndex(this.settings.indexFile);
+                        this.processTasksDirectory()
+                    });
+            }
+        });
 
-		// this.addStatusBarItem().setText('Status Bar Text');
+        // get task directory
 
-		/*
-		this.addCommand({
-			id: 'open-sample-modal',
-			name: 'Open Sample Modal',
-			// callback: () => {
-			// 	console.log('Simple Callback');
-			// },
-			checkCallback: (checking: boolean) => {
-				let leaf = this.app.workspace.activeLeaf;
-				if (leaf) {
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-					return true;
-				}
-				return false;
-			}
-		});
-		 */
+        // this.registerDomEvent(document, 'keyup', debounce(handlKeyup, 300, true));
 
-		// this.addSettingTab(new SampleSettingTab(this.app, this));
+        // set some code to run on interval, may be good for backing the data up
+        // this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+    }
 
-		// this.registerCodeMirror((cm: CodeMirror.Editor) => {
-		// 	console.log('codemirror', cm);
-		// });
+    onunload() {
+    }
 
-		this.registerDomEvent(document, 'keyup', debounce(handlKeyup, 300, true));
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
 
-		// set some code to run on interval, may be good for backing the data up
-		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
 
-	onunload() {
-		console.log('unloading plugin');
-	}
+    registerEvents() {
+        [
+            this.app.vault.on('create', this.handleFileCreated),
+            this.app.vault.on('modify', this.handleFileModified),
+            this.app.vault.on('delete', this.handleFileDeleted),
+            this.app.vault.on('rename', this.handleFileRenamed),
+        ].forEach(this.registerEvent);
+    }
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
+    private handleFileCreated(abstractFile: TAbstractFile) {
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+    }
+
+    private handleFileModified(abstractFile: TAbstractFile) {
+
+    }
+
+    private handleFileDeleted(abstractFile: TAbstractFile) {
+
+    }
+
+    private handleFileRenamed(abstractFile: TAbstractFile) {
+
+    }
+
+    private indexTodosFromFile(tFile: TFile) {
+        this.app.vault.cachedRead(tFile)
+            .then(TaskParser.parseLines)
+            .then(taskLines => this.processFileTasks(taskLines, tFile))
+            .catch(console.log);
+    }
+
+    public get tasksDirectory(): TFolder | null {
+        return this.app.vault.getAbstractFileByPath(this.settings.taskDirectory) as TFolder | null;
+    }
+
+    private async processTasksDirectory() {
+        debugger;
+        const tasksFolder = this.tasksDirectory;
+        if (!tasksFolder) {
+            await this.app.vault.createFolder(this.settings.taskDirectory);
+        } else {
+            for (const tFile of tasksFolder.children) {
+                const pathRelativeToVault = tFile.path;
+                const existing = this.index.getTaskByName(tFile.name);
+                if (existing) {
+                    // what to do here?
+                    // we should not have dupliates
+                }
+                const data = await this.app.vault.cachedRead(tFile as TFile);
+                const fm = await this.app.metadataCache.getFileCache(tFile as TFile)?.frontmatter;
+                const subtasks = TaskParser.parseLines(data);
+            }
+        }
+    }
+
+    private buildTaskIndex() {
+        const index = new TaskIndex();
+        const vault = this.app.vault;
+        const cache = this.app.metadataCache;
+        const files = vault.getMarkdownFiles();
+        for (const tFile of files) {
+            vault.cachedRead(tFile)
+                .then(contents => {
+                    const {frontmatter, listItems} = cache.getFileCache(tFile);
+                })
+        }
+    }
+
+    /**
+     *
+     * @param bTasks
+     * @param tFile
+     * @private
+     */
+    private processFileTasks(bTasks: TaskLine[], tFile: TFile) {
+        for (const [lineNo, {name, status}] of bTasks) {
+            const primaryTask = this.index.getTaskByName(name);
+            if (!primaryTask) {
+                // create new task
+            } else {
+                // add location to task
+            }
+        }
+    }
 }
 
 function handlKeyup(event: KeyboardEvent) {
-	console.log('keyupping!');
+    console.log('keyupping!');
 }
 
 /*

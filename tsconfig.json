@@ -1,9 +1,12 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "inlineSourceMap": true,
+    "outDir": "./dist/",
+    "esModuleInterop": true,
     "inlineSources": true,
+    "allowSyntheticDefaultImports": true,
     "module": "ESNext",
+    "sourceMap": true,
     "target": "es6",
     "allowJs": true,
     "noImplicitAny": true,
@@ -11,12 +14,12 @@
     "importHelpers": true,
     "lib": [
       "dom",
-      "es5",
+      "es6",
       "scripthost",
-      "es2015"
+      "es2020"
     ]
   },
   "include": [
     "**/*.ts"
-  ]
+  ],
 }

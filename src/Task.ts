@@ -1,17 +1,30 @@
-enum TaskStatus {
-    TODO,
-    DONE
+import {TFolder} from "obsidian";
+
+export const TaskRecordType = '--TASK_FILE--';
+
+export enum TaskStatus {
+    TODO = 'TODO',
+    DONE = 'DONE'
 }
 
-export interface Task {
+export enum iTaskStatus {
+    TODO = 'O',
+    DONE = 'X'
+}
+
+export interface BaseTask {
     name: string;
-    id: string;
+    status: TaskStatus;
+    parents?: Task[];
+    children?: Task[];
+    locations: TaskLocation[];
+}
+
+export interface Task extends BaseTask {
+    id: number;
     created: Date;
     updated: Date;
     description?: string;
-    status: TaskStatus;
-    parent?: Task;
-    children?: Task[];
     duplicates?: Task[];
 }
 
@@ -24,10 +37,9 @@ export interface TaskList {
 }
 
 export interface TaskLocation {
-    file: 'backlog'|'completed';
+    filePath: string;
     line: number;
 }
-
 /*
 create task file
 get task template

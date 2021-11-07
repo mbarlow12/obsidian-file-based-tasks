@@ -1,6 +1,6 @@
 {
 	"id": "mb-task-manager",
-	"name": "Barlow's Bangin' Tasks",
+	"name": "Barlow's Bangin' Task Manager",
 	"version": "1.0.1",
 	"minAppVersion": "0.9.12",
 	"description": "A simple, file-based task management platform.",
