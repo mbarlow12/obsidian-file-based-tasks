@@ -13,7 +13,9 @@ const getRegex = (start: string = frontDelim, end: string = rearDelim) => {
     return new RegExp(r, 'g');
 }
 
-const requiredKeys = ['status','name', 'locations', 'created', 'updated']
+const dataStr = (data: unknown): string =>`${frontDelim}${data}${rearDelim}`;
+
+const requiredKeys: Array<keyof Task> = ['status','name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
     private tasks: Record<string, Task>
@@ -108,5 +110,14 @@ export class TaskIndex {
             created: new Date(created),
             updated: new Date(updated)
         };
+    }
+
+    private taskToString(task: Task): string {
+        return requiredKeys.map(key => dataStr(task[key])).join('')
+    }
+
+    public writeToIndexFile(): Promise<void> {
+        const lines = Object.values(this.tasks).sort((a, b) => a.id - b.id);
+        return this.vault.modify(this.indexTFile, lines.join('\n'), {mtime: Date.now()});
     }
 }

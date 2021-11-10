@@ -12,12 +12,23 @@ export enum iTaskStatus {
     DONE = 'X'
 }
 
+
 export interface BaseTask {
     name: string;
     status: TaskStatus;
     parents?: Task[];
     children?: Task[];
     locations: TaskLocation[];
+}
+
+type B = {
+    [k in keyof BaseTask]: BaseTask[k];
+};
+
+function a (d: B) {
+    for (let key in d) {
+        d[key as keyof B]
+    }
 }
 
 export interface Task extends BaseTask {
