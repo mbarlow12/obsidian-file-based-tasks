@@ -5,15 +5,15 @@ import {TFile, TFolder, Vault} from "obsidian";
  * Like todo.txt
  * - <status> <name>
  */
-const frontDelim = "\|\*\~ ";
-const rearDelim = " \~\*\|";
+const frontDelim = "\|\*\~";
+const rearDelim = "\~\*\|";
 const lineKeyPattern = /\[\[(?<key>\w+)\]\](?<data>(?:.|[\n\r])+)/;
 const getRegex = (start: string = frontDelim, end: string = rearDelim) => {
     const r = `${start}(.*?(?=${end}))${end}`;
     return new RegExp(r, 'g');
 }
 
-const requiredKeys = ['location', 'created', 'updated']
+const requiredKeys = ['status','name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
     private tasks: Record<string, Task>
@@ -30,6 +30,7 @@ export class TaskIndex {
             .then(contents => {
                 for (const [lineNum, taskLine] of contents.split("\n").entries()) {
                     const task: Task = this.getTaskFromLine(lineNum, taskLine);
+                    this.addTask(task)
                 }
             })
     }
@@ -92,11 +93,17 @@ export class TaskIndex {
     }
 
     private parseLocationData(locationInfoString: string): TaskLocation[] {
-        return [];
+        return locationInfoString.split('||').map(file_line_num => {
+           const [filePath, line_num] = file_line_num.split(':');
+           return {
+               filePath,
+               line: Number.parseInt(line_num)
+           };
+        });
     }
 
     private parseTimestamps(timestampsString: string): Record<'created'|'updated', Date> {
-        const [created, updated] = timestampsString.split(';;;;');
+        const [created, updated] = timestampsString.split(';;');
         return {
             created: new Date(created),
             updated: new Date(updated)
