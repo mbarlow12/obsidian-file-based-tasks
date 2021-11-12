@@ -11,10 +11,13 @@ import {
     TAbstractFile, TFile, TFolder
 } from 'obsidian';
 import {TaskIndex} from "./src/TaskIndex";
-import TaskParser, {TaskLine} from "./src/TaskParser";
-import {BaseTask} from "./src/Task";
+import TaskParser from "./src/TaskParser";
+import globals from "./src/globals";
+import {FileTaskLine} from "./src/Task";
+import {TaskFileManager} from "./src/TaskFileManager";
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
+    taskDirectoryName: 'tasks',
     indexFile: 'taskIndex.txt',
     backlogFileName: 'backlog',
     completedFileName: 'completed',
@@ -26,6 +29,7 @@ const DEFAULT_SETTINGS: TaskManagerSettings = {
 export default class ObsidianTaskManager extends Plugin {
     settings: TaskManagerSettings;
     index: TaskIndex;
+    taskFileManager: TaskFileManager;
     private initialized = false;
 
     constructor(app: App, manifest: PluginManifest) {
@@ -38,7 +42,7 @@ export default class ObsidianTaskManager extends Plugin {
             if (!this.initialized) {
                 this.loadSettings()
                     .then(() => {
-                        this.index = new TaskIndex(this.settings.indexFile);
+                        this.taskFileManager = new TaskFileManager(this.app.vault, this.app.metadataCache, this.settings.taskDirectoryName)
                         this.processTasksDirectory()
                     });
             }
@@ -96,26 +100,29 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     public get tasksDirectory(): TFolder | null {
-        return this.app.vault.getAbstractFileByPath(this.settings.taskDirectory) as TFolder | null;
+        return this.app.vault.getAbstractFileByPath(this.settings.taskDirectoryName) as TFolder | null;
     }
 
+    /**
+     * Builds the index from the tasks directory.
+     * @private
+     */
     private async processTasksDirectory() {
-        debugger;
-        const tasksFolder = this.tasksDirectory;
-        if (!tasksFolder) {
-            await this.app.vault.createFolder(this.settings.taskDirectory);
-        } else {
-            for (const tFile of tasksFolder.children) {
-                const pathRelativeToVault = tFile.path;
-                const existing = this.index.getTaskByName(tFile.name);
-                if (existing) {
-                    // what to do here?
-                    // we should not have dupliates
-                }
-                const data = await this.app.vault.cachedRead(tFile as TFile);
-                const fm = await this.app.metadataCache.getFileCache(tFile as TFile)?.frontmatter;
-                const subtasks = TaskParser.parseLines(data);
+        if (!this.taskFileManager.tasksDirectory) {
+            await this.app.vault.createFolder(this.settings.taskDirectoryName);
+            const tasksFolder = this.app.vault.getAbstractFileByPath(this.settings.taskDirectoryName);
+            this.taskFileManager.tasksDirectory = tasksFolder as TFolder;
+        }
+        const tasksFolder = this.taskFileManager.tasksDirectory;
+        const witnessedNames: Set<string> = new Set();
+        for (const tFile of tasksFolder.children) {
+            const existing = this.index.getTaskByName(tFile.name);
+            if (existing) {
+                // what to do here?
+                // we should not have dupliates
             }
+            const task = await this.taskFileManager.getTaskFromTaskFile(tFile as TFile, witnessedNames)
+            this.index.addTask(task);
         }
     }
 
@@ -138,7 +145,7 @@ export default class ObsidianTaskManager extends Plugin {
      * @param tFile
      * @private
      */
-    private processFileTasks(bTasks: TaskLine[], tFile: TFile) {
+    private processFileTasks(bTasks: FileTaskLine[], tFile: TFile) {
         for (const [lineNo, {name, status}] of bTasks) {
             const primaryTask = this.index.getTaskByName(name);
             if (!primaryTask) {

@@ -1,6 +1,6 @@
 import Parser from './TaskParser';
-import {BaseTask, TaskStatus} from "./Task";
 import {createTaskFileContents} from "./TestHelpers";
+import {IAnonymousTask, TaskStatus} from "./Task/types";
 
 /**
  * TODO invalid cases and handle reformatting
@@ -12,21 +12,21 @@ import {createTaskFileContents} from "./TestHelpers";
 
 test('Parse a single incomplete todo item', () => {
     const line = '- [ ] an incomplete todo';
-    const t: BaseTask = Parser.parseLine(line);
+    const t: IAnonymousTask = Parser.parseLine(line);
     expect(t.status).toEqual(TaskStatus.TODO);
     expect(t.name).toEqual('an incomplete todo');
 });
 
 test('Parse a single complete todo item', () => {
     const line = '- [x] a complete todo';
-    const t: BaseTask = Parser.parseLine(line);
+    const t: IAnonymousTask = Parser.parseLine(line);
     expect(t.status).toEqual(TaskStatus.DONE);
     expect(t.name).toEqual('a complete todo');
 });
 
 test('Parse a todo with a nested todo in the text', () => {
     const line = '- [x] a complete todo but here - [ ] is another oddity';
-    const t: BaseTask = Parser.parseLine(line);
+    const t: IAnonymousTask = Parser.parseLine(line);
     expect(t.status).toEqual(TaskStatus.DONE);
     expect(t.name).toEqual('a complete todo but here - [ ] is another oddity');
 });

@@ -1,5 +1,6 @@
-import {BaseTask, iTaskStatus, Task, TaskLocation, TaskStatus} from "./Task";
 import {TFile, TFolder, Vault} from "obsidian";
+import {ITask, TaskLocation, TaskStatus} from "./Task/types";
+import {clone} from 'lodash';
 
 /**
  * Like todo.txt
@@ -15,26 +16,17 @@ const getRegex = (start: string = frontDelim, end: string = rearDelim) => {
 
 const dataStr = (data: unknown): string =>`${frontDelim}${data}${rearDelim}`;
 
-const requiredKeys: Array<keyof Task> = ['status','name', 'locations', 'created', 'updated']
+const requiredKeys: Array<keyof ITask> = ['status','name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
-    private tasks: Record<string, Task>
-    private vault: Vault;
-    private fileName: string;
-    private indexTFile: TFile;
+    private tasks: Record<string, ITask>
 
-    constructor(vault: Vault, indexFilename: string) {
-        this.vault = vault;
+    constructor(tasks: ITask[] = []) {
         this.tasks = {};
-        this.fileName = indexFilename;
-        const indexFile = this.getIndexFile();
-        vault.cachedRead(indexFile)
-            .then(contents => {
-                for (const [lineNum, taskLine] of contents.split("\n").entries()) {
-                    const task: Task = this.getTaskFromLine(lineNum, taskLine);
-                    this.addTask(task)
-                }
-            })
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            this.tasks[task.name] = task;
+        }
     }
 
     public static taskID(name: string, taskDir: TFolder) {
@@ -45,29 +37,62 @@ export class TaskIndex {
 
     }
 
-    addTask(t: Task) {
-
+    addTask(t: ITask) {
+        if (this.taskExists(t.name)) {
+            // TODO: consider erroring or changing the name?
+            return;
+        }
+        this.tasks[t.name] = t;
     }
 
-    addTasks(tasks: Task[]) {}
-
-    deleteTask(t: Task) {
-
+    addTasks(tasks: ITask[]) {
+        for (let i = 0; i < tasks.length; i++) {
+            this.addTask(tasks[i]);
+        }
     }
 
-    clear() {}
+    taskExists(name: string) {
+        return Object.keys(this.tasks).includes(name);
+    }
 
-    updateTask(t: Task) {}
+    deleteTask(t: ITask) {
+        if (this.taskExists(t.name)) {
+            delete this.tasks[t.name];
+        }
+    }
 
-    getTaskById(id: number|string) {}
+    clear() {
+        this.tasks = {};
+    }
 
-    public getTaskByName(name: string): Task|null {
+    updateTask(t: ITask) {
+        if (!this.taskExists(t.name)) {
+            this.tasks[t.name] = t;
+            return t;
+        }
+        else {
+            const existing = clone(this.tasks[t.name]);
+            const  newTask = {
+                ...existing,
+                ...t
+            };
+            this.tasks[t.name] = newTask;
+            return newTask;
+        }
+    }
+
+    getTaskById(id: number|string) {
+        return this.tasks[id];
+    }
+
+    public getTaskByName(name: string): ITask|null {
         if (name in this.tasks) {
             return this.tasks[name];
         }
         return null;
     }
 
+    /**
     public getIndexFile(name?: string): TFile {
         if (name)
             return this.vault.getAbstractFileByPath(name) as TFile;
@@ -80,7 +105,7 @@ export class TaskIndex {
         return this.indexTFile;
     }
 
-    private getTaskFromLine(lineNum: number, taskLine: string): Task {
+    private getTaskFromLine(lineNum: number, taskLine: string): ITask {
         const re = getRegex();
         const [status, name, locationInfo, ...taskMetadatas] = [...taskLine.matchAll(re)].map(m => m[1]);
         const [timestamps] = taskMetadatas.slice(taskMetadatas.length - 1);
@@ -112,7 +137,7 @@ export class TaskIndex {
         };
     }
 
-    private taskToString(task: Task): string {
+    private taskToString(task: ITask): string {
         return requiredKeys.map(key => dataStr(task[key])).join('')
     }
 
@@ -120,4 +145,5 @@ export class TaskIndex {
         const lines = Object.values(this.tasks).sort((a, b) => a.id - b.id);
         return this.vault.modify(this.indexTFile, lines.join('\n'), {mtime: Date.now()});
     }
+     */
 }

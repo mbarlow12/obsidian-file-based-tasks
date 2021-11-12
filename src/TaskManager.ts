@@ -1,15 +1,15 @@
 /**
  *
  */
-import {Task, TaskList} from "./Task";
 import {TFile, Vault} from "obsidian";
+import {ITask, TaskList} from "./Task/types";
 
 export class TaskManager {
-    private tasks: Record<string, Task[]>; // id -> Task
+    private tasks: Record<string, ITask[]>; // id -> Task
     private backlogFileName: string;
     private completedFileName: string;
     private vault: Vault;
-    private listeners: ((tasks: Task[]) => unknown)[];
+    private listeners: ((tasks: ITask[]) => unknown)[];
     private taskDirectory?: string;
 
     constructor(backlogFileName?: string, completedFileName?: string) {
@@ -39,7 +39,7 @@ export class TaskManager {
     moveItem(nameOrId: string, destination: string): void {
     }
 
-    searchItems(needle: string): Task[] { return []; }
+    searchItems(needle: string): ITask[] { return []; }
 
     registerEventHandlers() {}
     invokeListeners() {}

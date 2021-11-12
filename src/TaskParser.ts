@@ -1,17 +1,11 @@
-import {BaseTask, Task, TaskStatus} from "./Task";
-
-export interface TaskLine extends Array<number|BaseTask> {
-    0: number,
-    1: BaseTask,
-    length: 2
-}
+import {IAnonymousTask, FileTaskLine, TaskStatus} from "./Task/types";
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
     static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S.*)/;
     static generalPattern: RegExp = /(?:-|\*)\s*\[(?<complete>[\sxX]*)\]\s*(?<taskLine>\S.*)/;
 
-    static parseLine(line: string): BaseTask | null {
+    static parseLine(line: string): IAnonymousTask | null {
         const match = line.match(TaskParser.strictPattern);
         if (match) {
             const {complete, taskLine} = match.groups;
@@ -23,10 +17,21 @@ export default class TaskParser {
             return null;
     }
 
-    static parseLines(contents: string): Array<TaskLine> {
+    static parseLines(contents: string): Array<FileTaskLine> {
         const lines = contents.split(/\r?\n/g);
         return lines.map((line, index) => {
-           return [index, TaskParser.parseLine(line)] as TaskLine
+            return [index, TaskParser.parseLine(line)] as FileTaskLine
         }).filter(tl => tl[1] !== null);
+    }
+
+    static parseLinesToRecord(contents: string): Record<number, IAnonymousTask> {
+        const lines = contents.split(/\r?\n/g);
+        return lines.reduce((rec, line, lineNum) => {
+            const task = TaskParser.parseLine(line);
+            if (task) {
+                rec[lineNum] = task;
+            }
+            return rec;
+        }, {} as Record<number, IAnonymousTask>);
     }
 }
