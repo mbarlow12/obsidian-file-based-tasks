@@ -1,8 +1,9 @@
-import {FileManager, FileSystemAdapter, MetadataCache, TFile, TFolder, Vault} from "obsidian";
-import {FileTaskLine, IAnonymousTask, ITask, Task, TaskRecordType, TaskStatus, TaskYamlObject} from "./Task";
+import {FileSystemAdapter, MetadataCache, TFile, TFolder, Vault} from "obsidian";
+import {IAnonymousTask, ITask, Task, TaskRecordType, TaskStatus, TaskYamlObject} from "./Task";
 import {keys} from "ts-transformer-keys";
-import {pick, clone} from 'lodash';
+import {clone, pick} from 'lodash';
 import TaskParser from "./TaskParser";
+import {TaskIndex} from "./TaskIndex";
 
 type FileTreeNode = {
     name: string;
@@ -85,23 +86,22 @@ export class TaskFileManager {
     }
 
     public getAppConfig() {
-        const vaultPath = (this.vault.adapter as FileSystemAdapter).getBasePath();
-        const configPath = `${vaultPath}/${this.vault.configDir}/app.json`;
-        return require(configPath);
+        return (this.vault as any).config;
     }
 
-    public async parseTasksFromFile(tFile: TFile): Promise<ITask|Record<number, IAnonymousTask>> {
+    public async parseTasksFromFile(tFile: TFile, witnessed: TaskIndex = new TaskIndex()): Promise<[ITask|null, Record<number, IAnonymousTask>|null]> {
         // has front matter?
         const cache = this.mdCache.getFileCache(tFile);
         if (cache.frontmatter &&
             cache.frontmatter.type &&
             cache.frontmatter.type === TaskRecordType) {
-            const witnessed: Set<string> = new Set();
-            return this.getTaskFromTaskFile(tFile, witnessed)
+            const task = await this.getTaskFromTaskFile(tFile, witnessed);
+            return [task, null];
         }
         else {
             // file contents contain anon tasks only
-            return this.getTasksFromFile(tFile);
+            const record = await this.getTasksFromFile(tFile);
+            return [null, record];
         }
     }
 
@@ -147,11 +147,15 @@ export class TaskFileManager {
             })
     }
 
-    public async getTaskFromTaskFile(file: TFile, witnessed: Set<string> = new Set()): Promise<ITask> {
+    public async getTaskFromTaskFile(file: TFile, witnessed: TaskIndex = new TaskIndex()): Promise<ITask> {
         const cache = this.mdCache.getFileCache(file);
-        const taskYml: TaskYamlObject = pick(cache.frontmatter, keys<ITask>());
+        const taskYml: TaskYamlObject = pick(cache.frontmatter, ['name', 'locations', 'status', 'created', 'updated', 'parents', 'children']);
         const task = Task.flatFromYamlObject(taskYml);
-        witnessed.add(task.name);
+        task.name = task.name ?? file.basename;
+        if (witnessed.taskExists(task.name)) {
+            return witnessed.getTaskByName(task.name);
+        }
+        witnessed.addTask(task);
         task.children = await this.buildTasksFromList(task.children, witnessed);
         task.parents = await this.buildTasksFromList(task.parents, witnessed);
         const contentStart = cache.sections[0].position.end.line + 1;
@@ -159,14 +163,17 @@ export class TaskFileManager {
             .then(data => data.split('\n').slice(contentStart))
             .then(lines => lines.join('\n'));
         task.description = contents;
+        witnessed.updateTask(task);
         return task;
     }
 
-    private buildTasksFromList(tasks: ITask[], seen: Set<string> = new Set()): Promise<ITask[]> {
-        const taskPromises = tasks.filter(task => !seen.has(task.name))
+    private buildTasksFromList(tasks: ITask[], witnessed: TaskIndex = new TaskIndex()): Promise<ITask[]> {
+        const taskPromises = tasks
             .map(task => {
-                seen.add(task.name);
-                return this.getTaskFromTaskFile(this.getTaskFile(task.name), seen)
+                if (witnessed.taskExists(task.name)) {
+                    return witnessed.getTaskByName(task.name);
+                }
+                return this.getTaskFromTaskFile(this.getTaskFile(task.name), witnessed)
             });
         return Promise.all<ITask>(taskPromises);
     }
@@ -190,5 +197,23 @@ export class TaskFileManager {
                 roots.push(currentParent)
             }
         }
+    }
+
+    private updateBacklog(allTasks: ITask[]) {
+        let task: ITask;
+        const contents: string[] = [];
+        for (let i = 0; i < allTasks.length; i++) {
+            task = allTasks[i];
+            if (task.status === TaskStatus.TODO) {
+                if (task.parents.length > 0)
+                    continue;
+                contents.push(...Task.asChecklist(task,this.getAppConfig().tabSize || 4))
+            }
+        }
+        const backlog = this.vault.getMarkdownFiles().filter(f => f.name.startsWith('Backlog'))[0];
+        this.vault.modify(backlog, contents.join('\n'))
+            .then(() => {
+                // backlog updated
+            });
     }
 }

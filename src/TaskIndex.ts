@@ -1,6 +1,7 @@
-import {TFile, TFolder, Vault} from "obsidian";
+import {TFolder} from "obsidian";
 import {ITask, TaskLocation, TaskStatus} from "./Task/types";
 import {clone} from 'lodash';
+import {Task} from "./Task";
 
 /**
  * Like todo.txt
@@ -14,18 +15,24 @@ const getRegex = (start: string = frontDelim, end: string = rearDelim) => {
     return new RegExp(r, 'g');
 }
 
+const locStr = (l: TaskLocation): string => `${l.filePath}:${l.line}`;
+
 const dataStr = (data: unknown): string =>`${frontDelim}${data}${rearDelim}`;
 
 const requiredKeys: Array<keyof ITask> = ['status','name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
     private tasks: Record<string, ITask>
+    private locations: Record<string, ITask>
 
     constructor(tasks: ITask[] = []) {
         this.tasks = {};
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
             this.tasks[task.name] = task;
+            for (const location of task.locations) {
+                this.locations[locStr(location)] = this.tasks[task.name];
+            }
         }
     }
 
@@ -37,12 +44,34 @@ export class TaskIndex {
 
     }
 
+    createTask(name: string, location: TaskLocation): ITask {
+        this.tasks[name] = new Task(name, TaskStatus.TODO, [location]);
+        this.locations[locStr(location)] = this.tasks[name];
+        return this.tasks[name];
+    }
+
+    completeTask(name: string) {
+        if (this.taskExists(name)) {
+            const task = this.getTaskByName(name);
+            task.status = TaskStatus.DONE;
+            this.updateTask(task);
+        }
+    }
+
     addTask(t: ITask) {
         if (this.taskExists(t.name)) {
             // TODO: consider erroring or changing the name?
             return;
         }
-        this.tasks[t.name] = t;
+        if (t instanceof Task) {
+            this.tasks[t.name] = t;
+        }
+        else {
+            this.tasks[t.name] = Task.fromITask(t);
+        }
+        for (const location of this.tasks[t.name].locations) {
+            this.locations[locStr(location)] = this.tasks[t.name];
+        }
     }
 
     addTasks(tasks: ITask[]) {
@@ -55,20 +84,34 @@ export class TaskIndex {
         return Object.keys(this.tasks).includes(name);
     }
 
-    deleteTask(t: ITask) {
-        if (this.taskExists(t.name)) {
+    deleteLocations(locs: TaskLocation[]) {
+        for (let i = 0; i < locs.length; i++) {
+            delete this.locations[locStr(locs[i])];
+        }
+    }
+
+    deleteTask(t: ITask|string) {
+        if (typeof t === 'string') {
+            if (this.taskExists(t)) {
+                this.deleteLocations(this.tasks[t].locations);
+                delete this.tasks[t]
+            }
+        }
+        else {
+            this.deleteLocations(this.tasks[t.name].locations);
             delete this.tasks[t.name];
         }
     }
 
     clear() {
         this.tasks = {};
+        this.locations = {};
     }
 
     updateTask(t: ITask) {
         if (!this.taskExists(t.name)) {
-            this.tasks[t.name] = t;
-            return t;
+            this.addTask(t);
+            return this.tasks[t.name];
         }
         else {
             const existing = clone(this.tasks[t.name]);
@@ -77,6 +120,14 @@ export class TaskIndex {
                 ...t
             };
             this.tasks[t.name] = newTask;
+            for (let loc in this.locations) {
+                if (this.locations[loc].name === t.name) {
+                    delete this.locations[loc]
+                }
+            }
+            for (const location of this.tasks[t.name].locations) {
+                this.locations[locStr(location)] = this.tasks[t.name];
+            }
             return newTask;
         }
     }
@@ -90,6 +141,16 @@ export class TaskIndex {
             return this.tasks[name];
         }
         return null;
+    }
+
+    getTasksByFilename(name: string): ITask[] {
+        const ret = [];
+        for (let key in this.locations) {
+            if (key.split(':')[0] === name) {
+                ret.push(this.locations[key])
+            }
+        }
+        return ret;
     }
 
     /**

@@ -27,14 +27,14 @@ export class Task implements ITask, Yamlable {
     public static flatFromYamlObject({name, status, locations, created, updated, parents, children}: TaskYamlObject) {
         const task = new Task(name);
         task.status = status === `DONE` ? TaskStatus.DONE : TaskStatus.TODO;
-        task.locations = locations.map(locStr => {
+        task.locations = locations && locations.map(locStr => {
             const [filePath, line] = locStr.split(':');
             return { filePath, line: Number.parseInt(line) };
         });
         task.updated = new Date(updated);
         task.created = new Date(created);
-        task.parents = parents.map(p => new Task(p));
-        task.children = children.map(cName => new Task(cName));
+        task.parents = (parents || []).map(p => new Task(p));
+        task.children = (children || []).map(cName => new Task(cName));
         return task;
     }
 
@@ -104,7 +104,8 @@ export class Task implements ITask, Yamlable {
     }
 
     public addLocation(loc: TaskLocation) {
-        this._locations.push(loc);
+        if (!this.hasLocation(loc))
+            this._locations.push(loc);
     }
 
     public removeLocation(loc: TaskLocation) {
@@ -112,6 +113,12 @@ export class Task implements ITask, Yamlable {
         if (i !== -1)
             return this._locations.splice(i, 1)[0];
         return null;
+    }
+
+    public hasLocation(loc: TaskLocation) {
+        const i = this._locations
+            .findIndex(({filePath, line}) => filePath === loc.filePath && line === loc.line);
+        return i > -1;
     }
 
     get name(): string {
@@ -183,9 +190,15 @@ export class Task implements ITask, Yamlable {
         return `${yaml}\n${this.description}`;
     }
 
-    public asChecklist() {
-        const x = this.status === TaskStatus.DONE ? 'x' : ' ';
-        return `- [${x}] ${this.name}`;
+    public static asChecklist(task: ITask, colWidth: number = 4): string[] {
+        const x = task.status === TaskStatus.DONE ? 'x' : ' ';
+        let contents = [`- [${x}] ${task.name}`];
+        for (const child of task.children) {
+            const childChecklistLines = Task.asChecklist(child, colWidth)
+                .map(line => Array(colWidth).fill(' ').join('') + line);
+            contents.push(...childChecklistLines);
+        }
+        return contents;
     }
 }
 /*

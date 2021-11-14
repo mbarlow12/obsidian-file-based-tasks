@@ -12,9 +12,9 @@ import {
 } from 'obsidian';
 import {TaskIndex} from "./src/TaskIndex";
 import TaskParser from "./src/TaskParser";
-import globals from "./src/globals";
-import {FileTaskLine} from "./src/Task";
+import {FileTaskLine, IAnonymousTask, Task, TaskLocation} from "./src/Task";
 import {TaskFileManager} from "./src/TaskFileManager";
+import {entries, intersection} from 'lodash';
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
@@ -38,12 +38,17 @@ export default class ObsidianTaskManager extends Plugin {
 
     async onload() {
 
-        this.app.workspace.onLayoutReady(() => {
+        this.app.workspace.onLayoutReady(async () => {
             if (!this.initialized) {
+                await this.loadSettings();
+                await this.processTasksDirectory();
+                await this.registerEvents();
                 this.loadSettings()
                     .then(() => {
                         this.taskFileManager = new TaskFileManager(this.app.vault, this.app.metadataCache, this.settings.taskDirectoryName)
-                        this.processTasksDirectory()
+                        this.processTasksDirectory().then(() => {
+                            this.registerEvents();
+                        })
                     });
             }
         });
@@ -77,11 +82,78 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     private handleFileCreated(abstractFile: TAbstractFile) {
-
+        // parse file
+        // is it a task file?
+            // yes? -> compare data to index, update if diff from most recent updated value
+            // no? -> parse file, create anon todos if necessary
     }
 
+    /**
+     * This will either be called with a task file or not. In the former, we simply grab the task metadata
+     * and description, check index existence, and update the index.
+     *
+     * The latter is trickier. We gather the checklists from the file (anonymous tasks). We then need to compare names,
+     * relationships, and locations.
+     * @param abstractFile
+     * @private
+     */
     private handleFileModified(abstractFile: TAbstractFile) {
+        // same as created
+        this.taskFileManager.parseTasksFromFile(abstractFile as TFile, this.index)
+            .then(([task, record]) => {
+                if (task) {
 
+                }
+                if (record) {
+                    // iterate over the records, and only add new or changed ones
+                    // after we have everything, we can check if the index currently thinks a task
+                    // should be in this file, indicating a deletion
+                    const newTasks: Task[] = [];
+                    const updateTasks: Task[] = [];
+                    for (let [numStr, anonTask] of entries(record)) {
+                        const lineNumber = Number.parseInt(numStr);
+                        if (this.index.taskExists(anonTask.name)) {
+                            // is anything different?
+                            const anonLoc: TaskLocation = {
+                                filePath: abstractFile.path,
+                                line: lineNumber
+                            };
+                            const task = this.index.getTaskByName(anonTask.name) as Task;
+                            const getName = (arg: IAnonymousTask) => arg.name;
+                            let diff = task.status !== anonTask.status ||
+                                !task.hasLocation(anonLoc) ||
+                                intersection(task.children.map(getName), anonTask.children.map(getName)).length > 0 ||
+                                intersection(task.parents.map(getName), anonTask.parents.map(getName)).length > 0;
+
+                            // may have removed a location
+                            const currentTasksInFile = this.index.getTasksByFilename(abstractFile.name);
+
+                            if (diff) {
+                                // trigger update event
+                            }
+                            else {
+                                // do we do anything?
+                            }
+
+                        }
+                        else {
+                            const task = new Task(anonTask.name, anonTask.status);
+                            task.locations = [{filePath: abstractFile.path, line: lineNumber}];
+                            for (let child of (anonTask.children || [])) {
+                                task.addChild(new Task(child.name, child.status));
+                            }
+                            for (let p of (anonTask.parents || [])) {
+                                task.addParent(new Task(p.name, p.status));
+                            }
+                            newTasks.push(task);
+                        }
+                    }
+
+                    if (newTasks.length > 0) {
+
+                    }
+                }
+            });
     }
 
     private handleFileDeleted(abstractFile: TAbstractFile) {
@@ -114,16 +186,16 @@ export default class ObsidianTaskManager extends Plugin {
             this.taskFileManager.tasksDirectory = tasksFolder as TFolder;
         }
         const tasksFolder = this.taskFileManager.tasksDirectory;
-        const witnessedNames: Set<string> = new Set();
+        const tasks = [];
+        const index = new TaskIndex();
         for (const tFile of tasksFolder.children) {
-            const existing = this.index.getTaskByName(tFile.name);
-            if (existing) {
-                // what to do here?
-                // we should not have dupliates
-            }
-            const task = await this.taskFileManager.getTaskFromTaskFile(tFile as TFile, witnessedNames)
-            this.index.addTask(task);
+            tasks.push(this.taskFileManager.getTaskFromTaskFile(tFile as TFile, index));
         }
+        Promise.all(tasks)
+            .then(all => {
+                this.index = new TaskIndex(all);
+
+            });
     }
 
     private buildTaskIndex() {
