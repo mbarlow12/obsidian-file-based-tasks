@@ -1,5 +1,5 @@
 import {stringifyYaml} from "obsidian";
-import {ITask, TaskLocation, TaskStatus, TaskYamlObject, Yamlable} from "./types";
+import {IAnonymousTask, ITask, TaskLocation, TaskStatus, TaskYamlObject, Yamlable} from "./types";
 
 export class Task implements ITask, Yamlable {
     private _status: TaskStatus;
@@ -10,6 +10,7 @@ export class Task implements ITask, Yamlable {
     private _locations: TaskLocation[];
     private _created: Date;
     private _updated: Date;
+    private _id: string;
 
     public static fromITask(iTask: ITask) {
         return new Task(
@@ -24,7 +25,19 @@ export class Task implements ITask, Yamlable {
         );
     }
 
-    public static flatFromYamlObject({name, status, locations, created, updated, parents, children}: TaskYamlObject) {
+    public static fromAnonymousTask({name, status, parents, children}: IAnonymousTask, locations: TaskLocation[] = []): ITask {
+        return {
+            name,
+            status,
+            parents: (parents || []).map(p => Task.fromAnonymousTask(p)),
+            children: (children || []).map(p => Task.fromAnonymousTask(p)),
+            locations: [],
+            created: new Date(),
+            updated: new Date(),
+        };
+    }
+
+    public static flatFromYamlObject({name, status, locations = [], created, updated, parents, children}: TaskYamlObject) {
         const task = new Task(name);
         task.status = status === `DONE` ? TaskStatus.DONE : TaskStatus.TODO;
         task.locations = locations && locations.map(locStr => {

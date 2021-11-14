@@ -2,8 +2,11 @@ import {IAnonymousTask, FileTaskLine, TaskStatus} from "./Task/types";
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
-    static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S.*)/;
+    static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S.*)$/;
     static generalPattern: RegExp = /(?:-|\*)\s*\[(?<complete>[\sxX]*)\]\s*(?<taskLine>\S.*)/;
+    // todo: add complete/incomplete status when handling block id
+    //  - even anonymous tasks should always have a blockID for linking
+    static blockID: RegExp = / \^([A-Z][a-z][0-9]+)$/;
 
     static parseLine(line: string): IAnonymousTask | null {
         const match = line.match(TaskParser.strictPattern);
@@ -24,11 +27,12 @@ export default class TaskParser {
         }).filter(tl => tl[1] !== null);
     }
 
-    static parseLinesToRecord(contents: string): Record<number, IAnonymousTask> {
+    static parseLinesToRecord(filePath: string, contents: string): Record<number, IAnonymousTask> {
         const lines = contents.split(/\r?\n/g);
         return lines.reduce((rec, line, lineNum) => {
             const task = TaskParser.parseLine(line);
             if (task) {
+                task.locations = [{filePath, line: lineNum}]
                 rec[lineNum] = task;
             }
             return rec;

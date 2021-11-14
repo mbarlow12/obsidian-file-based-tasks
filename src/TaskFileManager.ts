@@ -107,9 +107,9 @@ export class TaskFileManager {
 
     public async getTasksFromFile(file: TFile): Promise<Record<number, IAnonymousTask>> {
         const cache = this.mdCache.getFileCache(file);
-        return this.vault.cachedRead(file)
+        return this.vault.read(file)
             .then(contents => {
-                const tasksRecord = TaskParser.parseLinesToRecord(contents);
+                const tasksRecord = TaskParser.parseLinesToRecord(file.path, contents);
                 // add parent/child relationships if they exist
                 for (const cacheListItem of cache.listItems) {
                     if (cacheListItem.parent > -1) {

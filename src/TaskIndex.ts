@@ -69,7 +69,7 @@ export class TaskIndex {
         else {
             this.tasks[t.name] = Task.fromITask(t);
         }
-        for (const location of this.tasks[t.name].locations) {
+        for (const location of this.tasks[t.name].locations || []) {
             this.locations[locStr(location)] = this.tasks[t.name];
         }
     }
@@ -120,12 +120,12 @@ export class TaskIndex {
                 ...t
             };
             this.tasks[t.name] = newTask;
-            for (let loc in this.locations) {
+            for (let loc in this.locations || []) {
                 if (this.locations[loc].name === t.name) {
                     delete this.locations[loc]
                 }
             }
-            for (const location of this.tasks[t.name].locations) {
+            for (const location of this.tasks[t.name].locations || []) {
                 this.locations[locStr(location)] = this.tasks[t.name];
             }
             return newTask;
@@ -151,6 +151,54 @@ export class TaskIndex {
             }
         }
         return ret;
+    }
+
+    private mergeLocations(locList1: TaskLocation[], locList2: TaskLocation[]): TaskLocation[] {
+        const newLocs = locList2.filter(loc => !locList1.includes(loc));
+        return [...locList1, ...newLocs];
+    }
+
+    private mergeTaskList(list1: ITask[], list2: ITask[]): ITask[] {
+        const names = new Set(list1.map(t => t.name));
+        const ret = [...list1];
+        for (const task of list2) {
+            if (!names.has(task.name)) {
+                names.add(task.name);
+                ret.push(task);
+            }
+        }
+        return ret;
+    }
+
+    /**
+     * look at name, status, description, children, parents, and locations
+     * @param tasks
+     */
+    handleIndexUpdateRequest(tasks: ITask[]) {
+        const createTasks: Task[] = [];
+        const modifyTasks: Task[] = [];
+        const deleteTasks: Task[] = [];
+        const newIndex = new TaskIndex();
+        for (let i = 0; i < tasks.length; i++) {
+            const newTask = Task.fromITask(tasks[i]);
+            if (newIndex.taskExists(newTask.name)) {
+                const t = newIndex.getTaskByName(newTask.name);
+                t.status = newTask.status;
+                t.locations = this.mergeLocations(t.locations, newTask.locations);
+                t.parents = this.mergeTaskList(t.parents, newTask.parents);
+                t.children = this.mergeTaskList(t.children, newTask.children);
+                t.description = (t.description || '') + (newTask.description || '');
+                if (newTask.created < t.created) {
+                    t.created = newTask.created;
+                }
+                if (newTask.updated > t.updated) {
+                    t.updated = newTask.updated;
+                }
+            }
+            else {
+
+            }
+        }
     }
 
     /**

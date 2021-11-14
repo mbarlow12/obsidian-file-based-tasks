@@ -8,6 +8,7 @@ export enum TaskStatus {
 export interface IAnonymousTask {
     name: string;
     status: TaskStatus;
+    locations?: TaskLocation[];
     parents?: IAnonymousTask[];
     children?: IAnonymousTask[];
 }
@@ -28,9 +29,13 @@ export interface TaskList {
     moveItem: (nameOrId: string, destination: string) => void;
 }
 
+/**
+ * todo: add block creation and handling
+ */
 export interface TaskLocation {
     filePath: string;
     line: number;
+    blockId?: string;
 }
 
 export interface FileTaskLine extends Array<number | IAnonymousTask> {
