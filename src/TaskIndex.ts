@@ -1,6 +1,6 @@
 import {TFolder} from "obsidian";
 import {ITask, TaskLocation, TaskStatus} from "./Task/types";
-import {clone} from 'lodash';
+import {clone, isEqual} from 'lodash';
 import {Task} from "./Task";
 
 /**
@@ -47,6 +47,7 @@ export class TaskIndex {
     createTask(name: string, location: TaskLocation): ITask {
         this.tasks[name] = new Task(name, TaskStatus.TODO, [location]);
         this.locations[locStr(location)] = this.tasks[name];
+        this.deduplicate();
         return this.tasks[name];
     }
 
@@ -55,6 +56,18 @@ export class TaskIndex {
             const task = this.getTaskByName(name);
             task.status = TaskStatus.DONE;
             this.updateTask(task);
+        }
+    }
+
+    private deduplicate() {
+        // ensure all parents and children simply point to objects in the index
+        for (const name in this.tasks) {
+            let task = this.tasks[name];
+            const newChildren = task.children?.map(c => this.getTaskByName(c.name)) || [];
+            const newParents = task.parents?.map(p => this.getTaskByName(p.name)) || [];
+            task.children = newChildren;
+            task.parents = newParents;
+            this.tasks[name] = task;
         }
     }
 
@@ -72,6 +85,7 @@ export class TaskIndex {
         for (const location of this.tasks[t.name].locations || []) {
             this.locations[locStr(location)] = this.tasks[t.name];
         }
+        this.deduplicate();
     }
 
     addTasks(tasks: ITask[]) {
@@ -91,16 +105,34 @@ export class TaskIndex {
     }
 
     deleteTask(t: ITask|string) {
+        let name = '';
         if (typeof t === 'string') {
+            name = t;
             if (this.taskExists(t)) {
                 this.deleteLocations(this.tasks[t].locations);
                 delete this.tasks[t]
             }
         }
         else {
+            name = t.name;
             this.deleteLocations(this.tasks[t.name].locations);
             delete this.tasks[t.name];
         }
+        const modified = [];
+        // remove parent and child refs
+        for (const task of Object.values(this.tasks)) {
+            const [newC, newP] = [task.children, task.parents].map(arr => {
+                let iFound = arr.findIndex((t) => t.name === name);
+                if (iFound >= 0) {
+                    modified.push(task.name);
+                    arr.splice(iFound, 1)
+                }
+                return arr;
+            });
+            task.children = newC;
+            task.parents = newP;
+        }
+        // todo: trigger file update
     }
 
     clear() {
@@ -172,13 +204,57 @@ export class TaskIndex {
 
     /**
      * look at name, status, description, children, parents, and locations
+     * todo: add filepath to the arguments
+     *   - we always trigger the update from a single file
+     *   - iterate through the tasks
+     *      - if name doesn't exist, add to index
+     *      - else, check if new task is different
+     *          - could be different description, parents/children, status, locations
+     *          - locations: mod/add (is filepath in existing locations?), delete (is an existing task in the file, but not in the new
+     *            tasks)
+     *
      * @param tasks
      */
     handleIndexUpdateRequest(tasks: ITask[]) {
         const createTasks: Task[] = [];
         const modifyTasks: Task[] = [];
-        const deleteTasks: Task[] = [];
         const newIndex = new TaskIndex();
+
+        for (let t of tasks) {
+            const task = Task.isTask(t) ? t : Task.fromITask(t);
+            if (!this.getTaskByName(task.name)) {
+                createTasks.push(task);
+            }
+            else {
+                const existing = this.getTaskByName(task.name) as Task;
+                let diffLocations = false;
+                for (const loc of task.locations) {
+                    // new location - additional line num
+                    // deleted location - get all tasks from file name,
+                }
+                    if (
+                        existing.status !== task.status ||
+                        existing.description !== task.description ||
+                        existing.compareChildren(task).length ||
+                        existing.compareParents(task).length
+                    )
+                        modifyTasks.push(task);
+
+                    // description
+                    // children
+                    // parents
+                    // locations
+            }
+        }
+
+        for (let ct of createTasks) {
+            this.addTask(ct);
+        }
+
+        for (let mt of modifyTasks) {
+
+        }
+
         for (let i = 0; i < tasks.length; i++) {
             const newTask = Task.fromITask(tasks[i]);
             if (newIndex.taskExists(newTask.name)) {

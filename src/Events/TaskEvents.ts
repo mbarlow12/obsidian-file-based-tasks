@@ -6,6 +6,10 @@ import {EventType, IndexUpdatedAction, UpdateType} from "./types";
 export class TaskEvents {
     private _events: ObsEvents;
 
+    /**
+     * note: passing in Workspace for now
+     * @param obsidianEvents
+     */
     constructor(obsidianEvents: ObsEvents) {
         this._events = obsidianEvents;
     }

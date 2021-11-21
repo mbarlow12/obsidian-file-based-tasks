@@ -85,11 +85,33 @@ export class Task implements ITask, Yamlable {
         this._children.push(t);
     }
 
-    public removeChild({name}: ITask) {
+    public removeChild({name}: ITask): ITask|null {
         const i = this._children.findIndex(({name: existing}) => existing === name);
         if (i !== -1)
             return this._children.splice(i, 1)[0]
         return null;
+    }
+
+    public compareChildren({children}: ITask): string[] {
+        return this.compareTaskList(children);
+    }
+
+    public compareParents({parents}: ITask): string[] {
+        return this.compareTaskList(parents);
+    }
+
+    private compareTaskList(tasks: ITask[]): string[] {
+        const thisNames: Set<string> = new Set(this.children.map(c => c.name));
+        const result: Set<string> = new Set();
+        for (const oChild of tasks) {
+            if (!thisNames.has(oChild.name)) {
+                result.add(oChild.name);
+            }
+            else {
+                thisNames.delete(oChild.name);
+            }
+        }
+        return [...Array.from(result), ...Array.from(thisNames)];
     }
 
     get created(): Date {
@@ -212,6 +234,10 @@ export class Task implements ITask, Yamlable {
             contents.push(...childChecklistLines);
         }
         return contents;
+    }
+
+    public static isTask(task: ITask): task is Task {
+        return Object.getOwnPropertyNames(task).includes('yamlObject');
     }
 }
 /*
