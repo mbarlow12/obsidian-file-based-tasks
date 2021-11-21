@@ -14,11 +14,11 @@ export class TaskEvents {
         this._events = obsidianEvents;
     }
 
-    triggerRequestIndexUpdate(tasks: ITask[]) {
-        this._events.trigger(EventType.REQUEST_UPDATE_INDEX, tasks);
+    triggerRequestIndexUpdate(filePath: string, taskRecord: Record<number, ITask>) {
+        this._events.trigger(EventType.REQUEST_UPDATE_INDEX, {filePath, taskRecord});
     }
 
-    registerRequestIndexUpdateHandler(cb: (tasks: ITask[]) => void) {
+    registerRequestIndexUpdateHandler(cb: (arg: {filePath: string, taskRecord: Record<number, ITask>}) => void) {
         return this._events.on(EventType.REQUEST_UPDATE_INDEX, cb);
     }
 

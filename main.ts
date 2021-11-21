@@ -73,9 +73,8 @@ export default class ObsidianTaskManager extends Plugin {
             console.log('FILE-OPEN', file.path);
         }));
 
-        this.registerEvent(this.taskEvents.registerRequestIndexUpdateHandler(tasks => {
-            console.log('requesting index update');
-            console.log('task count', tasks.length);
+        this.registerEvent(this.taskEvents.registerRequestIndexUpdateHandler(({filePath, taskRecord}) => {
+            this.index.handleIndexUpdateRequest(filePath, taskRecord);
         }));
 
         this.registerEvent(this.app.metadataCache.on('changed', (arg) => {
@@ -132,7 +131,7 @@ export default class ObsidianTaskManager extends Plugin {
                     }
 
                     if (tasks.length)
-                        this.taskEvents.triggerRequestIndexUpdate(tasks);
+                        this.taskEvents.triggerRequestIndexUpdate(abstractFile.path, tasks);
                 });
         }
     }
@@ -189,7 +188,7 @@ export default class ObsidianTaskManager extends Plugin {
                 newTasks.push(Task.fromAnonymousTask(anonTask));
             }
             if (newTasks.length > 0) {
-                this.taskEvents.triggerRequestIndexUpdate(newTasks);
+                this.taskEvents.triggerRequestIndexUpdate(file.path, newTasks);
             }
         }
     }

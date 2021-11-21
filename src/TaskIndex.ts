@@ -176,13 +176,9 @@ export class TaskIndex {
     }
 
     getTasksByFilename(name: string): ITask[] {
-        const ret = [];
-        for (let key in this.locations) {
-            if (key.split(':')[0] === name) {
-                ret.push(this.locations[key])
-            }
-        }
-        return ret;
+        return Object.keys(this.locations)
+            .filter(k => k.split(':')[0] === name)
+            .map(k => this.locations[k]);
     }
 
     private mergeLocations(locList1: TaskLocation[], locList2: TaskLocation[]): TaskLocation[] {
@@ -213,14 +209,16 @@ export class TaskIndex {
      *          - locations: mod/add (is filepath in existing locations?), delete (is an existing task in the file, but not in the new
      *            tasks)
      *
-     * @param tasks
+     * @param taskRecord
      */
-    handleIndexUpdateRequest(tasks: ITask[]) {
+    handleIndexUpdateRequest(filePath: string, taskRecord: Record<number, ITask>) {
         const createTasks: Task[] = [];
         const modifyTasks: Task[] = [];
         const newIndex = new TaskIndex();
+        const existingFileTasks = this.getTasksByFilename(filePath);
 
-        for (let t of tasks) {
+        for (let key of Object.keys(taskRecord)) {
+            const t = taskRecord[Number(key)];
             const task = Task.isTask(t) ? t : Task.fromITask(t);
             if (!this.getTaskByName(task.name)) {
                 createTasks.push(task);
@@ -255,26 +253,26 @@ export class TaskIndex {
 
         }
 
-        for (let i = 0; i < tasks.length; i++) {
-            const newTask = Task.fromITask(tasks[i]);
-            if (newIndex.taskExists(newTask.name)) {
-                const t = newIndex.getTaskByName(newTask.name);
-                t.status = newTask.status;
-                t.locations = this.mergeLocations(t.locations, newTask.locations);
-                t.parents = this.mergeTaskList(t.parents, newTask.parents);
-                t.children = this.mergeTaskList(t.children, newTask.children);
-                t.description = (t.description || '') + (newTask.description || '');
-                if (newTask.created < t.created) {
-                    t.created = newTask.created;
-                }
-                if (newTask.updated > t.updated) {
-                    t.updated = newTask.updated;
-                }
-            }
-            else {
-
-            }
-        }
+        // for (let i = 0; i < taskRecord.length; i++) {
+        //     const newTask = Task.fromITask(taskRecord[i]);
+        //     if (newIndex.taskExists(newTask.name)) {
+        //         const t = newIndex.getTaskByName(newTask.name);
+        //         t.status = newTask.status;
+        //         t.locations = this.mergeLocations(t.locations, newTask.locations);
+        //         t.parents = this.mergeTaskList(t.parents, newTask.parents);
+        //         t.children = this.mergeTaskList(t.children, newTask.children);
+        //         t.description = (t.description || '') + (newTask.description || '');
+        //         if (newTask.created < t.created) {
+        //             t.created = newTask.created;
+        //         }
+        //         if (newTask.updated > t.updated) {
+        //             t.updated = newTask.updated;
+        //         }
+        //     }
+        //     else {
+        //
+        //     }
+        // }
     }
 
     /**
