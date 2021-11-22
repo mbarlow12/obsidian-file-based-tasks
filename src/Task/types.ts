@@ -38,6 +38,8 @@ export interface TaskLocation {
     blockId?: string;
 }
 
+export type TaskFileRecord = Record<number, ITask>;
+
 export interface FileTaskLine extends Array<number | IAnonymousTask> {
     0: number,
     1: IAnonymousTask,

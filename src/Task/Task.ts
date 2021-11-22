@@ -1,4 +1,4 @@
-import {stringifyYaml} from "obsidian";
+// import {stringifyYaml} from "obsidian";
 import {IAnonymousTask, ITask, TaskLocation, TaskStatus, TaskYamlObject, Yamlable} from "./types";
 
 export class Task implements ITask, Yamlable {
@@ -25,7 +25,12 @@ export class Task implements ITask, Yamlable {
         );
     }
 
-    public static fromAnonymousTask({name, status, parents, children}: IAnonymousTask, locations: TaskLocation[] = []): ITask {
+    public static fromAnonymousTask({
+                                        name,
+                                        status,
+                                        parents,
+                                        children
+                                    }: IAnonymousTask, locations: TaskLocation[] = []): ITask {
         return {
             name,
             status,
@@ -37,12 +42,20 @@ export class Task implements ITask, Yamlable {
         };
     }
 
-    public static flatFromYamlObject({name, status, locations = [], created, updated, parents, children}: TaskYamlObject) {
+    public static flatFromYamlObject({
+                                         name,
+                                         status,
+                                         locations = [],
+                                         created,
+                                         updated,
+                                         parents,
+                                         children
+                                     }: TaskYamlObject) {
         const task = new Task(name);
         task.status = status === `DONE` ? TaskStatus.DONE : TaskStatus.TODO;
         task.locations = locations && locations.map(locStr => {
             const [filePath, line] = locStr.split(':');
-            return { filePath, line: Number.parseInt(line) };
+            return {filePath, line: Number.parseInt(line)};
         });
         task.updated = new Date(updated);
         task.created = new Date(created);
@@ -51,12 +64,28 @@ export class Task implements ITask, Yamlable {
         return task;
     }
 
+    public static hash(task: ITask): string {
+        const {
+            name, status, locations, parents, children, description
+        } = task;
+        const ret: Record<string, string | TaskStatus | TaskLocation[] | string[]> = {
+            name, status, locations
+        };
+        if (parents)
+            ret.parents = parents.map(p => p.name);
+        if (children)
+            ret.children = children.map(c => c.name);
+        if (description)
+            ret.description = description;
+        return JSON.stringify(ret);
+    }
+
     constructor(name: string,
                 status?: TaskStatus,
-                locs?: TaskLocation|TaskLocation[],
+                locs?: TaskLocation | TaskLocation[],
                 description?: string,
-                created?: string|Date,
-                updated?: string|Date,
+                created?: string | Date,
+                updated?: string | Date,
                 parents?: ITask[],
                 children?: ITask[]) {
         this.name = name;
@@ -85,33 +114,32 @@ export class Task implements ITask, Yamlable {
         this._children.push(t);
     }
 
-    public removeChild({name}: ITask): ITask|null {
+    public removeChild({name}: ITask): ITask | null {
         const i = this._children.findIndex(({name: existing}) => existing === name);
         if (i !== -1)
             return this._children.splice(i, 1)[0]
         return null;
     }
 
-    public compareChildren({children}: ITask): string[] {
+    public compareChildren({children}: ITask): string[][] {
         return this.compareTaskList(children);
     }
 
-    public compareParents({parents}: ITask): string[] {
+    public compareParents({parents}: ITask): string[][] {
         return this.compareTaskList(parents);
     }
 
-    private compareTaskList(tasks: ITask[]): string[] {
+    private compareTaskList(tasks: ITask[]): string[][] {
         const thisNames: Set<string> = new Set(this.children.map(c => c.name));
         const result: Set<string> = new Set();
         for (const oChild of tasks) {
             if (!thisNames.has(oChild.name)) {
                 result.add(oChild.name);
-            }
-            else {
+            } else {
                 thisNames.delete(oChild.name);
             }
         }
-        return [...Array.from(result), ...Array.from(thisNames)];
+        return [Array.from(thisNames), Array.from(result)];
     }
 
     get created(): Date {
@@ -217,12 +245,14 @@ export class Task implements ITask, Yamlable {
     }
 
     public static toYamlString(task: ITask): string {
-        return stringifyYaml(Task.fromITask(task).yamlObject);
+        // return stringifyYaml(Task.fromITask(task).yamlObject);
+        return '';
     }
 
     public toFileContents() {
-        const yaml = stringifyYaml(this.yamlObject);
-        return `${yaml}\n${this.description}`;
+        // const yaml = stringifyYaml(this.yamlObject);
+        // return `${yaml}\n${this.description}`;
+        return '';
     }
 
     public static asChecklist(task: ITask, colWidth: number = 4): string[] {
@@ -240,6 +270,7 @@ export class Task implements ITask, Yamlable {
         return Object.getOwnPropertyNames(task).includes('yamlObject');
     }
 }
+
 /*
 create task file
 get task template
