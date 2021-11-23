@@ -14,3 +14,4 @@ main.js
 data.json
 dist.sh
 dist/
+local.config.js
