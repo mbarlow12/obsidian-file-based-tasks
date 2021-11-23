@@ -38,8 +38,6 @@ test('Parse minimally valid tasks', () => {
         for (const [i, name] of names.entries()) {
             const test = `${checkbox} ${name}`;
             const baseTask = Parser.parseLine(test);
-            console.log(test);
-            console.log(baseTask);
             const expectedStatus = itemI % 2 === 0 ? TaskStatus.TODO : TaskStatus.DONE;
             expect(baseTask.status).toEqual(expectedStatus);
             expect(baseTask.name).toEqual(names[i])

@@ -1,6 +1,6 @@
 import {TFolder} from "obsidian";
 import {ITask, TaskLocation, TaskStatus} from "./Task/types";
-import {clone, isEqual} from 'lodash';
+import {clone, isEqual, merge} from 'lodash';
 import {Task} from "./Task";
 import {off} from "codemirror";
 
@@ -28,6 +28,7 @@ export class TaskIndex {
 
     constructor(tasks: ITask[] = []) {
         this.tasks = {};
+        this.locationIndex = {};
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
             this.tasks[task.name] = task;
@@ -194,10 +195,7 @@ export class TaskIndex {
         }
         else {
             const existing = clone(this.tasks[t.name]);
-            const  newTask = {
-                ...existing,
-                ...t
-            };
+            const newTask = merge(existing, t);
             newTask.updated = new Date();
             newTask.created = newTask.created ?? new Date();
             this.tasks[t.name] = newTask;

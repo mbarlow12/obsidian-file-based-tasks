@@ -2,7 +2,7 @@ import {IAnonymousTask, FileTaskLine, TaskStatus} from "./Task/types";
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
-    static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S.*)$/;
+    static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)\^?.*$/;
     static generalPattern: RegExp = /(?:-|\*)\s*\[(?<complete>[\sxX]*)\]\s*(?<taskLine>\S.*)/;
     // todo: add complete/incomplete status when handling block id
     //  - even anonymous tasks should always have a blockID for linking
@@ -14,7 +14,7 @@ export default class TaskParser {
             const {complete, taskLine} = match.groups;
             return {
                 status: complete === 'x' ? TaskStatus.DONE : TaskStatus.TODO,
-                name: taskLine
+                name: taskLine.trim()
             }
         } else
             return null;
