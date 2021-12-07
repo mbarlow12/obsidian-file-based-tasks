@@ -17,7 +17,7 @@ import {TaskFileManager} from "./src/TaskFileManager";
 import {entries, intersection, isEqual} from 'lodash';
 import {TaskEvents} from "./src/Events/TaskEvents";
 import {FileTaskCache} from "./src/File/types";
-import {getFileTaskCache} from "./src/File";
+import {getFileTaskCache, getFileTaskCacheHash} from "./src/File";
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
@@ -33,7 +33,7 @@ export default class ObsidianTaskManager extends Plugin {
     index: TaskIndex;
     taskFileManager: TaskFileManager;
     // filepath: task cache
-    fileTaskCaches: Record<string, FileTaskCache>;
+    fileTaskCaches: Record<string, { sha: string, cache: FileTaskCache }>;
     private initialized = false;
     private taskEvents: TaskEvents;
 
@@ -79,12 +79,15 @@ export default class ObsidianTaskManager extends Plugin {
             console.log('FILE-OPEN', file.path);
         }));
 
-        this.registerEvent(
-            this.taskEvents.registerRequestIndexUpdateHandler(
-                ({filePath, taskRecord}) => {
-                    this.index.handleIndexUpdateRequest(filePath, taskRecord);
-                }
-            ));
+        this.registerEvent(this.taskEvents.registerRequestIndexUpdateHandler(
+            ({filePath, taskRecord}) => {
+                this.index.handleIndexUpdateRequest(filePath, taskRecord);
+            }));
+        this.registerEvent(this.taskEvents.registerRequestDeleteTaskHandler(this.index.handleIndexDeleteTaskRequest));
+        this.registerEvent(this.taskEvents.registerRequestDeleteFileHandler(
+            ({filePath, taskRecord}) => {
+                this.index.handleIndexDeleteFileRequest(filePath, taskRecord);
+            }));
 
         this.registerEvent(this.app.metadataCache.on('resolve', (arg) => {
             console.log('METADATA CACHE RESOLVE', arg.path);
@@ -94,12 +97,33 @@ export default class ObsidianTaskManager extends Plugin {
         }));
     }
 
-    private handleFileCreated(abstractFile: TAbstractFile) {
+    private async handleFileCreated(abstractFile: TAbstractFile) {
         console.log('FILE CREATED', abstractFile.path);
-        // parse file
         // is it a task file?
-        // yes? -> compare data to index, update if diff from most recent updated value
-        // no? -> parse file, create anon todos if necessary
+
+        if (abstractFile instanceof TFile) {
+            const contents = await this.app.vault.read(abstractFile);
+            const fileMdCache = this.app.metadataCache.getFileCache(abstractFile);
+            const ts: ITask[] = [];
+            const [task, taskRecord] = await this.taskFileManager.parseTasksFromFile(abstractFile);
+            if (task) {
+                ts.push(Task.fromITask(task));
+            } else if (taskRecord) {
+                ts.push(...Object.keys(taskRecord).map(k => {
+                    const line = Number.parseInt(k);
+                    const anonTask = taskRecord[line];
+                    const task = new Task(anonTask.name, anonTask.status);
+                    task.addLocation({filePath: abstractFile.path, line});
+                    return task;
+                }));
+                // update cache
+                const cache = getFileTaskCache(fileMdCache, contents);
+                const sha = await getFileTaskCacheHash(cache);
+                this.fileTaskCaches[abstractFile.path] = {sha, cache}
+            }
+            if (ts.length)
+                this.taskEvents.triggerRequestIndexUpdate(abstractFile.path, ts);
+        }
     }
 
     /**
@@ -120,41 +144,79 @@ export default class ObsidianTaskManager extends Plugin {
         }
 
         if (abstractFile instanceof TFile) {
-            const fileTaskCache = this.fileTaskCaches[abstractFile.path];
+            const {sha, cache} = this.fileTaskCaches[abstractFile.path];
             const fileMetadataCache = this.app.metadataCache.getFileCache(abstractFile);
             this.app.vault.read(abstractFile)
                 .then(contents => getFileTaskCache(fileMetadataCache, contents))
-                .then(newTaskCache => {
-                    this.taskFileManager.parseTasksFromFile(abstractFile)
-                        .then(tasksData => {
-                            const [t, rec] = tasksData;
-                            const tasks: ITask[] = []
-                            if (t)
-                                tasks.push(Task.fromITask(t));
-                            else if (rec) {
-                                const keys = Object.keys(rec);
-                                for (let i = 0; i < keys.length; i++) {
-                                    const anonTask = rec[Number.parseInt(keys[i])];
-                                    const task = new Task(anonTask.name, anonTask.status);
-                                    task.addLocation({filePath: abstractFile.path, line: i});
-                                    tasks.push(task);
+                .then(async newTaskCache => {
+                    const newsha = await getFileTaskCacheHash(newTaskCache);
+                    if (sha !== newsha) {
+                        this.taskFileManager.parseTasksFromFile(abstractFile)
+                            .then(tasksData => {
+                                const [t, rec] = tasksData;
+                                const tasks: ITask[] = []
+                                if (t)
+                                    tasks.push(Task.fromITask(t));
+                                else if (rec) {
+                                    const keys = Object.keys(rec);
+                                    tasks.push(...keys.map(k => {
+                                        const line = Number.parseInt(k);
+                                        const anonTask = rec[line];
+                                        const task = new Task(anonTask.name, anonTask.status);
+                                        task.addLocation({filePath: abstractFile.path, line});
+                                        return task;
+                                    }));
                                 }
-                            }
 
-                            if (tasks.length) {
-                                this.taskEvents.triggerRequestIndexUpdate(abstractFile.path, tasks);
-                            }
-                        });
-                })
+                                if (tasks.length) {
+                                    this.taskEvents.triggerRequestIndexUpdate(abstractFile.path, tasks);
+                                }
+                            });
+                        this.fileTaskCaches[abstractFile.path] = {
+                            sha: newsha,
+                            cache: newTaskCache
+                        };
+                    } else {
+                        // shas match...I don't think there's anything to do
+                    }
+                });
         }
     }
 
-    private handleFileDeleted(abstractFile: TAbstractFile) {
-
+    private async handleFileDeleted(abstractFile: TAbstractFile) {
+        if (abstractFile instanceof TFile) {
+            if (this.taskFileManager.isTaskFile(abstractFile)) {
+                this.taskEvents.triggerRequestDeleteTask(abstractFile.name);
+                this.index.deleteTask(abstractFile.name)
+            } else {
+                this.taskEvents.triggerRequestDeleteFile(abstractFile.path);
+            }
+        }
     }
 
-    private handleFileRenamed(abstractFile: TAbstractFile) {
+    // TODO: how to handle if someone changes the 'name' of a task in task file
 
+    private async handleFileRenamed(abstractFile: TAbstractFile, oldPath: string) {
+        // mainly changing link data & locations
+        if (abstractFile instanceof TFile) {
+            const {sha: oldSha, cache: oldCache} = this.fileTaskCaches[oldPath];
+            // update filetaskcache
+            // update index
+            // do refs & locations need to be updated? yes
+            // do we handle a task file differently? if we rely on the `name` field, then
+            // it's all pointer/link/location updating
+            if (this.taskFileManager.isTaskFile(abstractFile)) {
+                // implies the task has been renamed
+                // still a redundancy with the name yaml param
+                const task = await this.taskFileManager.getTaskFromTaskFile(abstractFile);
+
+            }
+            else {
+                // change locations
+                // go through all tasks that have the old file in their locations list
+                // change path to new file
+            }
+        }
     }
 
     public get tasksDirectory(): TFolder | null {
@@ -189,9 +251,13 @@ export default class ObsidianTaskManager extends Plugin {
         for (const file of this.app.vault.getMarkdownFiles()) {
             if (file.path.includes(this.settings.taskDirectoryName))
                 continue;
-            await this.app.vault.read(file).then(fileContents => {
+            await this.app.vault.read(file).then(async fileContents => {
                 const fileCache = this.app.metadataCache.getFileCache(file);
-                this.fileTaskCaches[file.path] = getFileTaskCache(fileCache, fileContents);
+                const taskCache = getFileTaskCache(fileCache, fileContents);
+                this.fileTaskCaches[file.path] = {
+                    sha: await getFileTaskCacheHash(taskCache),
+                    cache: taskCache
+                };
                 for (const [line, task] of TaskParser.parseLines(fileContents)) {
                     const loc: TaskLocation = {filePath: file.path, line};
                     if (!this.index.taskExists(task.name)) {

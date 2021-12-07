@@ -89,6 +89,15 @@ export class TaskFileManager {
         return (this.vault as any).config;
     }
 
+    public isTaskFile(file: TFile): boolean {
+        const cache = this.mdCache.getFileCache(file);
+        return (
+            file.path.contains(this.tasksDirString) &&
+            cache.frontmatter && cache.frontmatter.type &&
+            cache.frontmatter.type === TaskRecordType
+        );
+    }
+
     public async parseTasksFromFile(tFile: TFile, witnessed: TaskIndex = new TaskIndex()): Promise<[ITask|null, Record<number, IAnonymousTask>|null]> {
         // has front matter?
         const cache = this.mdCache.getFileCache(tFile);

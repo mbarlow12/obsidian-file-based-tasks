@@ -351,4 +351,12 @@ export class TaskIndex {
     public empty() {
         return Object.values(this.tasks).length > 0;
     }
+
+    public handleIndexDeleteTaskRequest(taskName: string) {
+
+    }
+
+    public handleIndexDeleteFileRequest(filePath: string, taskRecord?: Record<number, ITask>) {
+
+    }
 }

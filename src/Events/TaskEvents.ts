@@ -14,6 +14,22 @@ export class TaskEvents {
         this._events = obsidianEvents;
     }
 
+    triggerRequestDeleteTask(taskName: string) {
+        this._events.trigger(EventType.REQUEST_DELETE_TASK, taskName);
+    }
+
+    registerRequestDeleteTaskHandler(cb: (taskName: string) => void) {
+        return this._events.on(EventType.REQUEST_DELETE_TASK, cb);
+    }
+
+    triggerRequestDeleteFile(filePath: string, taskRecord?: Record<number, IAnonymousTask>) {
+        this._events.trigger(EventType.REQUEST_DELETE_FILE, {filePath, taskRecord});
+    }
+
+    registerRequestDeleteFileHandler(cb: (arg: {filePath: string, taskRecord: Record<number, ITask>}) => void) {
+        return this._events.on(EventType.REQUEST_DELETE_FILE, cb);
+    }
+
     triggerRequestIndexUpdate(filePath: string, taskRecord: Record<number, ITask>) {
         this._events.trigger(EventType.REQUEST_UPDATE_INDEX, {filePath, taskRecord});
     }
