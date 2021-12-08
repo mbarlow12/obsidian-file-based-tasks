@@ -200,7 +200,13 @@ export default class ObsidianTaskManager extends Plugin {
         // mainly changing link data & locations
         if (abstractFile instanceof TFile) {
             const {sha: oldSha, cache: oldCache} = this.fileTaskCaches[oldPath];
+            const contents = await this.app.vault.read(abstractFile);
+            const metadataCache = this.app.metadataCache.getFileCache(abstractFile);
+            const newCache = getFileTaskCache(metadataCache, contents);
+            const newSha = await getFileTaskCacheHash(newCache);
             // update filetaskcache
+            delete this.fileTaskCaches[oldPath];
+            this.fileTaskCaches[abstractFile.path] = {sha: newSha, cache: newCache};
             // update index
             // do refs & locations need to be updated? yes
             // do we handle a task file differently? if we rely on the `name` field, then
@@ -209,7 +215,7 @@ export default class ObsidianTaskManager extends Plugin {
                 // implies the task has been renamed
                 // still a redundancy with the name yaml param
                 const task = await this.taskFileManager.getTaskFromTaskFile(abstractFile);
-
+                this.index.renameTask(task, oldPath);
             }
             else {
                 // change locations

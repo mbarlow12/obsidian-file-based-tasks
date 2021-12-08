@@ -2,7 +2,7 @@ import {TFolder} from "obsidian";
 import {ITask, TaskLocation, TaskStatus} from "./Task/types";
 import {clone, isEqual, merge} from 'lodash';
 import {Task} from "./Task";
-import {off} from "codemirror";
+import * as path from 'path';
 
 /**
  * Like todo.txt
@@ -358,5 +358,26 @@ export class TaskIndex {
 
     public handleIndexDeleteFileRequest(filePath: string, taskRecord?: Record<number, ITask>) {
 
+    }
+
+    renameTask(task: ITask, oldPath: string) {
+        const oldName = path.basename(oldPath);
+        const oldTask = this.tasks[oldName.split('.')[0]];
+        this.deleteTask(oldTask);
+        task.updated = new Date();
+        const touched: Set<string> = new Set();
+
+        for (const existingTask of Object.values(this.tasks)) {
+            const [newC, newP] = [existingTask.children, existingTask.parents].map(arr => {
+                let iFound = arr.findIndex((t) => t.name === oldTask.name);
+                if (iFound >= 0) {
+                    touched.add(task.name);
+                    arr.splice(iFound, 1, task);
+                }
+                return arr;
+            });
+            task.children = newC;
+            task.parents = newP;
+        }
     }
 }
