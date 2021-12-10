@@ -1,4 +1,5 @@
-import {IAnonymousTask, FileTaskLine, TaskStatus} from "./Task/types";
+import {ITask, FileTaskLine} from "./Task/types";
+import {emptyTask} from "./Task";
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
@@ -8,14 +9,15 @@ export default class TaskParser {
     //  - even anonymous tasks should always have a blockID for linking
     static blockID: RegExp = / \^([A-Z][a-z][0-9]+)$/;
 
-    static parseLine(line: string): IAnonymousTask | null {
+    static parseLine(line: string): ITask | null {
         const match = line.match(TaskParser.strictPattern);
         if (match) {
             const {complete, taskLine} = match.groups;
             return {
-                status: complete === 'x' ? TaskStatus.DONE : TaskStatus.TODO,
-                name: taskLine.trim()
-            }
+                ...emptyTask,
+                complete: complete === 'x',
+                name: taskLine.trim(),
+            };
         } else
             return null;
     }
@@ -27,7 +29,7 @@ export default class TaskParser {
         }).filter(tl => tl[1] !== null);
     }
 
-    static parseLinesToRecord(filePath: string, contents: string): Record<number, IAnonymousTask> {
+    static parseLinesToRecord(filePath: string, contents: string): Record<number, ITask> {
         const lines = contents.split(/\r?\n/g);
         return lines.reduce((rec, line, lineNum) => {
             const task = TaskParser.parseLine(line);
@@ -36,6 +38,6 @@ export default class TaskParser {
                 rec[lineNum] = task;
             }
             return rec;
-        }, {} as Record<number, IAnonymousTask>);
+        }, {} as Record<number, ITask>);
     }
 }

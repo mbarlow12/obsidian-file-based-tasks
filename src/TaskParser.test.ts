@@ -1,6 +1,6 @@
 import Parser from './TaskParser';
 import {createTaskFileContents} from "./TestHelpers";
-import {IAnonymousTask, TaskStatus} from "./Task/types";
+import {ITask} from "./Task/types";
 
 /**
  * TODO invalid cases and handle reformatting
@@ -12,22 +12,22 @@ import {IAnonymousTask, TaskStatus} from "./Task/types";
 
 test('Parse a single incomplete todo item', () => {
     const line = '- [ ] an incomplete todo';
-    const t: IAnonymousTask = Parser.parseLine(line);
-    expect(t.status).toEqual(TaskStatus.TODO);
+    const t: ITask = Parser.parseLine(line);
+    expect(t.complete).toBe(false);
     expect(t.name).toEqual('an incomplete todo');
 });
 
 test('Parse a single complete todo item', () => {
     const line = '- [x] a complete todo';
-    const t: IAnonymousTask = Parser.parseLine(line);
-    expect(t.status).toEqual(TaskStatus.DONE);
+    const t: ITask = Parser.parseLine(line);
+    expect(t.complete).toBe(true);
     expect(t.name).toEqual('a complete todo');
 });
 
 test('Parse a todo with a nested todo in the text', () => {
     const line = '- [x] a complete todo but here - [ ] is another oddity';
-    const t: IAnonymousTask = Parser.parseLine(line);
-    expect(t.status).toEqual(TaskStatus.DONE);
+    const t: ITask = Parser.parseLine(line);
+    expect(t.complete).toEqual(true);
     expect(t.name).toEqual('a complete todo but here - [ ] is another oddity');
 });
 
@@ -38,8 +38,8 @@ test('Parse minimally valid tasks', () => {
         for (const [i, name] of names.entries()) {
             const test = `${checkbox} ${name}`;
             const baseTask = Parser.parseLine(test);
-            const expectedStatus = itemI % 2 === 0 ? TaskStatus.TODO : TaskStatus.DONE;
-            expect(baseTask.status).toEqual(expectedStatus);
+            const expectedStatus = itemI % 2 !== 0;
+            expect(baseTask.complete).toEqual(expectedStatus);
             expect(baseTask.name).toEqual(names[i])
         }
     }
@@ -65,7 +65,7 @@ test('Parser parses file contents successfully', () => {
    expect(items.length).toEqual(11);
    const [done, todo] = items.reduce((pr, [linNo, cur]) => {
       const [d, t] = pr;
-      if (cur.status === TaskStatus.DONE)
+      if (cur.complete)
           return [d+1, t];
       else
           return [d, t+1];

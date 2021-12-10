@@ -1,5 +1,14 @@
+import {ITask} from "./types";
+
 export { Task } from './Task'
 export * from "./types"
+
+export const emptyTask: Omit<ITask, 'name'|'complete'> = {
+    locations: [],
+    created: 0,
+    updated: 0,
+    children: []
+}
 
 export const taskid = (len: number): string => {
     let result           = '';

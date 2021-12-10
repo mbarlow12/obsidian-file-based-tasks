@@ -63,7 +63,7 @@ export class TaskFileManager {
                     break;
                 }
             }
-            this.vault.cachedRead(file)
+            this.vault.read(file)
                 .then(data => {
                     const lines = data.split('\n').filter(l => l);
                     lines.splice(line, 1, this.createTaskLine(task, offset));

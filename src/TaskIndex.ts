@@ -2,7 +2,6 @@ import {TFolder} from "obsidian";
 import {ITask, TaskLocation, TaskStatus} from "./Task/types";
 import {clone, isEqual, merge} from 'lodash';
 import {Task} from "./Task";
-import * as path from 'path';
 
 /**
  * Like todo.txt
@@ -361,7 +360,8 @@ export class TaskIndex {
     }
 
     renameTask(task: ITask, oldPath: string) {
-        const oldName = path.basename(oldPath);
+        const parts = oldPath.split('/');
+        const oldName = parts[parts.length - 1];
         const oldTask = this.tasks[oldName.split('.')[0]];
         this.deleteTask(oldTask);
         task.updated = new Date();

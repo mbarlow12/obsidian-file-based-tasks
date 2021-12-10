@@ -1,123 +1,139 @@
 // import {stringifyYaml} from "obsidian";
-import {IAnonymousTask, ITask, TaskLocation, TaskStatus, TaskYamlObject, Yamlable} from "./types";
+import { ITask, TaskLocation, TaskYamlObject, Yamlable} from "./types";
 
 export class Task implements ITask, Yamlable {
-    private _status: TaskStatus;
+    private _complete: boolean;
     private _name: string;
     private _description: string;
-    private _children: ITask[];
-    private _parents: ITask[];
+    private _children: string[];
     private _locations: TaskLocation[];
-    private _created: Date;
-    private _updated: Date;
+    private _created: number;
+    private _updated: number;
     private _id: string;
+    private _childRefs: Array<ITask>;
 
     public static fromITask(iTask: ITask) {
         return new Task(
             iTask.name,
-            iTask.status,
+            iTask.complete,
             iTask.locations,
             iTask.description,
             iTask.created,
             iTask.updated,
-            iTask.parents,
             iTask.children
         );
     }
 
     public static fromAnonymousTask({
                                         name,
-                                        status,
-                                        parents,
+                                        complete,
                                         children
-                                    }: IAnonymousTask, locations: TaskLocation[] = []): ITask {
+                                    }: ITask, locations: TaskLocation[] = []): ITask {
         return {
             name,
-            status,
-            parents: (parents || []).map(p => Task.fromAnonymousTask(p)),
-            children: (children || []).map(p => Task.fromAnonymousTask(p)),
+            complete,
+            children: (children || []),
             locations: [],
-            created: new Date(),
-            updated: new Date(),
+            created: Date.now(),
+            updated: Date.now(),
         };
     }
 
     public static flatFromYamlObject({
                                          name,
-                                         status,
+                                         complete,
                                          locations = [],
                                          created,
                                          updated,
-                                         parents,
-                                         children
+                                         children = []
                                      }: TaskYamlObject) {
         const task = new Task(name);
-        task.status = status === `DONE` ? TaskStatus.DONE : TaskStatus.TODO;
+        task.complete = complete === 'true';
         task.locations = locations && locations.map(locStr => {
             const [filePath, line] = locStr.split(':');
             return {filePath, line: Number.parseInt(line)};
         });
-        task.updated = new Date(updated);
-        task.created = new Date(created);
-        task.parents = (parents || []).map(p => new Task(p));
-        task.children = (children || []).map(cName => new Task(cName));
+        task.updated = Date.parse(updated);
+        task.created = Date.parse(created);
+        task.children = children;
         return task;
     }
 
     public static hash(task: ITask): string {
         const {
-            name, status, locations, parents, children, description
+            name, complete, locations, children, description
         } = task;
-        const ret: Record<string, string | TaskStatus | TaskLocation[] | string[]> = {
-            name, status, locations
+        const ret: Record<string, string | boolean | TaskLocation[] | string[]> = {
+            name, complete, locations
         };
-        if (parents)
-            ret.parents = parents.map(p => p.name);
         if (children)
-            ret.children = children.map(c => c.name);
+            ret.children = [...children];
         if (description)
             ret.description = description;
         return JSON.stringify(ret);
     }
 
     constructor(name: string,
-                status?: TaskStatus,
+                complete: boolean = false,
                 locs?: TaskLocation | TaskLocation[],
                 description?: string,
-                created?: string | Date,
-                updated?: string | Date,
-                parents?: ITask[],
-                children?: ITask[]) {
+                created?: string | Date | number,
+                updated?: string | Date | number,
+                children?: Array<ITask>|string[]) {
         this.name = name;
-        this.status = status ?? TaskStatus.TODO;
+        this.complete = complete;
         this.locations = locs ? Array.isArray(locs) ? locs : [locs] : [];
+
         this.created = created ?
-            created instanceof Date ? created : new Date(created) :
-            new Date();
+            created instanceof Date ?
+                created.getTime() :
+                typeof created === 'number' ?
+                    created : (new Date(created)).getTime() :
+            Date.now();
+
         this.updated = updated ?
-            updated instanceof Date ? updated : new Date(updated) :
-            new Date();
+            updated instanceof Date ?
+                updated.getTime() :
+                typeof updated === 'number' ?
+                    updated : (new Date(updated)).getTime() :
+            Date.now();
         this.description = description;
-        this.parents = parents;
-        this.children = children;
+        if (children.length) {
+            this.children = children.map(c => {
+               if (typeof c !== 'string') {
+                   return c.name;
+               }
+               return c;
+            });
+            this.childRefs = children.map(c => {
+               if (typeof c === 'string')
+                   return;
+               return c;
+            });
+        }
     }
 
     public get children() {
         return this._children;
     }
 
-    public set children(children: ITask[]) {
+    public set children(children: string[]) {
         this._children = children;
     }
 
-    public addChild(t: ITask) {
-        this._children.push(t);
+    public addChild(t: ITask|string) {
+        this._children.push(typeof t === 'string' ? t : t.name);
     }
 
-    public removeChild({name}: ITask): ITask | null {
-        const i = this._children.findIndex(({name: existing}) => existing === name);
+    public removeChild(name: string): string | null {
+        let i = this._children.findIndex(existing => existing === name);
         if (i !== -1)
-            return this._children.splice(i, 1)[0]
+            return this._children.splice(i, 1)[0];
+
+        i = this._childRefs.findIndex(curr => curr.name === name);
+        if (i !== -1)
+            return this._childRefs.splice(i, 1)[0]['name'];
+
         return null;
     }
 
@@ -125,28 +141,24 @@ export class Task implements ITask, Yamlable {
         return this.compareTaskList(children);
     }
 
-    public compareParents({parents}: ITask): string[][] {
-        return this.compareTaskList(parents);
-    }
-
-    private compareTaskList(tasks: ITask[]): string[][] {
-        const thisNames: Set<string> = new Set(this.children.map(c => c.name));
+    private compareTaskList(tasks: string[]): string[][] {
+        const thisNames: Set<string> = new Set(this.children);
         const result: Set<string> = new Set();
         for (const oChild of tasks) {
-            if (!thisNames.has(oChild.name)) {
-                result.add(oChild.name);
+            if (!thisNames.has(oChild)) {
+                result.add(oChild);
             } else {
-                thisNames.delete(oChild.name);
+                thisNames.delete(oChild);
             }
         }
         return [Array.from(thisNames), Array.from(result)];
     }
 
-    get created(): Date {
+    get created(): number {
         return this._created;
     }
 
-    set created(value: Date) {
+    set created(value: number) {
         this._created = value;
     }
 
@@ -192,55 +204,40 @@ export class Task implements ITask, Yamlable {
         this._name = value;
     }
 
-    get parents(): ITask[] {
-        return this._parents;
+    get complete(): boolean {
+        return this._complete;
     }
 
-    set parents(value: ITask[]) {
-        this._parents = value;
+    set complete(value: boolean) {
+        this._complete = value;
     }
 
-    addParent(p: ITask) {
-        this._parents.push(p)
-    }
-
-    removeParent(p: ITask) {
-        const foundIndex = this._parents.findIndex(parent => parent.name === p.name);
-        if (foundIndex !== -1) {
-            return this._parents.splice(foundIndex, 1)[0];
-        }
-        return null;
-    }
-
-
-    get status(): TaskStatus {
-        return this._status;
-    }
-
-    set status(value: TaskStatus) {
-        this._status = value;
-    }
-
-    get updated(): Date {
+    get updated(): number {
         return this._updated;
     }
 
-    set updated(value: Date) {
+    set updated(value: number) {
         this._updated = value;
+    }
+
+    get childRefs(): ITask[] {
+        return this._childRefs;
+    }
+
+    set childRefs(children: ITask[]) {
+        this._childRefs = children;
+        this.children = this._childRefs.map(cr => cr.name);
     }
 
     get yamlObject() {
         const yamlObj: TaskYamlObject = {
             name: this.name,
-            status: `${this.status}`,
+            complete: `${this.complete}`,
             locations: this._locations.map(l => `${l.filePath}:${l.line}`),
             created: this.created.toLocaleString(),
             updated: this.updated.toLocaleString(),
+            children: this.children || []
         };
-        if (this.parents)
-            yamlObj.parents = this.parents.map(p => p.name);
-        if (this.children)
-            yamlObj.children = this.children.map(c => c.name);
         return yamlObj;
     }
 
@@ -256,9 +253,9 @@ export class Task implements ITask, Yamlable {
     }
 
     public static asChecklist(task: ITask, colWidth: number = 4): string[] {
-        const x = task.status === TaskStatus.DONE ? 'x' : ' ';
+        const x = task.complete ? 'x' : ' ';
         let contents = [`- [${x}] ${task.name}`];
-        for (const child of task.children) {
+        for (const child of task.childRefs) {
             const childChecklistLines = Task.asChecklist(child, colWidth)
                 .map(line => Array(colWidth).fill(' ').join('') + line);
             contents.push(...childChecklistLines);

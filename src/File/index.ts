@@ -1,9 +1,12 @@
-import {CachedMetadata} from "obsidian";
+import {CachedMetadata, TFile} from "obsidian";
 import {FileTaskCache, TaskTree} from "./types";
 import TaskParser from "../TaskParser";
-import {IAnonymousTask} from "../Task";
-import {entries, isEqual} from "lodash";
+import {IAnonymousTask, ITask, TaskStatus} from "../Task";
+import {entries} from "lodash";
 import {hash} from "../util/hash";
+import globals from "../globals";
+
+const {app, vault, fileManager} = globals;
 
 export const getFileTaskCacheHash = async ({locations, hierarchy}: FileTaskCache): Promise<string> => {
     const sortedLocs = Object.keys(locations).sort().reduce((carry, k) => {
@@ -71,3 +74,16 @@ export const getFileTaskCache = (cache: CachedMetadata, fileContents: string): F
         hierarchy: tree
     };
 }
+
+export const getTasksFromFile = (file: TFile): IAnonymousTask[] => {
+    const ret: ITask = {
+        name: 'name',
+        status: TaskStatus.TODO,
+        created: new Date(),
+        updated: new Date(),
+        locations: [],
+        parents: [],
+        children: [],
+    }
+    return [ret];
+};
