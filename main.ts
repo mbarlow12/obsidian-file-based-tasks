@@ -18,6 +18,7 @@ import {entries, intersection, isEqual} from 'lodash';
 import {TaskEvents} from "./src/Events/TaskEvents";
 import {FileTaskCache} from "./src/File/types";
 import {getFileTaskCache, getFileTaskCacheHash} from "./src/File";
+import globals from './src/globals';
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
@@ -52,6 +53,12 @@ export default class ObsidianTaskManager extends Plugin {
                 this.taskEvents = new TaskEvents(this.app.workspace);
                 await this.registerEvents();
                 this.initialized = true;
+            }
+            if (!globals.initialized) {
+                globals.app = this.app;
+                globals.vault = this.app.vault;
+                globals.fileManager = this.app.fileManager;
+                globals.initialized = true;
             }
         });
     }
@@ -97,8 +104,13 @@ export default class ObsidianTaskManager extends Plugin {
         }));
     }
 
+    /**
+     * If file is a task file, get the task, and add it to the index.
+     *
+     * @param abstractFile
+     * @private
+     */
     private async handleFileCreated(abstractFile: TAbstractFile) {
-        console.log('FILE CREATED', abstractFile.path);
         // is it a task file?
 
         if (abstractFile instanceof TFile) {
@@ -196,6 +208,13 @@ export default class ObsidianTaskManager extends Plugin {
 
     // TODO: how to handle if someone changes the 'name' of a task in task file
 
+    /**
+     * if task file, we're renaming the task, and its presence in all parents & locations
+     * if not a task file, we're only changing location references
+     * @param abstractFile
+     * @param oldPath
+     * @private
+     */
     private async handleFileRenamed(abstractFile: TAbstractFile, oldPath: string) {
         // mainly changing link data & locations
         if (abstractFile instanceof TFile) {

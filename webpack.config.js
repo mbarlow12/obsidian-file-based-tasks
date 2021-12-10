@@ -16,9 +16,13 @@ module.exports = {
         ],
     },
     externals: {
-        obsidian: 'obsidian'
+        obsidian: 'obsidian',
     },
     resolve: {
-        extensions: ['.js', '.ts']
+        extensions: ['.js', '.ts'],
+        fallback: {
+            crypto: require.resolve('crypto-browserify'),
+            path: require.resolve('path-browserify')
+        }
     }
 }
