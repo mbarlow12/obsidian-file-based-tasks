@@ -17,7 +17,7 @@ import {TaskFileManager} from "./src/TaskFileManager";
 import {entries, intersection, isEqual} from 'lodash';
 import {TaskEvents} from "./src/Events/TaskEvents";
 import {FileTaskCache} from "./src/File/types";
-import {getFileTaskCache, getFileTaskCacheHash} from "./src/File";
+import {getFileTaskCache, hashTaskCache} from "./src/File";
 import globals from './src/globals';
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
@@ -130,7 +130,7 @@ export default class ObsidianTaskManager extends Plugin {
                 }));
                 // update cache
                 const cache = getFileTaskCache(fileMdCache, contents);
-                const sha = await getFileTaskCacheHash(cache);
+                const sha = await hashTaskCache(cache);
                 this.fileTaskCaches[abstractFile.path] = {sha, cache}
             }
             if (ts.length)
@@ -161,7 +161,7 @@ export default class ObsidianTaskManager extends Plugin {
             this.app.vault.read(abstractFile)
                 .then(contents => getFileTaskCache(fileMetadataCache, contents))
                 .then(async newTaskCache => {
-                    const newsha = await getFileTaskCacheHash(newTaskCache);
+                    const newsha = await hashTaskCache(newTaskCache);
                     if (sha !== newsha) {
                         this.taskFileManager.parseTasksFromFile(abstractFile)
                             .then(tasksData => {
@@ -222,7 +222,7 @@ export default class ObsidianTaskManager extends Plugin {
             const contents = await this.app.vault.read(abstractFile);
             const metadataCache = this.app.metadataCache.getFileCache(abstractFile);
             const newCache = getFileTaskCache(metadataCache, contents);
-            const newSha = await getFileTaskCacheHash(newCache);
+            const newSha = await hashTaskCache(newCache);
             // update filetaskcache
             delete this.fileTaskCaches[oldPath];
             this.fileTaskCaches[abstractFile.path] = {sha: newSha, cache: newCache};
@@ -280,7 +280,7 @@ export default class ObsidianTaskManager extends Plugin {
                 const fileCache = this.app.metadataCache.getFileCache(file);
                 const taskCache = getFileTaskCache(fileCache, fileContents);
                 this.fileTaskCaches[file.path] = {
-                    sha: await getFileTaskCacheHash(taskCache),
+                    sha: await hashTaskCache(taskCache),
                     cache: taskCache
                 };
                 for (const [line, task] of TaskParser.parseLines(fileContents)) {

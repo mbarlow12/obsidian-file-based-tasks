@@ -10,13 +10,12 @@ export type TaskYamlObject = {
     complete: 'true'|'false'
 }
 
-export interface TaskList {
-    tasks: Record<string, ITask>;
-    createItem: (name: string) => void;
-    deleteItem: (nameOrId: string) => void;
-    completeItem: (nameOrId: string) => void;
-    moveItem: (nameOrId: string, destination: string) => void;
-}
+export type TaskID = number;
+
+/**
+ * `[file path with extension]:[line number]`
+ */
+export type LocationString = string;
 
 /**
  * todo: add block creation and handling
@@ -36,14 +35,25 @@ export interface FileTaskLine extends Array<number | ITask> {
 }
 
 export interface ITask {
+    id: number;
     name: string;
     complete: boolean;
-    locations: TaskLocation[];
+    locations?: TaskLocation[];
     created: number;
     updated: number;
     description?: string;
-    children: string[];
+    children: number[];
     childRefs?: ITask[];
 }
+
+export interface DisplayTask {
+    id: number;
+    name: string;
+    complete: boolean;
+    location: TaskLocation;
+    parent?: ITask;
+}
+
+export type AnonymousDisplayTask = Omit<DisplayTask, 'id'>;
 
 export type BaseTask = Pick<ITask, 'name'|'complete'>;

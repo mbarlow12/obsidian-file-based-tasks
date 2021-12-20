@@ -1,14 +1,14 @@
 import {CachedMetadata, TFile} from "obsidian";
 import {FileTaskCache, TaskTree} from "./types";
 import TaskParser from "../TaskParser";
-import {IAnonymousTask, ITask, TaskStatus} from "../Task";
+import {BaseTask, ITask} from "../Task";
 import {entries} from "lodash";
 import {hash} from "../util/hash";
 import globals from "../globals";
 
 const {app, vault, fileManager} = globals;
 
-export const getFileTaskCacheHash = async ({locations, hierarchy}: FileTaskCache): Promise<string> => {
+export const hashTaskCache = async ({locations, hierarchy}: FileTaskCache): Promise<string> => {
     const sortedLocs = Object.keys(locations).sort().reduce((carry, k) => {
         const key = Number.parseInt(k);
         carry[key] = locations[key];
@@ -20,7 +20,7 @@ export const getFileTaskCacheHash = async ({locations, hierarchy}: FileTaskCache
 
 export const getFileTaskCache = (cache: CachedMetadata, fileContents: string): FileTaskCache => {
     const lines = fileContents.split(/\r?\n/g);
-    const taskIndex: Record<number, IAnonymousTask> = {};
+    const taskIndex: Record<number, BaseTask> = {};
     const tree: TaskTree = {};
     // add parent/child relationships if they exist
     for (const cacheListItem of cache.listItems || []) {
@@ -37,7 +37,7 @@ export const getFileTaskCache = (cache: CachedMetadata, fileContents: string): F
         if (!(task.name in tree)) {
             tree[task.name] = {
                 name: task.name,
-                status: task.status
+                complete: task.complete,
             };
         }
 

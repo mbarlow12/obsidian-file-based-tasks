@@ -2,7 +2,7 @@
  *
  */
 import {TFile, Vault} from "obsidian";
-import {ITask, TaskList} from "./Task/types";
+import {ITask} from "./Task/types";
 
 export class TaskManager {
     private tasks: Record<string, ITask[]>; // id -> Task

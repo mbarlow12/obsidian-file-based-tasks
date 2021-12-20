@@ -19,7 +19,7 @@ const locStr = (name: string, l: TaskLocation): string => `${l.filePath}:${l.lin
 
 const dataStr = (data: unknown): string =>`${frontDelim}${data}${rearDelim}`;
 
-const requiredKeys: Array<keyof ITask> = ['status','name', 'locations', 'created', 'updated']
+const requiredKeys: Array<keyof ITask> = ['complete', 'name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
     private tasks: Record<string, ITask>

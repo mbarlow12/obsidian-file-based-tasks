@@ -1,10 +1,10 @@
-import {IAnonymousTask, TaskStatus} from "../Task";
+import {BaseTask} from "../Task";
 
 export type TreeNode<T> = {
     [k in keyof T]: T[k]
 }
 
-export type TH = Pick<IAnonymousTask, 'name'|'status'> & {children?: string[]};
+export type TH = Pick<BaseTask, 'name'|'complete'> & {children?: string[]};
 export type TaskTreeNode = TreeNode<TH>;
 
 // export type TaskTreeNode = Pick<IAnonymousTask, 'name'|'status'> & { children?: string []} &
