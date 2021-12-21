@@ -1,85 +1,143 @@
 // import {stringifyYaml} from "obsidian";
-import { ITask, TaskLocation, TaskYamlObject, Yamlable} from "./types";
+import {DisplayTask, ITask, ITaskTree, TaskLocation, TaskYamlObject, Yamlable} from "./types";
+import {TaskIndex} from "../TaskIndex";
+import {stringifyYaml} from "obsidian";
+import {TaskTree} from "../File/types";
+
+export const emptyTask: ITask = {
+    id: -1,
+    complete: false,
+    name: '',
+    locations: [],
+    created: 0,
+    updated: 0,
+    children: [],
+};
+
+export const getTaskFromYaml = (yaml: TaskYamlObject): ITask => {
+    const {
+        complete, id, locations, children, name, created, updated
+    } = yaml;
+    return {
+        id: Number.parseInt(id),
+        name,
+        complete: complete === 'true',
+        created: Date.parse(created),
+        updated: Date.parse(updated),
+        locations: locations.map(loc => {
+            const [filePath, line, name] = loc.split(':');
+            return {filePath, line: Number.parseInt(line)}
+        }),
+        children: children.map(c => Number.parseInt(c))
+    };
+}
+
+export const taskToYamlObject = (task: ITask): TaskYamlObject => {
+    const {id, name, complete, locations, created, updated, children} = task
+    return {
+        id: `${id}`,
+        name,
+        complete: `${complete}`,
+        locations: locations.map(l => `${l.filePath}:${l.line}`),
+        created: (new Date(created)).toLocaleString(),
+        updated: (new Date(updated)).toLocaleString(),
+        children: (children || []).map(c => `${c}`)
+    };
+}
+
+export const taskToFileContents = (task: ITask): string => {
+    const yamlObject = taskToYamlObject(task);
+    let ret = stringifyYaml(yamlObject);
+    ret += '\n';
+    ret += task.description;
+    return ret;
+}
+
+export const taskToJsonString = (task: ITask): string => {
+    const {
+        name, complete, locations, children, description, created, updated
+    } = task;
+    const ret: Record<string, string | boolean | TaskLocation[] | string[]> = {
+        name, complete, locations, created: `${created}`, updated: `${updated}`
+    };
+    if (children)
+        ret.children = children.map(c => `${c}`);
+    if (description)
+        ret.description = description.trim();
+    return JSON.stringify(ret);
+}
+
+export const hashTask = async (task: ITask): Promise<string> => {
+    const encoded = new TextEncoder().encode(taskToJsonString(task));
+    const buffer = await crypto.subtle.digest('SHA-256', encoded);
+    const hashArray = Array.from(new Uint8Array(buffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
+export const taskAsChecklist = (task: ITaskTree, colWidth: number = 4): string[] => {
+    const x = task.complete ? 'x' : ' ';
+    let contents = [`- [${x}] ${task.name}`];
+    for (const child of task.children) {
+        const childChecklistLines = taskAsChecklist(child, colWidth)
+            .map(line => Array(colWidth).fill(' ').join('') + line);
+        contents.push(...childChecklistLines);
+    }
+    return contents;
+}
+
+/**
+ * if both rets are empty, children are identical
+ * if ret[0] is empty, taskB has added child task ids
+ * if ret[1] is empty, taskB has deleted child task ids
+ * if neither are empty, taskA's ids were deleted and taskB's were added
+ *
+ * @param taskA
+ * @param taskB
+ * @return Array - [child ids in A not in B, child ids in B not in A]
+ */
+export const compareTaskChildren = (taskA: ITask, taskB: ITask): [number[], number[]] => {
+    return compareArrays(taskA.children, taskB.children);
+};
+
+export const compareTaskLocations = (first: ITask, second: ITask): [TaskLocation[], TaskLocation[]] => {
+    return compareArrays(first.locations, second.locations);
+}
+
+const compareArrays = <T>(first: T[], second: T[]): [T[], T[]] => {
+  const firstItems = new Set<T>(first);
+  const secondItems = new Set<T>();
+  for (const si of second) {
+      if (!firstItems.has(si)) {
+          secondItems.add(si);
+      }
+      else {
+          firstItems.delete(si);
+      }
+  }
+  return [Array.from(firstItems), Array.from(secondItems)];
+};
 
 export class Task implements ITask, Yamlable {
     private _complete: boolean;
     private _name: string;
     private _description: string;
-    private _children: string[];
+    private _children: number[];
     private _locations: TaskLocation[];
     private _created: number;
     private _updated: number;
-    private _id: string;
+    private _id: number;
     private _childRefs: Array<ITask>;
 
-    public static fromITask(iTask: ITask) {
-        return new Task(
-            iTask.name,
-            iTask.complete,
-            iTask.locations,
-            iTask.description,
-            iTask.created,
-            iTask.updated,
-            iTask.children
-        );
-    }
-
-    public static fromAnonymousTask({
-                                        name,
-                                        complete,
-                                        children
-                                    }: ITask, locations: TaskLocation[] = []): ITask {
-        return {
-            name,
-            complete,
-            children: (children || []),
-            locations: [],
-            created: Date.now(),
-            updated: Date.now(),
-        };
-    }
-
-    public static flatFromYamlObject({
-                                         name,
-                                         complete,
-                                         locations = [],
-                                         created,
-                                         updated,
-                                         children = []
-                                     }: TaskYamlObject) {
-        const task = new Task(name);
-        task.complete = complete === 'true';
-        task.locations = locations && locations.map(locStr => {
-            const [filePath, line] = locStr.split(':');
-            return {filePath, line: Number.parseInt(line)};
-        });
-        task.updated = Date.parse(updated);
-        task.created = Date.parse(created);
-        task.children = children;
-        return task;
-    }
-
-    public static hash(task: ITask): string {
-        const {
-            name, complete, locations, children, description
-        } = task;
-        const ret: Record<string, string | boolean | TaskLocation[] | string[]> = {
-            name, complete, locations
-        };
-        if (children)
-            ret.children = [...children];
-        if (description)
-            ret.description = description;
-        return JSON.stringify(ret);
-    }
-
-    constructor(name: string,
+    constructor(id: number,
+                name: string,
                 complete: boolean = false,
                 locs?: TaskLocation | TaskLocation[],
                 description?: string,
                 created?: string | Date | number,
                 updated?: string | Date | number,
-                children?: Array<ITask>|string[]) {
+                children?: Array<ITask>|number[]) {
+        this.id = id;
         this.name = name;
         this.complete = complete;
         this.locations = locs ? Array.isArray(locs) ? locs : [locs] : [];
@@ -98,60 +156,47 @@ export class Task implements ITask, Yamlable {
                     updated : (new Date(updated)).getTime() :
             Date.now();
         this.description = description;
-        if (children.length) {
+        if (children && children.length) {
             this.children = children.map(c => {
-               if (typeof c !== 'string') {
-                   return c.name;
+               if (typeof c !== 'number') {
+                   return c.id;
                }
-               return c;
-            });
-            this.childRefs = children.map(c => {
-               if (typeof c === 'string')
-                   return;
                return c;
             });
         }
     }
 
-    public get children() {
-        return this._children;
+
+    public addChild(t: ITask|number) {
+        this._children.push(typeof t === 'number' ? t : t.id);
     }
 
-    public set children(children: string[]) {
-        this._children = children;
-    }
-
-    public addChild(t: ITask|string) {
-        this._children.push(typeof t === 'string' ? t : t.name);
-    }
-
-    public removeChild(name: string): string | null {
-        let i = this._children.findIndex(existing => existing === name);
+    public removeChild(id: number): number | null {
+        let i = this._children.findIndex(existing => existing === id);
         if (i !== -1)
             return this._children.splice(i, 1)[0];
 
-        i = this._childRefs.findIndex(curr => curr.name === name);
+        i = this._childRefs.findIndex(curr => curr.id === id);
         if (i !== -1)
-            return this._childRefs.splice(i, 1)[0]['name'];
+            return this._childRefs.splice(i, 1)[0]['id'];
 
         return null;
     }
 
-    public compareChildren({children}: ITask): string[][] {
-        return this.compareTaskList(children);
+    get id() {
+        return this._id;
     }
 
-    private compareTaskList(tasks: string[]): string[][] {
-        const thisNames: Set<string> = new Set(this.children);
-        const result: Set<string> = new Set();
-        for (const oChild of tasks) {
-            if (!thisNames.has(oChild)) {
-                result.add(oChild);
-            } else {
-                thisNames.delete(oChild);
-            }
-        }
-        return [Array.from(thisNames), Array.from(result)];
+    set id(id: number) {
+        this._id = id;
+    }
+
+    get children() {
+        return this._children;
+    }
+
+    set children(tasks: number[]) {
+        this._children = tasks;
     }
 
     get created(): number {
@@ -220,51 +265,8 @@ export class Task implements ITask, Yamlable {
         this._updated = value;
     }
 
-    get childRefs(): ITask[] {
-        return this._childRefs;
-    }
-
-    set childRefs(children: ITask[]) {
-        this._childRefs = children;
-        this.children = this._childRefs.map(cr => cr.name);
-    }
-
     get yamlObject() {
-        const yamlObj: TaskYamlObject = {
-            name: this.name,
-            complete: `${this.complete}`,
-            locations: this._locations.map(l => `${l.filePath}:${l.line}`),
-            created: this.created.toLocaleString(),
-            updated: this.updated.toLocaleString(),
-            children: this.children || []
-        };
-        return yamlObj;
-    }
-
-    public static toYamlString(task: ITask): string {
-        // return stringifyYaml(Task.fromITask(task).yamlObject);
-        return '';
-    }
-
-    public toFileContents() {
-        // const yaml = stringifyYaml(this.yamlObject);
-        // return `${yaml}\n${this.description}`;
-        return '';
-    }
-
-    public static asChecklist(task: ITask, colWidth: number = 4): string[] {
-        const x = task.complete ? 'x' : ' ';
-        let contents = [`- [${x}] ${task.name}`];
-        for (const child of task.childRefs) {
-            const childChecklistLines = Task.asChecklist(child, colWidth)
-                .map(line => Array(colWidth).fill(' ').join('') + line);
-            contents.push(...childChecklistLines);
-        }
-        return contents;
-    }
-
-    public static isTask(task: ITask): task is Task {
-        return Object.getOwnPropertyNames(task).includes('yamlObject');
+        return taskToYamlObject(this);
     }
 }
 

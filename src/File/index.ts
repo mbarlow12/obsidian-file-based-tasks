@@ -1,5 +1,5 @@
 import {CachedMetadata, TFile} from "obsidian";
-import {FileTaskCache, TaskTree} from "./types";
+import {FileTaskCache, TaskCacheItems, TaskTree} from "./types";
 import TaskParser from "../TaskParser";
 import {BaseTask, ITask} from "../Task";
 import {entries} from "lodash";
@@ -7,6 +7,21 @@ import {hash} from "../util/hash";
 import globals from "../globals";
 
 const {app, vault, fileManager} = globals;
+
+export const getTaskCacheItems = (cache: CachedMetadata, contents: string): TaskCacheItems => {
+    const items: TaskCacheItems = {};
+    const lines = contents.split(/\r?\n/g);
+
+    for (const listItem of cache.listItems.filter(li => li.task)) {
+        const taskLine = listItem.position.start.line;
+        const taskName = TaskParser.parseLine(lines[taskLine]);
+        if (!taskName) {
+            throw new Error(`No task found at ${taskLine}.`);
+        }
+    }
+
+    return items;
+};
 
 export const hashTaskCache = async ({locations, hierarchy}: FileTaskCache): Promise<string> => {
     const sortedLocs = Object.keys(locations).sort().reduce((carry, k) => {

@@ -22,23 +22,34 @@ const dataStr = (data: unknown): string =>`${frontDelim}${data}${rearDelim}`;
 const requiredKeys: Array<keyof ITask> = ['complete', 'name', 'locations', 'created', 'updated']
 
 export class TaskIndex {
-    private tasks: Record<string, ITask>
-    private locationIndex: Record<string, ITask>
+    private tasks: Record<number, ITask>;
+    private locationIndex: Record<string, number>;
+    private tasksByName: Record<string, number>;
+    private nextId: number;
 
     constructor(tasks: ITask[] = []) {
         this.tasks = {};
         this.locationIndex = {};
+        let nextId = 0;
+        const tasksWithoutids: number[] = [];
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
-            this.tasks[task.name] = task;
+            this.tasks[task.id] = task;
+            this.tasksByName[task.name] = task.id;
             for (const location of task.locations) {
-                this.locationIndex[locStr(task.name, location)] = this.tasks[task.name];
+                this.locationIndex[locStr(task.name, location)] = task.id;
             }
+            if (!task.id) {
+                tasksWithoutids.push(i);
+            }
+            else
+                nextId = Math.max(nextId, task.id) + 1;
         }
-    }
-
-    public static taskID(name: string, taskDir: TFolder) {
-        return `${taskDir.path}/${name}.md`;
+        nextId = nextId ?? Date.now();
+        for (const noIdIndex of tasksWithoutids) {
+            this.tasks[noIdIndex]['id'] = nextId++;
+        }
+        this.nextId = nextId;
     }
 
     search(needle: string) {
@@ -46,16 +57,19 @@ export class TaskIndex {
     }
 
     createTask(name: string, location: TaskLocation): ITask {
-        this.tasks[name] = new Task(name, TaskStatus.TODO, [location]);
-        this.locationIndex[locStr(name, location)] = this.tasks[name];
+        const id = this.nextId++;
+        const task = new Task(id, name, false, [location], '', Date.now(), Date.now());
+        this.tasks[id] = task;
+        this.locationIndex[locStr(name, location)] = id;
+        this.tasksByName[task.name] = id;
         this.deduplicate();
-        return this.tasks[name];
+        return this.tasks[id];
     }
 
-    completeTask(name: string) {
+    completeTask(name: string|number) {
         if (this.taskExists(name)) {
             const task = this.getTaskByName(name);
-            task.status = TaskStatus.DONE;
+            task.complete = true;
             this.updateTask(task);
         }
     }
@@ -114,8 +128,12 @@ export class TaskIndex {
         this.deduplicate();
     }
 
-    taskExists(name: string) {
-        return Object.keys(this.tasks).includes(name);
+    taskExists(name: string|number) {
+        if (typeof name === 'number') {
+            return this.tasks.hasOwnProperty(name);
+        }
+        else
+            return Object.values(this.tasks).filter(t => t.name === name).length > 0;
     }
 
     deleteLocations(taskName: string, locs: TaskLocation[]) {
@@ -211,21 +229,18 @@ export class TaskIndex {
         }
     }
 
-    getTaskById(id: number|string) {
+    getTaskById(id: number) {
         return this.tasks[id];
     }
 
     public getTaskByName(name: string): ITask|null {
-        if (name in this.tasks) {
-            return this.tasks[name];
-        }
-        return null;
+        return this.tasks[this.tasksByName[name]] || null;
     }
 
     getTasksByFilename(name: string): TaskIndex {
         const tasks: ITask[] = Object.keys(this.locationIndex)
             .filter(k => k.split(':')[0] === name)
-            .map(k => this.locationIndex[k]);
+            .map(k => this.tasks[this.locationIndex[k]]);
         return new TaskIndex(tasks);
     }
 

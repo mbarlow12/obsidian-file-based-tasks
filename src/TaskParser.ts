@@ -1,5 +1,8 @@
-import {ITask, FileTaskLine} from "./Task/types";
+import {ITask, FileTaskLine, AnonymousDisplayTask} from "./Task/types";
 import {emptyTask} from "./Task";
+import {CachedMetadata, TFile} from "obsidian";
+
+const strictPattern: RegExp = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/gm;
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
@@ -41,3 +44,33 @@ export default class TaskParser {
         }, {} as Record<number, ITask>);
     }
 }
+
+export const parseFileContents = (filePath: string, contents: string, fileCache: CachedMetadata): Record<number, AnonymousDisplayTask> => {
+    const cacheTasks = fileCache.listItems.filter(li => li.task);
+    const lines = contents.split(/(\r|\n)/g);
+    const ret: Record<number, AnonymousDisplayTask> = {};
+    for (let i = 0; i < cacheTasks.length; i++) {
+        const cacheListItem = cacheTasks[i];
+        const lineNum = cacheListItem.position.start.line;
+        if (lineNum >= lines.length)
+            throw new Error("Cache line number cannot be longer than file lines.")
+
+        const line = lines[lineNum];
+        const match = line.match(strictPattern);
+        if (match) {
+            const {complete, taskLine, id} = match.groups;
+            const task: AnonymousDisplayTask = {
+                complete: complete === 'x',
+                name: taskLine.trim(),
+                location: { filePath: filePath, line: lineNum},
+            };
+            if (id)
+                task.id = Number.parseInt(id);
+            if (cacheListItem.parent > -1) {
+                task.parent = ret[cacheListItem.parent];
+            }
+            ret[lineNum] = task;
+        }
+    }
+    return ret;
+};

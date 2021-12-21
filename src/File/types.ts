@@ -1,4 +1,12 @@
 import {BaseTask} from "../Task";
+import {ListItemCache} from "obsidian";
+
+export interface TaskCacheItem extends ListItemCache {
+    name: string;
+    parentName?: string;
+}
+
+export type TaskCacheItems = Record<number, TaskCacheItem>;
 
 export type TreeNode<T> = {
     [k in keyof T]: T[k]

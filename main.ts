@@ -11,7 +11,7 @@ import {
     TAbstractFile, TFile, TFolder
 } from 'obsidian';
 import {TaskIndex} from "./src/TaskIndex";
-import TaskParser from "./src/TaskParser";
+import TaskParser, {parseFileContents} from "./src/TaskParser";
 import {FileTaskLine, IAnonymousTask, ITask, Task, TaskLocation} from "./src/Task";
 import {TaskFileManager} from "./src/TaskFileManager";
 import {entries, intersection, isEqual} from 'lodash';
@@ -116,6 +116,16 @@ export default class ObsidianTaskManager extends Plugin {
         if (abstractFile instanceof TFile) {
             const contents = await this.app.vault.read(abstractFile);
             const fileMdCache = this.app.metadataCache.getFileCache(abstractFile);
+
+            if (this.taskFileManager.isTaskFile(abstractFile)) {
+                const task = await this.taskFileManager.getTaskFromTaskFile(abstractFile);
+                if (!this.index.taskExists(task.id)) {
+                    this.index.addTask(task);
+                }
+            }
+            else {
+                const taskData = parseFileContents(abstractFile.path, contents, fileMdCache);
+            }
             const ts: ITask[] = [];
             const [task, taskRecord] = await this.taskFileManager.parseTasksFromFile(abstractFile);
             if (task) {
