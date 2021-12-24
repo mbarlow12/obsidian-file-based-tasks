@@ -7,14 +7,14 @@ test('Task stringifies properly', () => {
         complete: true,
         created: Date.now(),
         updated: Date.now(),
-        locations: [{filePath: 'main/a good file.md', line: 5}],
+        locations: [{filePath: 'main/a good file.md', position: 5}],
         children: [],
     }
 
    const task: ITask = {
        name: "Test task 1",
        complete: true,
-       locations: [{filePath: 'main/a good file.md', line: 4}, {filePath: 'inbox/an unworked file.md', line: 35}],
+       locations: [{filePath: 'main/a good file.md', position: 4}, {filePath: 'inbox/an unworked file.md', position: 35}],
        children: [child.name],
        childRefs: [child],
        created: Date.now(),

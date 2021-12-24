@@ -1,17 +1,20 @@
-// import {stringifyYaml} from "obsidian";
-import {DisplayTask, ITask, ITaskTree, TaskLocation, TaskYamlObject, Yamlable} from "./types";
-import {TaskIndex} from "../TaskIndex";
-import {stringifyYaml} from "obsidian";
+import {BaseTask, DisplayTask, ITask, ITaskTree, TaskLocation, TaskYamlObject, Yamlable} from "./types";
+import {stringifyYaml, TFile} from "obsidian";
 import {TaskTree} from "../File/types";
+import {pos, taskLocationStr, taskLocFromStr} from "./index";
 
-export const emptyTask: ITask = {
-    id: -1,
-    complete: false,
-    name: '',
-    locations: [],
-    created: 0,
-    updated: 0,
-    children: [],
+const taskFileNameRegex = /^(?<name>\w.*)(?= - \d+) - (?<id>\d+)(?:.md)?/;
+
+export const emptyTask: () => ITask = () => {
+    return {
+        id: -1,
+        complete: false,
+        name: '',
+        locations: [],
+        created: Date.now(),
+        updated: Date.now(),
+        children: [],
+    };
 };
 
 export const getTaskFromYaml = (yaml: TaskYamlObject): ITask => {
@@ -24,10 +27,7 @@ export const getTaskFromYaml = (yaml: TaskYamlObject): ITask => {
         complete: complete === 'true',
         created: Date.parse(created),
         updated: Date.parse(updated),
-        locations: locations.map(loc => {
-            const [filePath, line, name] = loc.split(':');
-            return {filePath, line: Number.parseInt(line)}
-        }),
+        locations: locations.map(taskLocFromStr),
         children: children.map(c => Number.parseInt(c))
     };
 }
@@ -38,12 +38,34 @@ export const taskToYamlObject = (task: ITask): TaskYamlObject => {
         id: `${id}`,
         name,
         complete: `${complete}`,
-        locations: locations.map(l => `${l.filePath}:${l.line}`),
+        locations: locations.map(taskLocationStr),
         created: (new Date(created)).toLocaleString(),
         updated: (new Date(updated)).toLocaleString(),
         children: (children || []).map(c => `${c}`)
     };
 }
+
+export const taskToBasename = (task: ITask) => `${task.name} - ${task.id}`;
+
+export const isFilenameValid = (f: TFile): boolean => {
+    const match = f.basename.match(taskFileNameRegex);
+    if (!match)
+        return false
+
+    if (!match.groups.hasOwnProperty('name'))
+        return false;
+
+    if (!match.groups.hasOwnProperty('id'))
+        return false;
+
+    return true;
+}
+
+export const parseTaskFilename = (f: TFile) => {
+    const match = f.basename.match(taskFileNameRegex);
+    const {name, id} = match.groups;
+    return {name, id};
+};
 
 export const taskToFileContents = (task: ITask): string => {
     const yamlObject = taskToYamlObject(task);
@@ -58,8 +80,15 @@ export const taskToJsonString = (task: ITask): string => {
         name, complete, locations, children, description, created, updated
     } = task;
     const ret: Record<string, string | boolean | TaskLocation[] | string[]> = {
-        name, complete, locations, created: `${created}`, updated: `${updated}`
+        name, complete, created: `${created}`
     };
+    ret.locations = locations.sort((a, b) => {
+        let comp = a.filePath.localeCompare(b.filePath);
+        if (comp === 0) {
+            return a.position.start.line - b.position.start.line;
+        }
+        return comp;
+    });
     if (children)
         ret.children = children.map(c => `${c}`);
     if (description)
@@ -74,16 +103,14 @@ export const hashTask = async (task: ITask): Promise<string> => {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+export const taskAsChecklist = (t: BaseTask) => `- [${t.complete ? 'x' : ' '}] ${t.name} ^${t.id}`;
 
-export const taskAsChecklist = (task: ITaskTree, colWidth: number = 4): string[] => {
-    const x = task.complete ? 'x' : ' ';
-    let contents = [`- [${x}] ${task.name}`];
-    for (const child of task.children) {
-        const childChecklistLines = taskAsChecklist(child, colWidth)
-            .map(line => Array(colWidth).fill(' ').join('') + line);
-        contents.push(...childChecklistLines);
-    }
-    return contents;
+export const taskFileLine = (t: BaseTask, offset: number = 0) => new Array(offset).fill(' ').join('') + taskAsChecklist(t);
+
+export const fullTaskChecklist = (t: ITaskTree, offset: number = 0): string => {
+    const lines: string[] = [taskFileLine(t, offset)];
+    lines.push(...t.children.map( c => fullTaskChecklist(c, offset + 2)))
+    return lines.join('\n');
 }
 
 /**
@@ -104,18 +131,17 @@ export const compareTaskLocations = (first: ITask, second: ITask): [TaskLocation
     return compareArrays(first.locations, second.locations);
 }
 
-const compareArrays = <T>(first: T[], second: T[]): [T[], T[]] => {
-  const firstItems = new Set<T>(first);
-  const secondItems = new Set<T>();
-  for (const si of second) {
-      if (!firstItems.has(si)) {
-          secondItems.add(si);
-      }
-      else {
-          firstItems.delete(si);
-      }
-  }
-  return [Array.from(firstItems), Array.from(secondItems)];
+export const compareArrays = <T>(first: T[], second: T[]): [T[], T[]] => {
+    const firstItems = new Set<T>(first);
+    const secondItems = new Set<T>();
+    for (const si of second) {
+        if (!firstItems.has(si)) {
+            secondItems.add(si);
+        } else {
+            firstItems.delete(si);
+        }
+    }
+    return [Array.from(firstItems), Array.from(secondItems)];
 };
 
 export class Task implements ITask, Yamlable {
@@ -129,6 +155,11 @@ export class Task implements ITask, Yamlable {
     private _id: number;
     private _childRefs: Array<ITask>;
 
+    public static fromITask(t: ITask) {
+        const {id, name, complete, locations, description, created, updated, children} = t;
+        return new Task(id, name, complete, locations, description, created, updated, children);
+    }
+
     constructor(id: number,
                 name: string,
                 complete: boolean = false,
@@ -136,7 +167,7 @@ export class Task implements ITask, Yamlable {
                 description?: string,
                 created?: string | Date | number,
                 updated?: string | Date | number,
-                children?: Array<ITask>|number[]) {
+                children?: Array<ITask> | number[]) {
         this.id = id;
         this.name = name;
         this.complete = complete;
@@ -158,16 +189,16 @@ export class Task implements ITask, Yamlable {
         this.description = description;
         if (children && children.length) {
             this.children = children.map(c => {
-               if (typeof c !== 'number') {
-                   return c.id;
-               }
-               return c;
+                if (typeof c !== 'number') {
+                    return c.id;
+                }
+                return c;
             });
         }
     }
 
 
-    public addChild(t: ITask|number) {
+    public addChild(t: ITask | number) {
         this._children.push(typeof t === 'number' ? t : t.id);
     }
 
@@ -229,7 +260,10 @@ export class Task implements ITask, Yamlable {
     }
 
     public removeLocation(loc: TaskLocation) {
-        const i = this._locations.findIndex(({filePath, line}) => filePath === loc.filePath && line === loc.line);
+        const i = this._locations.findIndex(({
+                                                 filePath,
+                                                 position
+                                             }) => filePath === loc.filePath && position === loc.position);
         if (i !== -1)
             return this._locations.splice(i, 1)[0];
         return null;
@@ -237,7 +271,7 @@ export class Task implements ITask, Yamlable {
 
     public hasLocation(loc: TaskLocation) {
         const i = this._locations
-            .findIndex(({filePath, line}) => filePath === loc.filePath && line === loc.line);
+            .findIndex(({filePath, position}) => filePath === loc.filePath && position === loc.position);
         return i > -1;
     }
 

@@ -1,5 +1,5 @@
-import {ITask, FileTaskLine, AnonymousDisplayTask} from "./Task/types";
-import {emptyTask} from "./Task";
+import {ITask, FileTaskLine, DisplayTask} from "../Task/types";
+import {emptyTask} from "../Task";
 import {CachedMetadata, TFile} from "obsidian";
 
 const strictPattern: RegExp = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/gm;
@@ -17,7 +17,7 @@ export default class TaskParser {
         if (match) {
             const {complete, taskLine} = match.groups;
             return {
-                ...emptyTask,
+                ...emptyTask(),
                 complete: complete === 'x',
                 name: taskLine.trim(),
             };
@@ -32,44 +32,41 @@ export default class TaskParser {
         }).filter(tl => tl[1] !== null);
     }
 
-    static parseLinesToRecord(filePath: string, contents: string): Record<number, ITask> {
-        const lines = contents.split(/\r?\n/g);
-        return lines.reduce((rec, line, lineNum) => {
-            const task = TaskParser.parseLine(line);
-            if (task) {
-                task.locations = [{filePath, line: lineNum}]
-                rec[lineNum] = task;
-            }
-            return rec;
-        }, {} as Record<number, ITask>);
-    }
+    // static parseLinesToRecord(filePath: string, contents: string): Record<number, ITask> {
+    //     const lines = contents.split(/\r?\n/g);
+    //     return lines.reduce((rec, line, lineNum) => {
+    //         const task = TaskParser.parseLine(line);
+    //         if (task) {
+    //             task.locations = [{filePath, position: lineNum}]
+    //             rec[lineNum] = task;
+    //         }
+    //         return rec;
+    //     }, {} as Record<number, ITask>);
+    // }
 }
 
-export const parseFileContents = (filePath: string, contents: string, fileCache: CachedMetadata): Record<number, AnonymousDisplayTask> => {
+
+export const parseFileContents = (filePath: string, contents: string, fileCache: CachedMetadata): Array<[number, DisplayTask]> => {
     const cacheTasks = fileCache.listItems.filter(li => li.task);
-    const lines = contents.split(/(\r|\n)/g);
-    const ret: Record<number, AnonymousDisplayTask> = {};
+    const ret: Array<[number, DisplayTask]> = [];
     for (let i = 0; i < cacheTasks.length; i++) {
         const cacheListItem = cacheTasks[i];
-        const lineNum = cacheListItem.position.start.line;
-        if (lineNum >= lines.length)
-            throw new Error("Cache line number cannot be longer than file lines.")
-
-        const line = lines[lineNum];
+        const {start: {line: lineNum, offset: sOff}, end: {offset: eOff}} = cacheListItem.position;
+        const line = contents.slice(sOff, eOff);
         const match = line.match(strictPattern);
         if (match) {
             const {complete, taskLine, id} = match.groups;
-            const task: AnonymousDisplayTask = {
+            const task: DisplayTask = {
                 complete: complete === 'x',
                 name: taskLine.trim(),
-                location: { filePath: filePath, line: lineNum},
+                location: { filePath: filePath, position: cacheListItem.position},
             };
             if (id)
                 task.id = Number.parseInt(id);
             if (cacheListItem.parent > -1) {
-                task.parent = ret[cacheListItem.parent];
+                task.parent = ret.find(([elemLine]) => elemLine === cacheListItem.parent)[1];
             }
-            ret[lineNum] = task;
+            ret.push([lineNum, task]);
         }
     }
     return ret;

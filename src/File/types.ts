@@ -1,12 +1,18 @@
-import {BaseTask} from "../Task";
+import {BaseTask, ITaskTree} from "../Task";
 import {ListItemCache} from "obsidian";
 
 export interface TaskCacheItem extends ListItemCache {
     name: string;
+    complete: boolean;
     parentName?: string;
+    parentId?: number;
 }
 
-export type TaskCacheItems = Record<number, TaskCacheItem>;
+export type HierarchyItem = Pick<TaskCacheItem, 'name' | 'complete' | 'parentId' | 'id' | 'parent'>;
+
+export type FileTaskCache = Record<number, TaskCacheItem>;
+
+export type TaskHierarchy = Array<HierarchyItem>;
 
 export type TreeNode<T> = {
     [k in keyof T]: T[k]
@@ -15,17 +21,7 @@ export type TreeNode<T> = {
 export type TH = Pick<BaseTask, 'name'|'complete'> & {children?: string[]};
 export type TaskTreeNode = TreeNode<TH>;
 
-// export type TaskTreeNode = Pick<IAnonymousTask, 'name'|'status'> & { children?: string []} &
-//     {
-//         [k in 'name'|'status'|'children']: TaskTreeNode[k]
-//     }
-
-export type TaskTree = Record<string, TaskTreeNode>;
-
-export interface FileTaskCache {
-    locations: Record<number, string>;
-    hierarchy: TaskTree;
-}
+export type TaskTree = Record<string, ITaskTree>;
 
 export enum DiffType {
     ADD_TASK = 'ADD_TASK',

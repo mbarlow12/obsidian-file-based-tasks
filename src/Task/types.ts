@@ -1,9 +1,14 @@
+import {Pos} from "obsidian";
+
 export const TaskRecordType = '--TASK--';
 
-export interface ITask {
+export interface BaseTask {
     id: number;
     name: string;
     complete: boolean;
+}
+
+export interface ITask extends BaseTask{
     locations?: TaskLocation[];
     created: number;
     updated: number;
@@ -11,19 +16,15 @@ export interface ITask {
     children: number[];
 }
 
-export type ITaskTree = ITask & { children: ITaskTree[] }
+export type ITaskTree = Omit<ITask, 'children'> & { children: ITaskTree[] }
 
 export interface DisplayTask {
-    id: number;
+    id?: number;
     name: string;
     complete: boolean;
     location: TaskLocation;
     parent?: DisplayTask;
 }
-
-export type AnonymousDisplayTask = Omit<DisplayTask, 'id'|'parent'> & { id?: number, parent?: AnonymousDisplayTask };
-
-export type BaseTask = Pick<ITask, 'name'|'complete'>;
 
 export interface Yamlable {
     yamlObject: unknown & Object;
@@ -44,8 +45,7 @@ export type LocationString = string;
 
 export interface TaskLocation {
     filePath: string;
-    line: number;
-    blockId?: string;
+    position: Pos;
 }
 
 export interface FileTaskLine extends Array<number | ITask> {

@@ -1,6 +1,6 @@
 import Parser from './TaskParser';
-import {createTaskFileContents} from "./TestHelpers";
-import {ITask} from "./Task/types";
+import {createTaskFileContents} from "../TestHelpers";
+import {ITask} from "../Task/types";
 
 /**
  * TODO invalid cases and handle reformatting
