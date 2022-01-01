@@ -1,4 +1,4 @@
-import {TaskCacheItems} from "./types";
+import {TaskCacheItem} from "./types";
 import {CachedMetadata, MetadataCache, TFile, Vault} from "obsidian";
 import {DisplayTask} from "../Task";
 
@@ -17,7 +17,7 @@ export class FileHandlerFactory {
 }
 
 export class FileHandler {
-    public taskCacheItems: TaskCacheItems;
+    public taskCacheItems: TaskCacheItem[];
     private tasks: Record<string, DisplayTask>;
     private file: TFile;
     private vault: Vault;

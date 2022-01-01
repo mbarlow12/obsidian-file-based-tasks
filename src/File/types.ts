@@ -1,12 +1,17 @@
-import {BaseTask, ITaskTree} from "../Task";
+import {BaseTask, ITask, ITaskTree} from "../Task";
 import {ListItemCache} from "obsidian";
 
-export interface TaskCacheItem extends ListItemCache {
+export interface TaskCacheItem {
+    id?: number;
     name: string;
     complete: boolean;
+    parent: number;
+    lineNumber: number;
     parentName?: string;
     parentId?: number;
 }
+
+export type FileTaskRecord = Record<number, ITask>;
 
 export type HierarchyItem = Pick<TaskCacheItem, 'name' | 'complete' | 'parentId' | 'id' | 'parent'>;
 

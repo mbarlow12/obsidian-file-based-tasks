@@ -1,4 +1,4 @@
-import * as crypto from "crypto";
+// import * as crypto from "crypto";
 
 export const hash = async (arg: unknown) => {
     let data: string = '';
@@ -8,8 +8,9 @@ export const hash = async (arg: unknown) => {
     else {
         data = arg;
     }
-    const hash = crypto.createHash('sha1');
     const message = new TextEncoder().encode(data);
-    hash.update(message);
-    return hash.digest('hex');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', message);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hex;
 }

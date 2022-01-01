@@ -21,12 +21,12 @@ export interface TasksDeleted {
 
 export interface TasksModified {
     type: UpdateType.MODIFY,
-    data: Task[]
+    data: ITask[]
 }
 
 export interface TasksCreated {
     type: UpdateType.CREATE;
-    data: Task[];
+    data: ITask[];
 }
 
 export type IndexUpdatedAction = TasksCreated | TasksModified | TasksDeleted;

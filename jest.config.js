@@ -1,5 +1,5 @@
 module.exports = {
     preset: 'ts-jest',
-    testEnvironment: 'node',
-    setupFilesAfterEnv: ['./src/File/setupCrypto.ts']
+    testEnvironment: 'jsdom',
+    setupFilesAfterEnv: ['./src/File/setupCrypto.ts', './test/mockObsidian.ts'],
 }

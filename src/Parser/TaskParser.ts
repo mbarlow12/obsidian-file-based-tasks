@@ -1,8 +1,8 @@
-import {ITask, FileTaskLine, DisplayTask} from "../Task/types";
+import {ITask, FileTaskLine, DisplayTask, BaseTask} from "../Task/types";
 import {emptyTask} from "../Task";
 import {CachedMetadata, TFile} from "obsidian";
 
-const strictPattern: RegExp = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/gm;
+const strictPattern: RegExp = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/;
 
 export default class TaskParser {
     // pattern = -/* [x] [something]
@@ -12,14 +12,14 @@ export default class TaskParser {
     //  - even anonymous tasks should always have a blockID for linking
     static blockID: RegExp = / \^([A-Z][a-z][0-9]+)$/;
 
-    static parseLine(line: string): ITask | null {
-        const match = line.match(TaskParser.strictPattern);
+    static parseLine(line: string): BaseTask | null {
+        const match = line.match(strictPattern);
         if (match) {
-            const {complete, taskLine} = match.groups;
+            const {complete, taskLine, id} = match.groups;
             return {
-                ...emptyTask(),
                 complete: complete === 'x',
                 name: taskLine.trim(),
+                id: Number.parseInt(id || '-1')
             };
         } else
             return null;
@@ -59,7 +59,7 @@ export const parseFileContents = (filePath: string, contents: string, fileCache:
             const task: DisplayTask = {
                 complete: complete === 'x',
                 name: taskLine.trim(),
-                location: { filePath: filePath, position: cacheListItem.position},
+                location: { filePath: filePath, lineNumber: cacheListItem.position.start.line},
             };
             if (id)
                 task.id = Number.parseInt(id);

@@ -1,7 +1,7 @@
-import {BaseTask, DisplayTask, ITask, ITaskTree, TaskLocation, TaskYamlObject, Yamlable} from "./types";
+import {BaseTask, ITask, ITaskTree, TaskLocation, TaskRecordType, TaskYamlObject, Yamlable} from "./types";
 import {stringifyYaml, TFile} from "obsidian";
-import {TaskTree} from "../File/types";
-import {pos, taskLocationStr, taskLocFromStr} from "./index";
+import {taskLocationStr, taskLocFromStr} from "./index";
+import {hash} from "../util/hash";
 
 const taskFileNameRegex = /^(?<name>\w.*)(?= - \d+) - (?<id>\d+)(?:.md)?/;
 
@@ -35,6 +35,7 @@ export const getTaskFromYaml = (yaml: TaskYamlObject): ITask => {
 export const taskToYamlObject = (task: ITask): TaskYamlObject => {
     const {id, name, complete, locations, created, updated, children} = task
     return {
+        type: TaskRecordType,
         id: `${id}`,
         name,
         complete: `${complete}`,
@@ -46,6 +47,7 @@ export const taskToYamlObject = (task: ITask): TaskYamlObject => {
 }
 
 export const taskToBasename = (task: ITask) => `${task.name} - ${task.id}`;
+export const taskToFilename = (task: ITask) => `${taskToBasename(task)}.md`;
 
 export const isFilenameValid = (f: TFile): boolean => {
     const match = f.basename.match(taskFileNameRegex);
@@ -69,15 +71,12 @@ export const parseTaskFilename = (f: TFile) => {
 
 export const taskToFileContents = (task: ITask): string => {
     const yamlObject = taskToYamlObject(task);
-    let ret = stringifyYaml(yamlObject);
-    ret += '\n';
-    ret += task.description;
-    return ret;
+    return `---\n${stringifyYaml(yamlObject)}---\n${task.description || ''}`;
 }
 
 export const taskToJsonString = (task: ITask): string => {
     const {
-        name, complete, locations, children, description, created, updated
+        name, complete, locations, children, description, created
     } = task;
     const ret: Record<string, string | boolean | TaskLocation[] | string[]> = {
         name, complete, created: `${created}`
@@ -85,22 +84,19 @@ export const taskToJsonString = (task: ITask): string => {
     ret.locations = locations.sort((a, b) => {
         let comp = a.filePath.localeCompare(b.filePath);
         if (comp === 0) {
-            return a.position.start.line - b.position.start.line;
+            return a.lineNumber - b.lineNumber;
         }
         return comp;
     });
     if (children)
-        ret.children = children.map(c => `${c}`);
+        ret.children = children.sort().map(c => `${c}`);
     if (description)
         ret.description = description.trim();
     return JSON.stringify(ret);
 }
 
 export const hashTask = async (task: ITask): Promise<string> => {
-    const encoded = new TextEncoder().encode(taskToJsonString(task));
-    const buffer = await crypto.subtle.digest('SHA-256', encoded);
-    const hashArray = Array.from(new Uint8Array(buffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return await hash(taskToJsonString(task));
 }
 
 export const taskAsChecklist = (t: BaseTask) => `- [${t.complete ? 'x' : ' '}] ${t.name} ^${t.id}`;
@@ -262,8 +258,8 @@ export class Task implements ITask, Yamlable {
     public removeLocation(loc: TaskLocation) {
         const i = this._locations.findIndex(({
                                                  filePath,
-                                                 position
-                                             }) => filePath === loc.filePath && position === loc.position);
+                                                 lineNumber
+                                             }) => filePath === loc.filePath && lineNumber === loc.lineNumber);
         if (i !== -1)
             return this._locations.splice(i, 1)[0];
         return null;
@@ -271,7 +267,7 @@ export class Task implements ITask, Yamlable {
 
     public hasLocation(loc: TaskLocation) {
         const i = this._locations
-            .findIndex(({filePath, position}) => filePath === loc.filePath && position === loc.position);
+            .findIndex(({filePath, lineNumber}) => filePath === loc.filePath && lineNumber === loc.lineNumber);
         return i > -1;
     }
 

@@ -33,8 +33,9 @@ export interface Yamlable {
 export type TaskYamlObject = {
     [k in keyof Omit<ITask, 'description'>]: ITask[k] extends Array<unknown> ? string[] : string;
 } & {
-    complete: 'true'|'false'
-}
+    complete: 'true'|'false',
+    type: typeof TaskRecordType,
+};
 
 export type TaskID = number;
 
@@ -45,7 +46,7 @@ export type LocationString = string;
 
 export interface TaskLocation {
     filePath: string;
-    position: Pos;
+    lineNumber: number;
 }
 
 export interface FileTaskLine extends Array<number | ITask> {

@@ -24,9 +24,21 @@ export const locStr = ({line, col, offset}: Loc): string => [line, col, offset].
 
 export const posStr = ({start, end}: Pos): string => [locStr(start), locStr(end)].join(locationDelim);
 
-export const taskLocationStr = ({filePath, position}: TaskLocation): string => [filePath, posStr(position)].join(locationDelim);
+export const taskLocationStr = ({filePath, lineNumber}: TaskLocation): string => [filePath, `${lineNumber}`].join(locationDelim);
 
 export const taskLocFromStr = (locationStr: string): TaskLocation => {
-    const [filePath, ...positionData] = locationStr.split(locationDelim);
-    return {filePath, position: pos(...positionData.map(Number.parseInt))};
+    const [filePath, lineNumber] = locationStr.split(locationDelim);
+    return {filePath, lineNumber: Number.parseInt(lineNumber)};
+}
+
+export const locationsEqual = (locA: TaskLocation, locB: TaskLocation) => {
+  return locA.filePath === locB.filePath && locA.lineNumber === locB.lineNumber;
+};
+
+export const positionsEqual = (p1: Pos, p2: Pos) => {
+    return locsEqual(p1.start, p2.start);
+}
+
+export const locsEqual = (l1: Loc, l2: Loc) => {
+    return l1.line === l2.line && l1.col === l2.col && l1.offset === l2.offset;
 }
