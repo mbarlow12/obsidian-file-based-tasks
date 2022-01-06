@@ -21,7 +21,10 @@ export interface TasksDeleted {
 
 export interface TasksModified {
     type: UpdateType.MODIFY,
-    data: ITask[]
+    data: {
+        index: Record<number, ITask>,
+        locations: Record<string, number>
+    }
 }
 
 export interface TasksCreated {

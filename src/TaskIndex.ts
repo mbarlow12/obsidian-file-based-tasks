@@ -3,6 +3,7 @@ import {ITask, ITaskTree, TaskLocation} from "./Task/types";
 import {entries} from 'lodash';
 import {compareArrays, emptyTask, hashTask, locationsEqual, taskLocationStr} from "./Task";
 import {FileTaskCache, FileTaskRecord, TaskCacheItem} from "./File/types";
+import {TaskEvents} from "./Events/TaskEvents";
 
 export class TaskIndex {
     private tasks: Record<number, ITask>;
@@ -15,8 +16,10 @@ export class TaskIndex {
     private cacheEventRefs: EventRef[];
     private vaultEventRefs: EventRef[];
     private loaded: boolean = false;
+    private events: TaskEvents;
 
-    constructor(tasks: ITask[] = []) {
+    constructor(tasks: ITask[] = [], events: TaskEvents) {
+        this.events = events;
         this.tasks = {};
         this.deletedTasks = {};
         this.locationIndex = {};
@@ -42,6 +45,10 @@ export class TaskIndex {
     public async subscribeToCacheEvents(cache: MetadataCache) {}
 
     public unload() {}
+
+    public broadcastUpdate() {
+        this.events.triggerIndexUpdate({index: {...this.tasks}, locations: {...this.locationIndex}});
+    }
 
     public async updateIndex() {
         for (const id in this.tasks) {

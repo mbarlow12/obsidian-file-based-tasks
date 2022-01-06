@@ -1,5 +1,5 @@
 import {Events as ObsEvents} from 'obsidian';
-import {ITask, Task} from "../Task";
+import {ITask} from "../Task";
 import {EventType, IndexUpdatedAction, UpdateType} from "./types";
 
 
@@ -18,10 +18,10 @@ export class TaskEvents {
         return this._events.on(EventType.REQUEST_UPDATE_INDEX, cb);
     }
 
-    triggerIndexUpdate(tasks: ITask[], type: UpdateType) {
+    triggerIndexUpdate(data: {index: Record<number, ITask>, locations: Record<string, number>}) {
         const action: IndexUpdatedAction = {
-            type,
-            data: tasks
+            type: UpdateType.MODIFY,
+            data
         };
         this._events.trigger(EventType.INDEX_UPDATE, action)
     }
