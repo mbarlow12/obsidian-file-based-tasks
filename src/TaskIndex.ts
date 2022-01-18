@@ -40,7 +40,13 @@ export class TaskIndex {
         this.nextId = nextId;
     }
 
-    public async subscribeToVaultEvents(vault: Vault) {}
+    public async subscribeToVaultEvents(vault: Vault) {
+        const ref = vault.on('create', file => {
+            if (file instanceof TFile) {
+                if (isTaskFile)
+            }
+        });
+    }
 
     public async subscribeToCacheEvents(cache: MetadataCache) {}
 
