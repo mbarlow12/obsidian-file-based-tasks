@@ -1,5 +1,3 @@
-import {Pos} from "obsidian";
-
 export const TaskRecordType = '--TASK--';
 
 export interface BaseTask {
@@ -27,7 +25,7 @@ export interface DisplayTask {
 }
 
 export interface Yamlable {
-    yamlObject: unknown & Object;
+    yamlObject: unknown & Record<string, unknown>;
 }
 
 export type TaskYamlObject = {

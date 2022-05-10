@@ -1,12 +1,9 @@
-import {CachedMetadata, ListItemCache, Pos, TFile} from "obsidian";
-import {FileTaskCache, FileTaskRecord, TaskCacheItem, TaskHierarchy, TaskTree} from "./types";
+import {CachedMetadata, Pos, TFile} from "obsidian";
+import {FileTaskCache, FileTaskRecord, TaskCacheItem, TaskHierarchy} from "./types";
 import TaskParser from "../Parser/TaskParser";
-import {BaseTask, compareArrays, emptyTask, ITask, locationsEqual, TaskLocation, taskLocationStr} from "../Task";
+import {compareArrays, emptyTask, ITask, locationsEqual, TaskLocation, taskLocationStr} from "../Task";
 import {entries} from "lodash";
 import {hash} from "../util/hash";
-import globals from "../globals";
-
-const {app, vault, fileManager} = globals;
 
 export const taskCacheItemToDisplayTask = (item: TaskCacheItem) => {
 }
@@ -32,22 +29,6 @@ export const taskToBaseCacheItem = (location: TaskLocation, task: ITask): TaskCa
         lineNumber: loc.lineNumber,
         parent: -1
     };
-}
-
-export const hierarchyFromTaskCache = (cache: FileTaskCache): TaskHierarchy => {
-    const sorted = Object.entries(cache).sort(([a], [b]) => a - b);
-    return sorted.map(([, cacheItem]) => {
-        let {name, complete, id, parent, parentId} = cacheItem;
-        if (parent >= 0)
-            parent = sorted.findIndex(([pLineNum]) => pLineNum === parent);
-        return {
-            name,
-            complete,
-            id,
-            parent, // parent now index into TaskHierarchy array
-            parentId
-        };
-    });
 }
 
 export const getFileTaskCache = (cache: CachedMetadata, contents: string): FileTaskCache => {
@@ -129,32 +110,6 @@ export const getDeleteIdsFromCacheUpdate = (prev: FileTaskCache, curr: FileTaskC
     }
     return deleteIds;
 }
-
-export const getTaskCacheUpdates = (prev: FileTaskCache, curr: FileTaskCache) => {
-    const currCopy = {...curr};
-    const updateIds = new Set<number>();
-    const [deleteIds] = compareArrays(Object.values(prev).map(i => i.id), Object.values(curr).map(i => i.id));
-    const [, newTasks] = compareArrays(Object.values(prev).map(i => i.name), Object.values(curr).map(i => i.name));
-    for (const prevLine in prev) {
-        const prevItem = prev[prevLine];
-        if (prevLine in currCopy) {
-            const currItem = currCopy[prevLine];
-            if (currItem.name !== prevItem.name || currItem.id !== prevItem.id)
-                updateIds.add(prevItem.id)
-            delete currCopy[prevLine];
-        } else {
-            if (!(prevItem.id in deleteIds))
-                updateIds.add(prevItem.id);
-        }
-    }
-    for (const updateId of diffTaskHierarchies(hierarchyFromTaskCache(prev), hierarchyFromTaskCache(curr)))
-        updateIds.add(updateId);
-    return {
-        updateIds,
-        deleteIds: new Set(deleteIds),
-        newTasks: new Set(newTasks)
-    };
-};
 
 export const fileTaskRecordToCache = (filePath: string, record: FileTaskRecord): FileTaskCache => {
     const cache: FileTaskCache = {};
@@ -243,7 +198,6 @@ export const fileCachesEqual = (a: FileTaskCache, b: FileTaskCache) => {
     if (keysA.length !== keysB.length)
         return false;
     const [aNotB, bNotA] = diffFileCaches(a, b);
-    if (Object.keys(aNotB).length > 0 || Object.keys(bNotA).length > 0)
-        return false;
-    return true;
+    return !(Object.keys(aNotB).length > 0 || Object.keys(bNotA).length > 0);
+
 }

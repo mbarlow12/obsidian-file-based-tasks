@@ -5,8 +5,9 @@
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
-    "build": "rollup --config rollup.config.js --environment BUILD:production && ./dist.sh",
+    "build": "rollup --config rollup.config.js --environment BUILD:production && ./dist.js",
     "build:wp": "webpack --progress --color --mode=development",
+    "build:eb": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "test": "jest"
   },
   "keywords": [],
@@ -38,7 +39,6 @@
     "webpack-cli": "^4.9.1"
   },
   "dependencies": {
-    "@types/node": "^17.0.5",
     "async-mutex": "^0.3.2",
     "crypto-browserify": "^3.12.0",
     "lodash": "^4.17.21",

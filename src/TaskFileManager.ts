@@ -30,7 +30,7 @@ export class TaskFileManager {
     private taskHashes: Record<string, string>;
     private fileTaskCaches: Record<string, FileTaskCache>;
 
-    constructor(vault: Vault, cache: MetadataCache, tasksDirectory: string = 'tasks') {
+    constructor(vault: Vault, cache: MetadataCache, tasksDirectory = 'tasks') {
         this.vault = vault;
         this.mdCache = cache;
         this.tasksDirString = tasksDirectory;
@@ -124,10 +124,18 @@ export class TaskFileManager {
         return task;
     }
 
-    public async readNoteFile(file: TFile): Promise<FileTaskRecord> {
+    public async getFileTaskCache(file: TFile): Promise<FileTaskCache> {
         const contents = await this.vault.read(file);
         const fileMdCache = this.mdCache.getFileCache(file);
-        const taskCache = getFileTaskCache(fileMdCache, contents);
+        return getFileTaskCache(fileMdCache, contents);
+    }
+
+    public updateFileTaskCache(filepath: string, newCache: FileTaskCache) {
+        this.fileTaskCaches[filepath] = newCache
+    }
+
+    public async readNoteFile(file: TFile): Promise<FileTaskRecord> {
+        const taskCache = await this.getFileTaskCache(file)
         this.fileTaskCaches[file.path] = taskCache;
         if (!isEmpty(taskCache)) {
             return fileTaskCacheToRecord(file.path, taskCache);

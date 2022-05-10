@@ -2,15 +2,10 @@ import {ITask, FileTaskLine, DisplayTask, BaseTask} from "../Task/types";
 import {emptyTask} from "../Task";
 import {CachedMetadata, TFile} from "obsidian";
 
-const strictPattern: RegExp = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/;
+// pattern = -/* [x] [something]
+const strictPattern = /^\s*(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>(\d|\w)[^\^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/;
 
 export default class TaskParser {
-    // pattern = -/* [x] [something]
-    static strictPattern: RegExp = /(?:-|\*) \[(?<complete>\s|x)?\]\s+(?<taskLine>\S[^\^]*)\^?.*$/;
-    static generalPattern: RegExp = /(?:-|\*)\s*\[(?<complete>[\sxX]*)\]\s*(?<taskLine>\S.*)/;
-    // todo: add complete/incomplete status when handling block id
-    //  - even anonymous tasks should always have a blockID for linking
-    static blockID: RegExp = / \^([A-Z][a-z][0-9]+)$/;
 
     static parseLine(line: string): BaseTask | null {
         const match = line.match(strictPattern);
@@ -21,7 +16,8 @@ export default class TaskParser {
                 name: taskLine.trim(),
                 id: Number.parseInt(id || '-1')
             };
-        } else
+        }
+        else
             return null;
     }
 

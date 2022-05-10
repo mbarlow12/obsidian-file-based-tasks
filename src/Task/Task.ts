@@ -57,10 +57,9 @@ export const isFilenameValid = (f: TFile): boolean => {
     if (!match.groups.hasOwnProperty('name'))
         return false;
 
-    if (!match.groups.hasOwnProperty('id'))
-        return false;
+    return match.groups.hasOwnProperty('id');
 
-    return true;
+
 }
 
 export const parseTaskFilename = (f: TFile) => {
@@ -101,9 +100,9 @@ export const hashTask = async (task: ITask): Promise<string> => {
 
 export const taskAsChecklist = (t: BaseTask) => `- [${t.complete ? 'x' : ' '}] ${t.name} ^${t.id}`;
 
-export const taskFileLine = (t: BaseTask, offset: number = 0) => new Array(offset).fill(' ').join('') + taskAsChecklist(t);
+export const taskFileLine = (t: BaseTask, offset = 0) => new Array(offset).fill(' ').join('') + taskAsChecklist(t);
 
-export const fullTaskChecklist = (t: ITaskTree, offset: number = 0): string => {
+export const fullTaskChecklist = (t: ITaskTree, offset = 0): string => {
     const lines: string[] = [taskFileLine(t, offset)];
     lines.push(...t.children.map( c => fullTaskChecklist(c, offset + 2)))
     return lines.join('\n');

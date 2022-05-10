@@ -1,4 +1,4 @@
-interface TaskManagerSettings {
+export interface TaskManagerSettings {
     taskDirectoryName: string;
     taskTitlePrefix?: string;
     backlogFileName?: string;

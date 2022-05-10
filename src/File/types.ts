@@ -1,5 +1,4 @@
 import {BaseTask, ITask, ITaskTree} from "../Task";
-import {ListItemCache} from "obsidian";
 
 export interface TaskCacheItem {
     id?: number;

@@ -1,4 +1,4 @@
-import {ITask, Task} from "../Task";
+import {ITask} from "../Task";
 
 export enum EventType {
     REQUEST_UPDATE_INDEX = 'obsidian-file-tasks:request-index-update',
