@@ -1,7 +1,7 @@
-import {BaseTask, ITask, ITaskTree} from "../Task";
+import {Task} from "../Task";
 
 export interface TaskCacheItem {
-    id?: number;
+    tid: string;
     name: string;
     complete: boolean;
     parent: number;
@@ -10,11 +10,11 @@ export interface TaskCacheItem {
     parentId?: number;
 }
 
-export type FileTaskRecord = Record<number, ITask>;
+export type FileTaskRecord = Record<number, Task>;
 
-export type HierarchyItem = Pick<TaskCacheItem, 'name' | 'complete' | 'parentId' | 'id' | 'parent'>;
+export type HierarchyItem = Pick<TaskCacheItem, 'name' | 'complete' | 'parentId' | 'parent'>;
 
-export type FileTaskCache = Record<number, TaskCacheItem>;
+export type FileTaskCache = Record<number, TaskCacheItem> & {dirty: boolean};
 
 export type TaskHierarchy = Array<HierarchyItem>;
 
@@ -22,10 +22,8 @@ export type TreeNode<T> = {
     [k in keyof T]: T[k]
 }
 
-export type TH = Pick<BaseTask, 'name'|'complete'> & {children?: string[]};
+export type TH = Pick<Task, 'name'|'complete'> & {children?: string[]};
 export type TaskTreeNode = TreeNode<TH>;
-
-export type TaskTree = Record<string, ITaskTree>;
 
 export enum DiffType {
     ADD_TASK = 'ADD_TASK',

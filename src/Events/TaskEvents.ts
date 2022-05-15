@@ -1,6 +1,6 @@
-import {Events as ObsEvents} from 'obsidian';
-import {ITask} from "../Task";
-import {EventType, IndexUpdatedAction, UpdateType} from "./types";
+import {EventRef, Events as ObsEvents} from 'obsidian';
+import {EventType, TaskModifiedData} from "./types";
+import {State} from "../Store/TaskStore";
 
 
 export class TaskEvents {
@@ -14,19 +14,23 @@ export class TaskEvents {
         this._events = obsidianEvents;
     }
 
-    registerRequestIndexUpdateHandler(cb: (arg: {filePath: string, taskRecord: Record<number, ITask>}) => void) {
-        return this._events.on(EventType.REQUEST_UPDATE_INDEX, cb);
+    public off(ref: EventRef) {
+        this._events.offref(ref)
     }
 
-    triggerIndexUpdate(data: {index: Record<number, ITask>, locations: Record<string, number>}) {
-        const action: IndexUpdatedAction = {
-            type: UpdateType.MODIFY,
-            data
-        };
-        this._events.trigger(EventType.INDEX_UPDATE, action)
+    triggerIndexUpdate(data: TaskModifiedData) {
+        this._events.trigger(EventType.INDEX_UPDATE, data)
     }
 
-    registerIndexUpdateHandler(handler: (action: IndexUpdatedAction) => void) {
+    registerIndexUpdateHandler(handler: (data: TaskModifiedData) => void) {
         return this._events.on(EventType.INDEX_UPDATE, handler);
+    }
+
+    onFileCacheUpdate(handler: (fileState: State) => void) {
+        return this._events.on(EventType.FILE_CACHE_UPDATE, handler)
+    }
+
+    triggerFileCacheUpdate(fileState: State) {
+        this._events.trigger(EventType.FILE_CACHE_UPDATE, fileState);
     }
 }

@@ -1,8 +1,8 @@
 import {CachedMetadata} from "obsidian";
-import {getFileTaskCache, hashTaskCache} from "./index";
+import {getFileTaskRecord, hashTaskCache} from "./index";
 import {FileTaskCache} from "./types";
 import * as TestData from './TestData';
-import {base, getFileContents, testTaskLines} from "./TestData";
+import {getFileContents, testTaskLines} from './TestData';
 
 const testContents1 = `- [ ] t1
 - [ ] t2
@@ -74,7 +74,7 @@ const cacheMetadata2: CachedMetadata = {
 }
 
 test('Basic representation', () => {
-    const obj = getFileTaskCache(cacheMetadata1, testContents1);
+    const obj = getFileTaskRecord(cacheMetadata1, testContents1);
     const expected: FileTaskCache = {
         0: {
             id: -1,
@@ -113,7 +113,7 @@ test('Basic representation', () => {
 });
 
 test('Representation with ids', () => {
-    const obj = getFileTaskCache(cacheMetadata2, testContents2);
+    const obj = getFileTaskRecord(cacheMetadata2, testContents2);
     const expected: FileTaskCache = {
         0: {
             id: 12345,
@@ -137,8 +137,8 @@ test('Representation with ids', () => {
 
 test('Test Diff', async () => {
     const {contents1, cache1, contents2, cache2} = TestData;
-    const tCache1 = getFileTaskCache(cache1, contents1);
-    const tCache2 = getFileTaskCache(cache2, contents2);
+    const tCache1 = getFileTaskRecord(cache1, contents1);
+    const tCache2 = getFileTaskRecord(cache2, contents2);
     const h1 = await hashTaskCache(tCache1);
     const h12 = await hashTaskCache(tCache1);
     expect(h1).toEqual(h12);
@@ -149,8 +149,8 @@ test('Test Diff', async () => {
 test('Test filecontents', async () => {
     const c1 = getFileContents(testTaskLines.slice(0, 6), {0: [1], 1: [2, 3], 3: [4]});
     const c2 = getFileContents(testTaskLines.slice(0, 6), {0: [1], 1: [2, 3], 3: [4]});
-    const fc1 = getFileTaskCache(c1.cache, c1.contents);
-    const fc2 = getFileTaskCache(c2.cache, c2.contents);
+    const fc1 = getFileTaskRecord(c1.cache, c1.contents);
+    const fc2 = getFileTaskRecord(c2.cache, c2.contents);
     const h1 = await hashTaskCache(fc1);
     const h2 = await hashTaskCache(fc2);
     expect(h1).toEqual(h2);

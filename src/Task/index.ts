@@ -1,10 +1,26 @@
 import {Loc, Pos} from "obsidian";
 import {TaskLocation} from "./types";
 
-export * from './Task'
+export {
+    emptyTask,
+    getTaskFromYaml,
+    taskToFileContents,
+    taskToJsonString,
+    taskAsChecklist,
+    taskToYamlObject,
+    taskFileLine,
+    taskToBasename,
+    taskToFilename,
+    compareTaskChildren,
+    compareTaskLocations,
+    baseTasksSame,
+    hashTask,
+    parseTaskFilename,
+    compareArrays,
+} from './Task'
 export * from "./types"
 
-const locationDelim = ':';
+export const LOC_DELIM = '::';
 
 export const loc = (line: number, col: number, offset: number): Loc => ({line, col, offset});
 
@@ -20,14 +36,14 @@ export const pos = (...locData: number[]): Pos => {
     };
 }
 
-export const locStr = ({line, col, offset}: Loc): string => [line, col, offset].join(locationDelim);
+export const locStr = ({line, col, offset}: Loc): string => [line, col, offset].join(LOC_DELIM);
 
-export const posStr = ({start, end}: Pos): string => [locStr(start), locStr(end)].join(locationDelim);
+export const posStr = ({start, end}: Pos): string => [locStr(start), locStr(end)].join(LOC_DELIM);
 
-export const taskLocationStr = ({filePath, lineNumber}: TaskLocation): string => [filePath, `${lineNumber}`].join(locationDelim);
+export const taskLocationStr = ({filePath, lineNumber}: TaskLocation): string => [filePath, `${lineNumber}`].join(LOC_DELIM);
 
 export const taskLocFromStr = (locationStr: string): TaskLocation => {
-    const [filePath, lineNumber] = locationStr.split(locationDelim);
+    const [filePath, lineNumber] = locationStr.split(LOC_DELIM);
     return {filePath, lineNumber: Number.parseInt(lineNumber)};
 }
 

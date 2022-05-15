@@ -1,7 +1,7 @@
 // import * as crypto from "crypto";
 
 export const hash = async (arg: unknown) => {
-    let data: string = '';
+    let data = '';
     if (typeof arg !== 'string') {
         data = JSON.stringify(arg);
     }

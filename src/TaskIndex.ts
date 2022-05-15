@@ -1,13 +1,29 @@
-import {EventRef, MetadataCache, TFile, Vault} from "obsidian";
-import {ITask, ITaskTree, TaskLocation} from "./Task/types";
-import {entries} from 'lodash';
-import {compareArrays, emptyTask, hashTask, locationsEqual, taskLocationStr} from "./Task";
-import {FileTaskCache, FileTaskRecord, TaskCacheItem} from "./File/types";
+import {EventRef, MetadataCache} from "obsidian";
+import {IndexedTask, NonEmptyString, Task, TaskID, TaskLocation} from "./Task/types";
+import {compareArrays, hashTask, locationsEqual, taskLocationStr} from "./Task";
+import {FileTaskRecord} from "./File/types";
 import {TaskEvents} from "./Events/TaskEvents";
+import {emptyIndexedTask, taskIdToTid, taskTidToId} from "./Task/Task";
+
+
+export const getParentIds = (
+  newTasks: Record<TaskID, IndexedTask>,
+  locations: TaskLocation[],
+  record: FileTaskRecord
+): number[] => locations.filter(l=>l.cacheItemParent>=0)
+  .reduce((tids: string[],{cacheItemParent})=>[...tids,record[cacheItemParent].name], [])
+  .map(pn => Object.values(newTasks).find(({name}) => name === pn).id);
+
+export const filterUnique = <T>(
+  array: T[],
+  filterComp: (a:T, b: T) => boolean = (a, b) => a && b && a === b
+    ): T[] => {
+    return array.filter((val, i, arr) => arr.findIndex(v => filterComp(val, v)) === i)
+}
 
 export class TaskIndex {
-    private tasks: Record<number, ITask>;
-    private deletedTasks: Record<number, ITask>;
+    private tasks: Record<number, IndexedTask>;
+    private deletedTasks: Record<number, IndexedTask>;
     private locationIndex: Record<string, number>;
     private tasksByName: Record<string, number>;
     private parents: Record<number, Set<number>>;
@@ -15,10 +31,10 @@ export class TaskIndex {
     private nextId: number;
     private cacheEventRefs: EventRef[];
     private vaultEventRefs: EventRef[];
-    private loaded: boolean = false;
+    private loaded = false;
     private events: TaskEvents;
 
-    constructor(tasks: ITask[] = [], events: TaskEvents) {
+    constructor(tasks: Task[] = [], events: TaskEvents) {
         this.events = events;
         this.tasks = {};
         this.deletedTasks = {};
@@ -26,17 +42,19 @@ export class TaskIndex {
         this.tasksByName = {};
         this.parents = {};
         this.cache = {};
-        let nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id || 0)) + 1 : 1;
+        let nextId = tasks.length > 0 ? Math.max(...tasks.map(t => Number.parseInt(t.id, 16) || 0)) + 1 : 100000;
         for (let i = 0; i < tasks.length; i++) {
-            const task = tasks[i];
-            if (!task.id)
-                task.id = nextId++;
-            this.tasks[task.id] = task;
-            this.updateSupportIndexesFromTask(task);
+            let task: IndexedTask;
+            if (tasks[i].id.length === 0)
+                task = this.createTask(tasks[i].name, tasks[i].locations)
+                task.id = nextId.toString(16) as NonEmptyString;
+            this.tasks[nextId] = task;
             hashTask(task).then(hash => {
-                this.cache[task.id] = hash;
+                this.cache[nextId] = hash;
             });
+            nextId++;
         }
+        this.updateIndex();
         this.nextId = nextId;
     }
 
@@ -56,27 +74,39 @@ export class TaskIndex {
     }
 
     public async updateIndex() {
-        for (const id in this.tasks) {
-            if (this.tasks[id].locations.length === 0) {
-                this.deletedTasks[id] = this.tasks[id];
-                delete this.tasks[id];
+        const newIndex = {...this.tasks};
+        const deletedTasks: Record<TaskID, IndexedTask> = {};
+        for (const idStr in newIndex) {
+            const id = Number.parseInt(idStr);
+            newIndex[id].parentUids = [];
+            newIndex[id].childUids = [];
+            newIndex[id].childTids = [];
+            if (newIndex[id].locations.length === 0) {
+                deletedTasks[id] = newIndex[id];
+                delete newIndex[id];
             }
         }
-        for (const id in this.tasks) {
-            for (let i = 0; i < this.tasks[id].children.length; i++) {
-                const childId = this.tasks[id].children[i];
-                if (!(childId in this.tasks)) {
-                    this.tasks[id].children.remove(childId);
-                }
-            }
+        this.updateLocationIndex(newIndex);
+        this.updateParentIndex(newIndex);
+        this.updateTasksByName(newIndex);
+
+        for (const idStr in newIndex) {
+            const id = Number.parseInt(idStr);
+            const task = {...newIndex[id]};
+            task.parentUids = [...(this.parents[task.uid] || [])];
+            task.childUids = Object.keys(this.parents).map(Number.parseInt)
+              .filter(cid => task.uid in this.parents[cid]);
+            task.childTids = task.childUids.map(taskIdToTid);
+            newIndex[id] = task;
         }
-        const newCacheArr = await Promise.all(entries(this.tasks).map(async ([id, task]) => (Promise.all([Number.parseInt(id), hashTask(task)]))));
+
+        const newCacheArr = await Promise.all(Object.entries(newIndex).map(async ([id, task]) => (Promise.all([Number.parseInt(id), hashTask(task)]))));
         const newCache: Record<number, string> = newCacheArr.reduce((c, [id, taskHash]) => {
             c[id] = taskHash;
             return c;
-        }, {} as Record<number, string>);
+        }, {} as Record<TaskID, string>);
         const [deletedIds, newIds] = compareArrays(Object.keys(this.cache), Object.keys(newCache));
-        const [cacheDeleted, deleted] = compareArrays(deletedIds, Object.keys(this.deletedTasks).map(id => `${id}`));
+        const [cacheDeleted, deleted] = compareArrays(deletedIds, Object.keys(deletedTasks).map(id => `${id}`));
         if (cacheDeleted.length > 0)
             throw new Error(`Deleted IDs from cache not in deletedTasks. ${cacheDeleted.join(',')}`);
         if (deleted.length > 0)
@@ -86,103 +116,111 @@ export class TaskIndex {
             if (newId in this.cache && this.cache[newId] !== newCache[newId])
                 updatedIds.push(Number.parseInt(newId));
         }
-        this.updateLocationIndex();
-        this.updateParentIndex();
-        this.updateTasksByName();
         this.cache = newCache;
-        const deletedTasks = {...this.deletedTasks};
-        this.deletedTasks = {};
-        const dirtyTasks: Record<number, ITask> = [...updatedIds, ...newIds.map(Number.parseInt)].reduce((ret, id) => {
+        const dirtyTasks: Record<number, IndexedTask> = [...updatedIds, ...newIds.map(Number.parseInt)].reduce((ret, id) => {
             if (!(id in ret))
                 ret[id] = this.getTaskById(id);
             return ret;
-        }, {} as Record<number, ITask>);
+        }, {} as Record<number, IndexedTask>);
         return {dirtyTasks, deletedTasks};
     }
 
-    private updateLocationIndex() {
-        this.locationIndex = Object.values(this.tasks).reduce((locs, task) => {
+    private updateLocationIndex(index: Record<TaskID, IndexedTask>) {
+        this.locationIndex = Object.keys(index).reduce((locs, id) => {
+            const indexId = Number.parseInt(id)
+            const task = this.tasks[indexId]
             for (const tLoc of task.locations) {
-                locs[taskLocationStr(tLoc)] = task.id;
+                locs[taskLocationStr(tLoc)] = indexId;
             }
             return locs;
         }, {} as Record<string, number>);
     }
 
-    private updateParentIndex() {
+    private updateParentIndex(index: Record<TaskID, IndexedTask>) {
         const newParents: Record<number, Set<number>> = {};
-        for (const task of Object.values(this.tasks)) {
-            if (task.children.length === 0)
-                continue;
-            for (const childId of task.children) {
-                if (!(childId in newParents))
-                    newParents[childId] = new Set();
-                newParents[childId].add(task.id);
+        for (const task of Object.values(index)) {
+            for (const pLoc of task.parentLocations) {
+                const pid = this.locationIndex[taskLocationStr(pLoc)];
+                if (!(task.id in newParents))
+                    newParents[task.id] = new Set();
+                newParents[task.id].add(pid)
             }
         }
         this.parents = newParents;
     }
 
-    private updateTasksByName() {
-        this.tasksByName = Object.values(this.tasks).reduce((record, task) => {
+    private updateTasksByName(index: Record<TaskID, IndexedTask>) {
+        this.tasksByName = Object.values(index).reduce((record, task) => {
             record[task.name] = task.id;
             return record;
         }, {} as Record<string, number>);
     }
 
-    private updateSupportIndexesFromTask(task: ITask) {
-        if (!task.id  || task.id === -1)
-            return;
-        this.tasksByName[task.name] = task.id;
-        for (const location of task.locations)
-            this.locationIndex[taskLocationStr(location)] = task.id;
-        for (const childId of task.children) {
-            if (!(childId in this.parents))
-                this.parents[childId] = new Set();
-            this.parents[childId].add(task.id);
-        }
-    }
-
-    public createTask(name: string, locations: TaskLocation[]): ITask {
+    public createTask(name: string, locations: TaskLocation[]): IndexedTask {
         const id = this.nextId++;
-        const task = {
-            ...emptyTask(),
-            id,
+        const task: IndexedTask = {
+            ...emptyIndexedTask(),
             name,
-            locations: locations,
+            locations,
+            id: taskIdToTid(id),
+            uid: id,
         };
-        this.tasks[id] = task;
-        this.tasksByName[task.name] = task.id;
-        return this.tasks[id];
+        return this.insertTask(task);
     }
 
-    public addTask(t: ITask) {
-        if (this.taskExists(t.name)) {
-            // TODO: consider erroring or changing the name?
+    public insertTask(t: Task|IndexedTask) {
+        if (!TaskIndex.validateTask(t))
+            throw TypeError(`Task is invalid ${t}`)
+
+        if (this.taskExists(t.name) || this.taskExists(t.id) || (TaskIndex.taskIsIndexed(t) && this.taskExists(t.uid)))
             return;
+
+        const id = this.nextId++;
+        const newTask: IndexedTask = {
+            ...emptyIndexedTask(),
+            ...t,
+            uid: id,
+            id: taskIdToTid(id)
+        };
+
+        this.tasks[id] = newTask;
+        this.tasksByName[newTask.name] = newTask.uid;
+
+        this.updateIndex()
+
+        return this.tasks[newTask.uid];
+    }
+
+    public static taskIsIndexed(t: Task|IndexedTask): t is IndexedTask {
+        if (t.hasOwnProperty('id')) {
+            // @ts-ignore
+            return t['id'] > 0
+        }
+    }
+
+    public static validateTask(t: Task|IndexedTask) {
+        const idxId = taskTidToId(t.id);
+        if (TaskIndex.taskIsIndexed(t)) {
+            return idxId === t.uid &&
+              t.created instanceof Date && t.created > new Date(0) &&
+              t.updated instanceof Date && t.updated >= t.created;
         }
 
-        t.id = this.nextId++;
-
-        this.tasks[t.id] = {
-            ...emptyTask(),
-            ...t
-        };
-
-        this.updateSupportIndexesFromTask(t);
-
-        return this.tasks[t.id];
+        return t.name.length > 0 && isBoolean(t.complete) && (t.id === '' || !isNaN(idxId));
     }
 
-    public addTasks(tasks: ITask[]) {
-        return tasks.map(this.addTask);
+    public addTasks(tasks: IndexedTask[]) {
+        return tasks.map(this.insertTask);
     }
 
     taskExists(name: string | number) {
         if (typeof name === 'number') {
             return this.tasks.hasOwnProperty(name);
-        } else
-            return this.tasksByName.hasOwnProperty(name);
+        }
+        else {
+            const id = Number.parseInt(name, 16);
+            return (!isNaN(id) && this.tasks.hasOwnProperty(id)) || this.tasksByName.hasOwnProperty(name);
+        }
     }
 
     deleteLocations(taskId: number, locs: TaskLocation[]) {
@@ -191,27 +229,8 @@ export class TaskIndex {
         }
     }
 
-    /**
-     * Get all tasks in the index that hold references to the provided task name in either
-     * their parents or children member arrays.
-     *
-     * @param targetId
-     * @return Array<ITask>
-     */
-    getRefHolders(targetId: number) {
-        const ret: ITask[] = [];
-        for (const tid in this.tasks) {
-            const task = this.tasks[tid];
-            if (task.children.filter(c => c === targetId).length) {
-                // targetId is in this task's children
-                ret.push(task);
-            }
-        }
-        return ret;
-    }
-
-    deleteTask(t: ITask | string | number) {
-        let id: number = typeof t === 'string' ? this.tasksByName[t] : typeof t === 'number' ? t : t.id;
+    deleteTask(t: IndexedTask | string | number) {
+        const id: number = typeof t === 'string' ? this.tasksByName[t] : typeof t === 'number' ? t : t.uid;
         if (!this.taskExists(id))
             return;
 
@@ -226,236 +245,68 @@ export class TaskIndex {
         this.cache = {};
         this.locationIndex = {};
         this.parents = {};
-        this.nextId = 0;
+        this.nextId = 100000;
         this.deletedTasks = {};
     }
 
-    updateTask(t: ITask) {
-        if (!t.id || t.id === -1 || !this.taskExists(t.id)) {
-            if (this.taskExists(t.name))
-                throw new Error(`Task (${t.name}) exists but improper id: ${t.id}`);
-            this.addTask(t);
-            return this.tasks[t.id];
-        } else {
-            t.updated = Date.now();
-            t.created = t.created ?? Date.now();
-            this.tasks[t.id] = {...t};
-            return this.tasks[t.id];
-        }
+    updateTask(t: IndexedTask) {
+        this.tasks[t.uid] = {
+            ...(this.tasks[t.uid] || emptyIndexedTask()),
+            ...t,
+            updated: new Date(),
+        };
+        this.updateIndex();
+        return this.tasks[t.uid];
     }
 
-    public getTaskById(id: number): ITask {
+    public getTaskById(id: number): IndexedTask {
         return {...this.tasks[id]};
     }
 
-    public getTaskByName(name: string): ITask | null {
+    public getTaskByTid(tid: string): IndexedTask {
+        return {...this.tasks[Number.parseInt(tid, 16)]}
+    }
+
+    public getTaskByName(name: string): IndexedTask | null {
         return {...this.tasks[this.tasksByName[name]]} || null;
     }
 
-    public getTasksByFilepath(filepath: string): ITask[] {
+    public getTasksByFilepath(filepath: string): IndexedTask[] {
         return Object.keys(this.locationIndex)
             .filter(k => k.split(':')[0] === filepath)
             .map(k => ({...this.tasks[this.locationIndex[k]]}));
     }
 
-    public getTaskCacheForFile(filepath: string): FileTaskCache {
+    public getIndexedFileTaskRecord(filepath: string): FileTaskRecord {
         const tasks = this.getTasksByFilepath(filepath);
         return tasks.reduce((cache, task) => {
             return {
                 ...cache,
-                ...this.taskToCache(task, filepath)
+                ...this.taskToRecord(task, filepath)
             }
         }, {});
     }
 
-    public taskToCache(task: ITask, filepath: string): FileTaskCache {
-        const {name, id, complete} = task;
+    public taskToRecord(task: IndexedTask, filepath: string): FileTaskRecord {
         const lineNumbers = this.getFilePositions(task, filepath).sort();
         return lineNumbers.reduce((cache, lineNumber) => {
-            const ret: TaskCacheItem = {
-                id,
-                name,
-                complete,
-                lineNumber,
-                parent: -1
-            };
-            const parent = this.getFileParent(task, filepath) || emptyTask();
-            const parentLineNumbers = this.getFilePositions(parent, filepath).sort();
-            if (parentLineNumbers.length > 0) {
-                for (const parentLine of parentLineNumbers) {
-                    if (parentLine > ret.parent && parentLine < lineNumber)
-                        ret.parent = parentLine;
-                }
-                ret.parentId = parent.id;
-            }
             return {
                 ...cache,
-                [lineNumber]: ret
+                [lineNumber]: task
             };
-        }, {} as FileTaskCache);
+        }, {});
     }
 
-    public getFileParent({id}: ITask, filepath: string): ITask {
-        if (id in this.parents) {
-            for (const parent of this.parents[id]) {
-                const parentTask = this.getTaskById(parent);
-                const found = parentTask.locations.find(loc => loc.filePath === filepath);
-                if (found)
-                    return parentTask;
-            }
-        }
-        return null;
-    }
-
-    public getFilePositions({locations}: ITask, filepath: string): number[] {
+    public getFilePositions({locations}: IndexedTask, filepath: string): number[] {
         return locations.filter(loc => loc.filePath === filepath).map(loc => loc.lineNumber);
-    }
-
-    private mergeLocations(locList1: TaskLocation[], locList2: TaskLocation[]): TaskLocation[] {
-        const newLocs = locList2.filter(loc => !locList1.includes(loc));
-        return [...locList1, ...newLocs];
-    }
-
-    private mergeTaskList(list1: ITask[], list2: ITask[]): ITask[] {
-        const ids = new Set(list1.map(t => t.id));
-        const ret = [...list1];
-        for (const task of list2) {
-            if (!ids.has(task.id)) {
-                ids.add(task.id);
-                ret.push(task);
-            }
-        }
-        return ret;
-    }
-
-    public toTaskList(): ITask[] {
-        return Object.values(this.tasks).sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    public empty() {
-        return Object.values(this.tasks).length > 0;
-    }
-
-    public handleNewTasksFromFile(file: TFile, taskNames: string[], cache: FileTaskCache) {
-        const newTasks: Record<number, ITask> = {};
-        for (const line in cache) {
-            const item = cache[line];
-            if (item.name in taskNames) {
-                let task: ITask;
-                // it's a new task
-                if (!this.taskExists(item.name)) {
-                    task = this.createTask(item.name, [{filePath: file.path, lineNumber: item.lineNumber}]);
-                } else {
-                    // task already exists, add this location
-                }
-            }
-        }
-    }
-
-    public handleFileCacheUpdate(file: TFile, prev: FileTaskCache, current: FileTaskCache) {
-        for (const prevLineNum in prev) {
-            const prevItem = prev[prevLineNum];
-            if (Number.parseInt(prevLineNum) !== prevItem.lineNumber)
-                throw new Error(`Prev Index ${prevLineNum} does not match cache line number ${prevItem.lineNumber} for task: ${prevItem.name}`);
-            const loc: TaskLocation = {filePath: file.path, lineNumber: prevItem.lineNumber};
-            if (!(prevLineNum in current)) {
-                this.deleteTaskLocation(prevItem.id, loc)
-            } else {
-                const currItem = current[prevLineNum];
-                if (prevItem.id !== currItem.id) {
-                    this.deleteTaskLocation(prevItem.id, loc)
-                }
-            }
-        }
-
-        for (const currLineNum in current) {
-            const currItem = current[currLineNum];
-            if (Number.parseInt(currLineNum) !== currItem.lineNumber)
-                throw new Error(`Prev Index ${currLineNum} does not match cache line number ${currItem.lineNumber} for task: ${currItem.name}`);
-            const currLocation: TaskLocation = {filePath: file.path, lineNumber: currItem.lineNumber};
-            let task: ITask;
-            if (currItem.id === -1) {
-                if (!this.taskExists(currItem.name))
-                    task = this.createTask(currItem.name, [currLocation]);
-                else {
-                    task = this.getTaskByName(currItem.name);
-                }
-            } else {
-                task = this.getTaskById(currItem.id);
-            }
-            task.complete = currItem.complete;
-            const foundLocation = task.locations.find(loc => locationsEqual(loc, currLocation));
-            if (!foundLocation)
-                task.locations.push(currLocation);
-            this.updateTask(task);
-
-            if (currItem.parent > -1) {
-                const parentItem = current[currItem.parent];
-                const parentTask = this.getTaskByName(parentItem.name);
-                if (!parentTask)
-                    throw new Error(`No parent task found for ${currItem.name}.`)
-                if (!(task.id in parentTask.children))
-                    parentTask.children.push(task.id);
-                this.updateTask(parentTask);
-            } else {
-                // parent == -1,
-                // if prev parent wasn't -1, then we remove the parent/child relationship if this was the only
-                // location to represent it
-                if (currItem.id > -1) {
-                    for (const prevLine in prev) {
-                        const prevItem = prev[prevLine];
-                        if (prevItem.id === currItem.id && prevItem.parent > -1) {
-                            const prevParent = this.getTaskByName(prevItem.parentName);
-                            prevParent.children.remove(currItem.id);
-                            this.updateTask(prevParent);
-                        }
-                    }
-                }
-            }
-        }
-        return this.updateIndex();
     }
 
     public deleteAllFileLocations(path: string) {
         for (const task of this.getTasksByFilepath(path)) {
             task.locations = [...task.locations.filter(l => l.filePath !== path)];
-            this.updateTask(task);
+            task.parentLocations = [...task.parentLocations.filter(l => l.filePath !== path)]
+            this.tasks[task.uid] = {...task}
         }
-    }
-
-    public triggerIndexUpdateEvent(dirtyTaskIds: number[]) {
-
-    }
-
-    private taskTreeFromId(id: number): ITaskTree {
-        if (!this.taskExists(id))
-            return null;
-        const task = this.getTaskById(id);
-        return {
-            ...task,
-            children: (task.children || []).map(this.taskTreeFromId)
-        };
-    }
-
-    private deleteTaskLocation(taskId: number, location: TaskLocation) {
-        if (!this.taskExists(taskId))
-            return;
-
-        const task = this.getTaskById(taskId);
-        const newLocations = [...task.locations.filter(loc => !locationsEqual(loc, location))]
-        this.updateTask({...task, locations: newLocations});
-    }
-
-    private addTaskLocation(taskId: number, location: TaskLocation) {
-        if (!this.taskExists(taskId))
-            return;
-
-        const task = this.getTaskById(taskId);
-        const existing = task.locations.find(loc => locationsEqual(loc, location));
-        if (existing)
-            return;
-        else
-            this.updateTask({...task, locations: [...task.locations, location]});
     }
 
     public getAllTasks() {
@@ -472,45 +323,36 @@ export class TaskIndex {
     }
 
     public updateFromFile(path: string, record: FileTaskRecord) {
-        this.deleteAllFileLocations(path);
-        for (const line in record) {
-            const lineNumber = Number.parseInt(line);
-            const recordTask = record[lineNumber];
-            let task: ITask;
-            if (recordTask.id === -1) {
-                if (!this.taskExists(recordTask.name))
-                    task = this.createTask(recordTask.name, recordTask.locations);
-                else
-                    task = this.getTaskByName(recordTask.name);
-                recordTask.id = task.id;
-            } else {
-                if (!this.taskExists(recordTask.id)) {
-                    this.nextId = recordTask.id;
-                    task = this.createTask(recordTask.name, recordTask.locations);
+        const sortedLines = Object.keys(record).map(Number.parseInt).sort()
+        const tasks: Record<TaskID, IndexedTask> = sortedLines.reduce((newTasks, line) => {
+            const {
+                name, id, complete, locations,
+                tags, recurrence, description, dueDate, parentLocations
+            } = record[line];
+            const recIdxId = taskTidToId(id);
+            const newTask = isNaN(recIdxId) ? this.createTask(name, locations) : this.getTaskById(recIdxId);
+            const newLocations: TaskLocation[] = filterUnique(
+              newTask.locations.filter(l => l.filePath !== path).concat(locations), locationsEqual
+            );
+            const parentLocs: TaskLocation[] = filterUnique(
+              newTask.parentLocations.filter(l => l.filePath !== path).concat(parentLocations), locationsEqual
+            );
+            return {
+                ...newTasks,
+                [newTask.uid]: {
+                    ...newTask,
+                    complete, tags, description, recurrence, dueDate,
+                    parentLocations: parentLocs,
+                    locations: newLocations,
                 }
-                else
-                    task = this.getTaskById(recordTask.id);
-            }
-            task.name = recordTask.name;
-            task.complete = recordTask.complete;
-            if (!task.locations.find(l => locationsEqual(l, {filePath: path, lineNumber})))
-                task.locations.push({filePath: path, lineNumber});
-            this.updateTask(task);
+            };
+        }, {} as Record<TaskID, IndexedTask>)
+
+        this.tasks = {
+            ...this.tasks,
+            ...tasks
         }
 
-        // handle children now that all items have an id
-        for (const line in record) {
-            const recTask = record[line];
-            if (recTask.children?.length > 0) {
-                const task = this.getTaskById(recTask.id);
-                recTask.children.map(childLine => {
-                    const recChild = record[childLine];
-                    if (!task.children.includes(recChild.id))
-                        task.children.push(recChild.id);
-                });
-                this.updateTask(task);
-            }
-        }
         return this.updateIndex();
     }
 }

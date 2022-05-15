@@ -8,11 +8,11 @@ import {
   Instruction,
   TFile
 } from "obsidian";
-import {ITask} from "./Task";
+import {IndexedTask} from "./Task";
 import {TaskIndex} from "./TaskIndex";
 
 
-export class TaskEditorSuggest implements EditorSuggest<ITask>{
+export class TaskEditorSuggest implements EditorSuggest<IndexedTask>{
   static taskLinePattern = /(-|\*) \[(\s|x)?\]/
   static pattern =  /(?:-|\*) \[(\s|x)?\]\s+[^\r\n]+(?!\|\|)$/gm;
 
@@ -29,7 +29,7 @@ export class TaskEditorSuggest implements EditorSuggest<ITask>{
   close(): void {
   }
 
-  getSuggestions(context: EditorSuggestContext): ITask[] | Promise<ITask[]> {
+  getSuggestions(context: EditorSuggestContext): IndexedTask[] | Promise<IndexedTask[]> {
     const search = context.query;
     return this.taskIndex.getAllTasks().filter(t => t.name.startsWith(search));
   }
@@ -58,10 +58,10 @@ export class TaskEditorSuggest implements EditorSuggest<ITask>{
   open(): void {
   }
 
-  renderSuggestion(value: ITask, el: HTMLElement): void {
+  renderSuggestion(value: IndexedTask, el: HTMLElement): void {
   }
 
-  selectSuggestion(value: ITask, evt: MouseEvent | KeyboardEvent): void {
+  selectSuggestion(value: IndexedTask, evt: MouseEvent | KeyboardEvent): void {
   }
 
   setInstructions(instructions: Instruction[]): void {

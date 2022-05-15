@@ -1,9 +1,9 @@
-import {ITask} from "./types";
-import {hashTask, Task} from "./Task";
+import {IndexedTask} from "./types";
+import {hashTask} from "./Task";
 import {hash} from "../util/hash";
 
 test('Task stringifies properly', () => {
-    const child: ITask = {
+    const child: IndexedTask = {
         id: 23456,
         name: "child task",
         complete: true,
@@ -13,10 +13,10 @@ test('Task stringifies properly', () => {
             filePath: 'main/a good file.md',
             lineNumber: 5
         }],
-        children: [],
+        childTids: [],
     }
 
-    const task: ITask = {
+    const task: IndexedTask = {
         id: 12345,
         name: "Test task 1",
         complete: true,
@@ -27,7 +27,7 @@ test('Task stringifies properly', () => {
             filePath: 'inbox/an unworked file.md',
             lineNumber: 0
         }],
-        children: [child.id],
+        childTids: [child.id],
         created: Date.now(),
         updated: Date.now(),
         description: 'this is a long description of this task',

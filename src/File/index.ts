@@ -1,29 +1,25 @@
 import {CachedMetadata, Pos, TFile} from "obsidian";
-import {FileTaskCache, FileTaskRecord, TaskCacheItem, TaskHierarchy} from "./types";
-import TaskParser from "../Parser/TaskParser";
-import {compareArrays, emptyTask, ITask, locationsEqual, TaskLocation, taskLocationStr} from "../Task";
-import {entries} from "lodash";
+import {FileTaskCache, FileTaskRecord, TaskCacheItem} from "./types";
+import {parseLine} from "../Parser/TaskParser";
+import {emptyTask, IndexedTask, locationsEqual, Task, TaskLocation, taskLocationStr} from "../Task";
 import {hash} from "../util/hash";
 
-export const taskCacheItemToDisplayTask = (item: TaskCacheItem) => {
-}
-
-export const taskCacheItemToTask = (filePath: string, item: TaskCacheItem): ITask => {
-    const {name, id, lineNumber, complete} = item;
+export const taskCacheItemToTask = (filePath: string, item: TaskCacheItem): Task => {
+    const {name, tid, lineNumber, complete, parent} = item;
     return {
         ...emptyTask(),
-        name, id, complete, locations: [{filePath, lineNumber}]
+        name, id: tid, complete, locations: [{filePath, lineNumber, cacheItemParent: parent}]
     };
 }
 
-export const taskToBaseCacheItem = (location: TaskLocation, task: ITask): TaskCacheItem => {
+export const taskToBaseCacheItem = (location: TaskLocation, task: IndexedTask): TaskCacheItem => {
     const {id, name, complete, locations} = task;
     const loc = locations.find(l => locationsEqual(l, location));
     if (!loc) {
         throw new Error(`Location ${taskLocationStr(location)} not found. Task: ${name}`);
     }
     return {
-        id,
+        tid: id,
         name,
         complete,
         lineNumber: loc.lineNumber,
@@ -31,29 +27,27 @@ export const taskToBaseCacheItem = (location: TaskLocation, task: ITask): TaskCa
     };
 }
 
-export const getFileTaskCache = (cache: CachedMetadata, contents: string): FileTaskCache => {
-    const items: FileTaskCache = {};
+export const getFileTaskRecord = (file: TFile, cache: CachedMetadata, contents: string): FileTaskRecord => {
+    const items: FileTaskRecord = {};
     const contentLines = contents.split(/\r?\n/);
     for (const listItem of (cache.listItems || []).filter(li => li.task)) {
         const line = listItem.position.start.line;
         const taskLine = contentLines[line];
-        const task = TaskParser.parseLine(taskLine);
+        const task = parseLine(taskLine);
         if (!task) {
             console.warn(`No task found at ${taskLine}.`);
             continue;
         }
-        const taskCacheItem: TaskCacheItem = {
-            id: Number.parseInt(listItem.id || '-1'),
-            name: task.name,
-            complete: task.complete,
-            parent: listItem.parent,
-            lineNumber: listItem.position.start.line,
-        };
+        task.locations.push({filePath: file.path, lineNumber: line, cacheItemParent: listItem.parent});
         if (listItem.parent > -1) {
-            taskCacheItem.parentId = items[listItem.parent].id || -1;
-            taskCacheItem.parentName = items[listItem.parent].name;
+            const parent = cache.listItems.find((th) => th.position.start.line === listItem.parent)
+            task.parentLocations = [
+              ...(task.parentLocations || []),
+                {filePath: file.path, lineNumber: parent.position.start.line, cacheItemParent: parent.parent}
+            ]
         }
-        items[listItem.position.start.line] = taskCacheItem;
+
+        items[line] = task;
     }
 
     return items;
@@ -75,66 +69,6 @@ export const replaceTextAtPosition = (contents: string, newContents: string, pos
     return first + newContents + second;
 }
 
-export const diffTaskHierarchies = (prev: TaskHierarchy, curr: TaskHierarchy): number[] => {
-    // const [removedIds] = compareArrays(prev.map(i => i.id), curr.map(i => i.id));
-    // const [, newNames] = compareArrays(prev.map(i => i.name), curr.map(i => i.name));
-    return curr.reduce((ups, chi, currI) => {
-        const prevI = prev.findIndex(phi => phi.name === chi.name && phi.id === chi.id);
-        // if task found in previous hierarchy and is same
-        if (prevI > -1 && prev[prevI].parentId === chi.parentId && prev[prevI].complete === chi.complete)
-            return ups;
-        return [...ups, chi.id];
-    }, [] as number[]);
-};
-
-export const getNewTasksFromCacheUpdate = (file: TFile, prev: FileTaskCache, curr: FileTaskCache): [string, TaskLocation[]][] => {
-    const [, newTasks] = compareArrays(Object.values(prev).map(i => i.name), Object.values(curr).map(i => i.name));
-    const ret: Record<string, TaskLocation[]> = {};
-    for (const currLine in curr) {
-        const currItem = curr[currLine];
-        if (currItem.name in newTasks) {
-            ret[currItem.name] = [...(ret[currItem.name]||[]), {filePath: file.path, lineNumber: currItem.lineNumber}]
-        }
-    }
-    return entries(ret);
-};
-
-export const getDeleteIdsFromCacheUpdate = (prev: FileTaskCache, curr: FileTaskCache) => {
-    const currIds = Object.values(curr).map(ci => ci.id);
-    const deleteIds: Set<number> = new Set();
-    for (const prevLine in prev) {
-        const prevItem = prev[prevLine];
-        if (prevItem.id !== -1 && !currIds.includes(prevItem.id)) {
-            deleteIds.add(prevItem.id);
-        }
-    }
-    return deleteIds;
-}
-
-export const fileTaskRecordToCache = (filePath: string, record: FileTaskRecord): FileTaskCache => {
-    const cache: FileTaskCache = {};
-    const parents: Record<number, number> = {};
-    for (const line in record) {
-        const lineNumber = Number.parseInt(line);
-        const task = record[lineNumber];
-        const baseItem = taskToBaseCacheItem({filePath, lineNumber}, task);
-        if (task.children?.length > 0) {
-            task.children.map(cid => {
-               parents[cid] = lineNumber;
-            });
-        }
-        if (task.id in parents) {
-            const parentLine = parents[task.id];
-            const parent = cache[parentLine];
-            baseItem.parent = parentLine;
-            baseItem.parentId = parent.id;
-            baseItem.parentName = parent.name;
-        }
-        cache[lineNumber] = baseItem;
-    }
-    return cache;
-}
-
 export const fileTaskCacheToRecord = (filePath: string, cache: FileTaskCache): FileTaskRecord => {
     return Object.keys(cache).reduce((ret, line) => {
         const ln = Number.parseInt(line);
@@ -142,17 +76,20 @@ export const fileTaskCacheToRecord = (filePath: string, cache: FileTaskCache): F
         if (!(ln in ret)) {
             ret[ln] = taskCacheItemToTask(filePath, cacheItem);
         }
-        if (cacheItem.parent > -1) {
-            if (!ret[cacheItem.parent].children.includes(ln))
-                ret[cacheItem.parent].children.push(ln)
+        const parentLine = cacheItem.parent;
+        const ploc: TaskLocation = {
+            filePath,
+            lineNumber: parentLine,
+            cacheItemParent: parentLine > -1 ? cache[parentLine].parent : -1
         }
+        ret[ln].parentLocations = [ploc]
         return ret;
-    }, {} as Record<number, ITask>);
+    }, {} as Record<number, Task>);
 }
 
-export const validateCaches = (prev: FileTaskCache, curr: FileTaskCache) => {
-    const prevLines = Object.keys(prev);
-    const currLines = Object.keys(curr);
+export const validateRecords = (fileRecord: FileTaskRecord, indexRecord: FileTaskRecord) => {
+    const prevLines = Object.keys(fileRecord);
+    const currLines = Object.keys(indexRecord);
     if (prevLines.length !== currLines.length) {
         throw new Error(`Caches differ.`)
     }
@@ -165,9 +102,9 @@ export const validateCaches = (prev: FileTaskCache, curr: FileTaskCache) => {
     }
 }
 
-export const diffFileCaches = (a: FileTaskCache, b: FileTaskCache) => {
-  const aNotB: FileTaskCache = {};
-  const bNotA: FileTaskCache = {};
+export const diffFileRecords = (a: FileTaskRecord, b: FileTaskRecord) => {
+  const aNotB: FileTaskRecord = {};
+  const bNotA: FileTaskRecord = {};
 
   for (const aLine in a) {
       if (!(aLine in b)) {
@@ -176,7 +113,7 @@ export const diffFileCaches = (a: FileTaskCache, b: FileTaskCache) => {
       else {
           const itemA = a[aLine];
           const itemB = b[aLine];
-          for (const prop of Object.getOwnPropertyNames(itemA) as (keyof TaskCacheItem)[]) {
+          for (const prop of Object.getOwnPropertyNames(itemA) as (keyof Task)[]) {
               if (!itemB[prop] || itemA[prop] !== itemB[prop]) {
                   aNotB[aLine] = itemA;
                   bNotA[aLine] = itemB;
@@ -192,12 +129,12 @@ export const diffFileCaches = (a: FileTaskCache, b: FileTaskCache) => {
   return [aNotB, bNotA];
 };
 
-export const fileCachesEqual = (a: FileTaskCache, b: FileTaskCache) => {
+export const fileRecordsEqual = (a: FileTaskRecord, b: FileTaskRecord) => {
     const keysA = Object.keys(a);
     const keysB = Object.keys(b);
     if (keysA.length !== keysB.length)
         return false;
-    const [aNotB, bNotA] = diffFileCaches(a, b);
+    const [aNotB, bNotA] = diffFileRecords(a, b);
     return !(Object.keys(aNotB).length > 0 || Object.keys(bNotA).length > 0);
 
 }

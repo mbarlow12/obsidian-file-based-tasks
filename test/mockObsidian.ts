@@ -6,3 +6,5 @@ jest.mock('obsidian', () => {
     };
 },
     {virtual: true});
+
+export {}

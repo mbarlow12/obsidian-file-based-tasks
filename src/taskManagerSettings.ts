@@ -3,4 +3,5 @@ export interface TaskManagerSettings {
     taskTitlePrefix?: string;
     backlogFileName?: string;
     completedFileName?: string;
+    taskPrefix?: string;
 }

@@ -1,5 +1,4 @@
 import {CachedMetadata, ListItemCache} from "obsidian";
-import {assign, entries} from "lodash";
 
 export const testTaskLines = Array(10).fill('').map((v, i) => `- [ ] t${i}`);
 
@@ -19,14 +18,10 @@ const baseListItem: ListItemCache = {
     "parent": -1,
     "task": " "
 };
-const getListItem = (x: any): ListItemCache => {
-    return baseListItem;
-}
-
 export const getFileContents = (taskLines: string[], relationships: Record<number, number[]>) => {
     const listItems: ListItemCache[] = [];
     for (let i = 0; i < taskLines.length; i++) {
-        listItems.push(assign({}, baseListItem, {
+        listItems.push(Object.assign({}, baseListItem, {
             position: {
                 ...baseListItem.position,
                 start: { line: i, col: 0, offset: 0 }}}));
@@ -34,9 +29,9 @@ export const getFileContents = (taskLines: string[], relationships: Record<numbe
     const children: number[] = []
     for (let i = 0; i < taskLines.length; i++) {
         if (i in relationships) {
-            let childIdxs = relationships[i].map(cidx => [i, cidx]);
+            const childIdxs = relationships[i].map(cidx => [i, cidx]);
             while (childIdxs.length > 0) {
-                let [parentI, childIdx] = childIdxs.pop();
+                const [parentI, childIdx] = childIdxs.pop();
                 taskLines[childIdx] = `  ${taskLines[childIdx]}`
                 listItems[childIdx].parent = parentI;
                 if (childIdx in relationships) {
@@ -59,7 +54,7 @@ export const base: string = testTaskLines.slice(0, 5).join('\n')
 export const baseReversed: string = testTaskLines.slice(0, 5).reverse().join('\n');
 
 
-export const contents1: string =
+export const contents1 =
     `- [ ] t1
 - [ ] t2`;
 
@@ -100,7 +95,7 @@ export const cache1: CachedMetadata = {
     ]
 };
 
-export const contents2: string =
+export const contents2 =
     `- [ ] t1
 \t- [ ] t2`;
 
@@ -141,7 +136,7 @@ export const cache2: CachedMetadata = {
     ]
 };
 
-export const contents3: string = `- [ ] t4
+export const contents3 = `- [ ] t4
 \t- [ ] t2`;
 
 export const cache3: CachedMetadata = {
@@ -180,8 +175,3 @@ export const cache3: CachedMetadata = {
         }
     ]
 };
-
-const contents4: string = `- [ ] t2
-\t- [ ] t4`;
-const contents5: string = `- [ ] t1
-- [ ] t2`;
