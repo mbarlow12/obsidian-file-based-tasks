@@ -2,7 +2,7 @@ import {RRule} from "rrule";
 import {EventRef, ListItemCache} from "obsidian";
 import {TaskEvents} from "../Events/TaskEvents";
 import {TaskModifiedData} from "../Events/types";
-import {IndexedTask, TaskID, TaskLocation, taskLocationStr, taskLocFromStr} from "../Task";
+import {IndexedTask, TaskID, TaskLocation, taskLocFromMinStr, taskLocLineStr} from "../Task";
 import {emptyIndexedTask, taskIdToTid, taskTidToId} from "../Task/Task";
 
 export interface LineTask extends ListItemCache {
@@ -12,13 +12,18 @@ export interface LineTask extends ListItemCache {
   recurrence?: RRule;
   dueDate?: Date;
   tags: string[];
+  originalTaskText?: string;
 }
+
+export type TaskIndex = Record<TaskID, IndexedTask>
 
 export type State = Record<string, LineTask>;
 
 export const taskLocationFromLineTask = (lt: LineTask, path: string): TaskLocation => ({
   filePath: path,
   lineNumber: lt.position.start.line,
+  pos: lt.position,
+  parent: lt.parent
 });
 
 export const getIndexedTask = (
@@ -29,6 +34,33 @@ export const getIndexedTask = (
   lineTask.uid > 0 && lineTask.uid in r && r[lineTask.uid] ||
   Object.values(r).find(rt => rt.name === lineTask.name) ||
   {...emptyIndexedTask(), uid: lineTask.uid || nextId};
+
+export const hashLineTask = (
+  {name, id, complete, parent, position: {start: {line}}}: LineTask
+): string => [line, id, name, complete ? 'x' : ' ', parent].join('||');
+
+export const renderTags = (tags?: string[]): string => ``;
+export const renderRecurrence = (rrule?: RRule): string => ``;
+export const renderDueDate = (dueDate: Date) => dueDate.toLocaleString();
+
+export const lineTaskToChecklist = ({complete, name, id, tags, recurrence, dueDate}: LineTask): string => [
+  `- [${complete}]`, name, renderTags(tags), renderDueDate(dueDate), renderRecurrence(recurrence), `^${id}`
+].join(' ');
+
+
+export const indexedTaskToState = (
+  {id, uid, name, recurrence, tags, dueDate, complete, locations}: IndexedTask
+): State => locations.reduce((tState, loc) => {
+  return {
+    ...tState,
+    [taskLocLineStr(loc)]: {
+      id, uid, name, recurrence, tags, dueDate, complete,
+      task: complete ? 'x' : ' ',
+      parent: loc.parent,
+      position: loc.pos
+    }
+  }
+}, {} as State)
 
 export class TaskStore {
   private events: TaskEvents;
@@ -43,6 +75,10 @@ export class TaskStore {
 
   public unload() {
     this.events.off(this.fileCacheRef);
+  }
+
+  public getState() {
+    return {...this.state};
   }
 
   private reducer(fileState: State) {
@@ -99,11 +135,11 @@ export class TaskStore {
     }, {} as Record<TaskID, IndexedTask>);
 
     for (const locStr in state) {
-      const {filePath} = taskLocFromStr(locStr);
+      const {filePath} = taskLocFromMinStr(locStr);
       const lineTask = state[locStr];
       const task = rec[lineTask.uid];
       const parentLine = lineTask.parent;
-      const parent = state[taskLocationStr({filePath, lineNumber: parentLine})]
+      const parent = state[taskLocLineStr({filePath, lineNumber: parentLine})]
       if (parent) {
         rec[parent.uid] = {
           ...rec[parent.uid],
@@ -120,22 +156,16 @@ export class TaskStore {
     return rec;
   }
 
-  public taskLocations(state: State): Record<string, TaskID> {
-    return Object.keys(state).reduce((lcs, locStr) => {
-      return {
-        ...lcs,
-        [locStr]: lcs[locStr] || state[locStr].uid
-      }
-    }, {} as Record<string, TaskID>);
-  }
-
   private update() {
     const index = this.taskRecordFromState(this.state);
-    const locations = this.taskLocations(this.state);
-    this.notifySubscribers({index, locations})
+    this.notifySubscribers({index, taskState: {...this.state}})
   }
 
   private notifySubscribers(data: TaskModifiedData) {
     this.events.triggerIndexUpdate(data)
+  }
+
+  initialize(state: State) {
+    this.state = this.unifyState({...state});
   }
 }

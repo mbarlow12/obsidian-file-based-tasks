@@ -1,4 +1,4 @@
-import TaskParser, {parseLine} from './TaskParser';
+import TaskParser, {parseTaskString} from './TaskParser';
 import {createTaskFileContents} from "../TestHelpers";
 import {Task} from "../Task";
 
@@ -12,21 +12,21 @@ import {Task} from "../Task";
 
 test('Parse a single incomplete todo item', () => {
     const line = '- [ ] an incomplete todo';
-    const t: Task = parseLine(line);
+    const t: Task = parseTaskString(line);
     expect(t.complete).toBe(false);
     expect(t.name).toEqual('an incomplete todo');
 });
 
 test('Parse a single complete todo item', () => {
     const line = '- [x] a complete todo';
-    const t: Task = parseLine(line);
+    const t: Task = parseTaskString(line);
     expect(t.complete).toBe(true);
     expect(t.name).toEqual('a complete todo');
 });
 
 test('Parse a todo with a nested todo in the text', () => {
     const line = '- [x] a complete todo but here - [ ] is another oddity';
-    const t: Task = parseLine(line);
+    const t: Task = parseTaskString(line);
     expect(t.complete).toEqual(true);
     expect(t.name).toEqual('a complete todo but here - [ ] is another oddity');
 });
@@ -37,7 +37,7 @@ test('Parse minimally valid tasks', () => {
         const names = ['a', '|', '?', '.'];
         for (const [i, name] of names.entries()) {
             const test = `${checkbox} ${name}`;
-            const baseTask = parseLine(test);
+            const baseTask = parseTaskString(test);
             const expectedStatus = itemI % 2 !== 0;
             expect(baseTask.complete).toEqual(expectedStatus);
             expect(baseTask.name).toEqual(names[i])
@@ -53,7 +53,7 @@ test('Parser a series of invalid todos', () => {
     ];
     for (const bullets of items) {
         for (const bullet of bullets) {
-            expect(parseLine(bullet)).toBeNull()
+            expect(parseTaskString(bullet)).toBeNull()
         }
     }
 })

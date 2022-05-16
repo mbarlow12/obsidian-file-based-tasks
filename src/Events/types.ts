@@ -1,4 +1,5 @@
-import {IndexedTask, TaskID} from "../Task";
+import {IndexedTask} from "../Task";
+import {LineTask} from "../Store/TaskStore";
 
 export enum EventType {
     REQUEST_UPDATE_INDEX = 'obsidian-file-tasks:request-index-update',
@@ -22,7 +23,7 @@ export interface TasksDeleted {
 
 export interface TaskModifiedData {
     index: Record<number, IndexedTask>;
-    locations: Record<string, TaskID>
+    taskState: Record<string, LineTask>
 }
 
 export interface TasksModified {

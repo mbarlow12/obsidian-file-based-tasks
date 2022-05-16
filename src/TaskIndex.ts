@@ -70,7 +70,7 @@ export class TaskIndex {
     public unload() {}
 
     public broadcastUpdate() {
-        this.events.triggerIndexUpdate({index: {...this.tasks}, locations: {...this.locationIndex}});
+        this.events.triggerIndexUpdate({index: {...this.tasks}, taskState: {...this.locationIndex}});
     }
 
     public async updateIndex() {

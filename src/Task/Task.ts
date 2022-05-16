@@ -30,7 +30,7 @@ export const emptyIndexedTask = (): IndexedTask => {
 
 export const taskIdToTid = (id: number) => id.toString(16);
 
-export const taskTidToId = (tid: string) => Number.parseInt(tid, 16);
+export const taskTidToId = (tid: string) => isNaN(Number.parseInt(tid, 16)) ? 0 : Number.parseInt(tid, 16);
 
 export const baseTasksSame = (tA: Task, tB: Task): boolean => {
     return tA.id === tB.id && tA.name == tB.name && tA.complete === tB.complete;

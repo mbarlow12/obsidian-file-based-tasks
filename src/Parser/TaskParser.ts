@@ -1,27 +1,29 @@
-import {FileTaskLine, Task} from "../Task";
+import {LineTask} from "../Store/TaskStore";
+import {RRule} from "rrule";
+import {taskTidToId} from "../Task/Task";
 
 // pattern = -/* [x] [something]
 const strictPattern = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(\d|\w)[^^]*)(?: \^(?<tid>[0-9A-Za-z]+))?$/;
 
-export function parseLine(line: string): Task | null {
+export type ParsedTask = Pick<LineTask, 'id'|'name'|'tags'|'recurrence'|'dueDate'|'complete'|'uid'>
+
+const parseTags = (tags: string): string[] => [];
+const parseRecurrence = (recurrence: string): RRule | null => null;
+
+export function parseTaskString(line: string): ParsedTask | null {
   const match = line.match(strictPattern);
   if (match) {
-    const {complete, taskLine, tid} = match.groups;
+    const {complete, taskLine, tid, tags, recurrence, dueDate} = match.groups;
     return {
-      childTids: [], description: "", locations: [], parentTids: [], tags: [],
+      uid: taskTidToId(tid),
       complete: complete === 'x',
       name: taskLine.trim(),
-      id: tid
+      id: tid,
+      tags: parseTags(tags),
+      recurrence: parseRecurrence(recurrence),
+      dueDate: new Date(dueDate)
     };
-  } else
-    return null;
-}
-
-export default class TaskParser {
-  static parseLines(contents: string): Array<FileTaskLine> {
-    const lines = contents.split(/\r?\n/g);
-    return lines.map((line, index) => {
-      return [index, parseLine(line)] as FileTaskLine
-    }).filter(tl => tl[1] !== null);
   }
+  else
+    return null;
 }

@@ -1,5 +1,5 @@
 import {RRule} from "rrule";
-import {ListItemCache} from "obsidian";
+import {ListItemCache, Pos} from "obsidian";
 
 export const TaskRecordType = '--TASK--';
 
@@ -58,7 +58,11 @@ export type LocationString = string;
 export interface TaskLocation {
     filePath: string;
     lineNumber: number;
+    parent: number;
+    pos: Pos;
 }
+
+export type MinTaskLocation = Pick<TaskLocation, 'filePath'|'lineNumber'>;
 
 export interface FileTaskLine extends Array<number | Task> {
     0: number,
