@@ -1,10 +1,23 @@
-import {IndexedTask, NonEmptyString, Task, TaskLocation, TaskRecordType, TaskYamlObject} from "./types";
-import {stringifyYaml, TFile} from "obsidian";
-import {taskLocationStr, taskLocFromStr} from "./index";
-import {hash} from "../util/hash";
-import {rrulestr} from "rrule";
+import { stringifyYaml, TFile } from "obsidian";
+import { rrulestr } from "rrule";
+import { LineTask } from '../Store/types';
+import { hash } from "../util/hash";
+import { emptyPosition, taskLocationStr, taskLocFromStr } from "./index";
+import { IndexedTask, NonEmptyString, Task, TaskLocation, TaskRecordType, TaskYamlObject } from "./types";
 
 const taskFileNameRegex = /^(?<name>\w.*)(?= - \d+) - (?<id>\d+)(?:.md)?/;
+
+export const emptyLineTask = (): LineTask => {
+    return {
+        tags: [],
+        id: '',
+        complete: false,
+        name: '',
+        parent: -1,
+        uid: 0,
+        position: emptyPosition(0)
+    };
+};
 
 export const emptyTask = (): Task => {
     return {

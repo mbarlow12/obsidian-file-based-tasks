@@ -1,15 +1,15 @@
-import {CachedMetadata, TFile} from "obsidian";
-import {FileTaskCache, FileTaskRecord} from "./types";
-import {parseTaskString} from "../Parser";
-import {Task, taskLocationStr} from "../Task";
-import {hash} from "../util/hash";
-import {State} from "../Store/TaskStore";
+import { CachedMetadata, TFile } from "obsidian";
+import { parseTaskString } from "../Parser";
+import { State } from '../Store/types';
+import { minTaskLocStr, Task } from "../Task";
+import { hash } from "../util/hash";
+import { FileTaskCache, FileTaskRecord } from "./types";
 
 export const getFileTaskState = (file: TFile, cache: CachedMetadata, contents: string): State => {
     const contentLines = contents.split(/\r?\n/);
     return (cache.listItems || []).filter(li => li.task !== undefined).reduce((st, cli) => {
         const lineNumber = cli.position.start.line;
-        const locStr = taskLocationStr({filePath: file.path, lineNumber, parent: cli.parent, pos: cli.position})
+        const locStr = minTaskLocStr({filePath: file.path, lineNumber})
         return {
             ...st,
             [locStr]: {

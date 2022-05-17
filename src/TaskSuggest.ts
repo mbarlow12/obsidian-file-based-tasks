@@ -9,7 +9,6 @@ import {
   TFile
 } from "obsidian";
 import {IndexedTask} from "./Task";
-import {TaskIndex} from "./TaskIndex";
 
 
 export class TaskEditorSuggest implements EditorSuggest<IndexedTask>{
@@ -19,19 +18,17 @@ export class TaskEditorSuggest implements EditorSuggest<IndexedTask>{
   context: EditorSuggestContext | null;
   limit: number;
   app: App;
-  taskIndex: TaskIndex;
 
-  constructor(app: App, tfm: TaskIndex) {
+  constructor(app: App) {
     this.app = app;
-    this.taskIndex = tfm;
   }
 
   close(): void {
   }
 
   getSuggestions(context: EditorSuggestContext): IndexedTask[] | Promise<IndexedTask[]> {
-    const search = context.query;
-    return this.taskIndex.getAllTasks().filter(t => t.name.startsWith(search));
+    // const search = context.query;
+    return []
   }
 
   onTrigger(cursor: EditorPosition, editor: Editor, file: TFile): EditorSuggestTriggerInfo | null {

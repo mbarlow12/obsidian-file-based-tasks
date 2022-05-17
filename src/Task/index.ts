@@ -1,5 +1,5 @@
-import {Loc, Pos} from "obsidian";
-import {MinTaskLocation, TaskLocation} from "./types";
+import { Loc, Pos } from "obsidian";
+import { MinTaskLocation, TaskLocation } from "./types";
 
 export {
     emptyTask,
@@ -42,7 +42,7 @@ export const posStr = ({start, end}: Pos): string => [locStr(start), locStr(end)
 
 export const taskLocationStr = ({filePath, lineNumber, pos}: TaskLocation): string => [filePath, `${lineNumber}`, posStr(pos)].join(LOC_DELIM);
 
-export const taskLocLineStr = ({filePath, lineNumber}: MinTaskLocation): string => [filePath, `${lineNumber}`].join(LOC_DELIM);
+export const minTaskLocStr = ({filePath, lineNumber}: MinTaskLocation): string => [filePath, `${lineNumber}`].join(LOC_DELIM);
 
 export const emptyPosition = (line: number): Pos => pos(line, 0, 0, 0, 0, 0);
 

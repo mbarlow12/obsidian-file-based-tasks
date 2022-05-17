@@ -1,6 +1,6 @@
-import {LineTask} from "../Store/TaskStore";
-import {RRule} from "rrule";
-import {taskTidToId} from "../Task/Task";
+import { RRule } from "rrule";
+import { LineTask } from '../Store/types';
+import { taskTidToId } from "../Task/Task";
 
 // pattern = -/* [x] [something]
 const strictPattern = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(\d|\w)[^^]*)(?: \^(?<tid>[0-9A-Za-z]+))?$/;
