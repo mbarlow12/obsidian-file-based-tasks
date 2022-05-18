@@ -1,14 +1,13 @@
 import { EventRef, FrontMatterCache, MetadataCache, TAbstractFile, TFile, TFolder, Vault } from "obsidian";
 import { TaskEvents } from "./Events/TaskEvents";
-import { TaskModifiedData } from "./Events/types";
 import { getFileTaskState } from "./File";
-import { hashLineTask, indexedTaskToState, lineTaskToChecklist } from "./Store/TaskStore";
-import { State, TaskIndex } from './Store/types';
+import { hashLineTask, indexedTaskToInstanceIndex, lineTaskToChecklist } from "./Store/TaskStore";
+import { InstanceIndex, TaskIndex, TaskStoreState } from './Store/types';
 import {
     getTaskFromYaml,
     hashTask,
-    IndexedTask,
     parseTaskFilename,
+    Task,
     taskLocFromMinStr,
     taskLocFromStr,
     TaskRecordType,
@@ -17,14 +16,14 @@ import {
     TaskYamlObject
 } from "./Task";
 
-export const hashFileTaskState = ( state: State ): string =>
+export const hashFileTaskState = ( state: InstanceIndex ): string =>
     Object.keys( state )
         .map( locStr => state[ locStr ] )
         .sort( ( tA, tB ) => tA.position.start.line - tB.position.start.line )
         .map( hashLineTask )
         .join( '\n' );
 
-export const filterStateByPath = ( filePath: string, state: State ): State =>
+export const filterStateByPath = ( filePath: string, state: InstanceIndex ): InstanceIndex =>
     Object.keys( state )
         .filter( s => taskLocFromStr( s ).filePath === filePath )
         .reduce( ( fst, locStr ) => ({ ...fst, [ locStr ]: state[ locStr ] }), {} )
@@ -64,7 +63,7 @@ export class TaskFileManager {
         this.fileStates = {};
     }
 
-    public async handleIndexUpdate( { index, taskState }: TaskModifiedData ) {
+    public async handleIndexUpdate( { index, instanceIndex }: TaskStoreState ) {
         const deleteMarks = new Set( Object.keys( this.fileStates ) )
         for ( const taskId in index ) {
             const idxTask = index[ taskId ];
@@ -83,12 +82,12 @@ export class TaskFileManager {
             };
         }
 
-        const filePaths = Object.keys( taskState )
+        const filePaths = Object.keys( instanceIndex )
             .map( s => taskLocFromMinStr( s ).filePath )
             .filter( ( fp, i, fps ) => fps.indexOf( fp ) === i );
 
         for ( const path in filePaths ) {
-            const newState = filterStateByPath( path, taskState );
+            const newState = filterStateByPath( path, instanceIndex );
             const newHash = hashFileTaskState( newState );
             deleteMarks.delete( path )
             if ( path in this.fileStates && this.fileStates[ path ].hash === newHash )
@@ -109,10 +108,10 @@ export class TaskFileManager {
     }
 
     public async getFileTaskState( file: TFile ) {
-        let state: State;
+        let state: InstanceIndex;
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file );
-            state = indexedTaskToState( idxTask );
+            state = indexedTaskToInstanceIndex( idxTask );
         }
         else {
             state = await this.readMarkdownFile( file )
@@ -152,7 +151,7 @@ export class TaskFileManager {
         return this.mdCache.getFirstLinkpathDest( name, this._tasksDirectory.path );
     }
 
-    public async storeTaskFile( task: IndexedTask ) {
+    public async storeTaskFile( task: Task ) {
         const fullPath = this.getTaskPath( task );
         const file = this.vault.getAbstractFileByPath( fullPath );
         if ( !file ) {
@@ -196,7 +195,7 @@ export class TaskFileManager {
         } as unknown as TaskYamlObject
     }
 
-    public async readTaskFile( file: TFile ): Promise<IndexedTask> {
+    public async readTaskFile( file: TFile ): Promise<Task> {
         const cache = this.mdCache.getFileCache( file );
         const taskYml: TaskYamlObject = TaskFileManager.taskYamlFromFrontmatter( cache.frontmatter )
         const task = getTaskFromYaml( taskYml );
@@ -208,13 +207,13 @@ export class TaskFileManager {
         return task;
     }
 
-    public async readMarkdownFile( file: TFile ): Promise<State> {
+    public async readMarkdownFile( file: TFile ): Promise<InstanceIndex> {
         const cache = this.mdCache.getFileCache( file );
         const contents = await this.vault.read( file );
         return getFileTaskState( file, cache, contents );
     }
 
-    public async writeStateToFile( file: TFile, index: TaskIndex, state: State ) {
+    public async writeStateToFile( file: TFile, index: TaskIndex, state: InstanceIndex ) {
         if ( Object.keys( state ).filter( s => taskLocFromMinStr( s ).filePath !== file.path ).length > 0 )
             throw new Error( `State with invalid paths passed to ${file.path}.` )
 
@@ -240,7 +239,7 @@ export class TaskFileManager {
         return hashFileTaskState( state )
     }
 
-    public getTaskPath( task: IndexedTask ): string {
+    public getTaskPath( task: Task ): string {
         return `${this.tasksDirectory.path}/${taskToFilename( task )}`;
     }
 

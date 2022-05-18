@@ -1,5 +1,5 @@
-import {RRule} from "rrule";
-import {ListItemCache, Pos} from "obsidian";
+import { ListItemCache } from "obsidian";
+import { RRule } from "rrule";
 
 export const TaskRecordType = '--TASK--';
 
@@ -11,61 +11,55 @@ export type Char =
 
 export type NonEmptyString = `${Char}${string}`
 
-export interface Task {
-    id: string;
+export interface TaskInstance extends ListItemCache {
+    uid?: number;
     name: string;
     complete: boolean;
-    locations: TaskLocation[];
-    description: string;
-    parentLocations: TaskLocation[];
     recurrence?: RRule;
     dueDate?: Date;
-    tags: string[];
+    tags?: string[];
+    rawText: string;
+    filePath: string;
 }
 
-export interface IndexedTask extends Task {
-    uid: number;
+export type TaskLocation = Pick<TaskInstance, 'filePath'|'position'|'parent'>
+
+export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'rawText'> & {
+    uid: TaskUID;
     childUids: number[];
     parentUids: number[];
     created: Date;
     updated: Date;
+    instances: TaskInstance[];
+    description: string;
 }
 
-export type ChecklistTask = Omit<Task, 'locations' | 'description' | 'parentLocations'>
-
-export interface CacheItemTask extends ListItemCache {
-    name: string;
+export type TaskYamlObject = YamlObject<Task, 'description'|'instances'> & {
+    type: typeof TaskRecordType
+    instances: TaskInstanceYamlObject[]
 }
 
-export interface Yamlable {
-    yamlObject: unknown & Record<string, unknown>;
-}
+export type TaskInstanceYamlObject = YamlObject<TaskInstance, 'tags'|'dueDate'|'recurrence'|'uid'|'id'|'name'>
 
-export type TaskYamlObject = {
-    [k in keyof Omit<IndexedTask, 'description'>]: IndexedTask[k] extends Array<unknown> ? string[] : string;
+
+export type YamlObject<T, TOmit extends string|number|symbol> = {
+    [k in keyof Omit<T, 'complete' | TOmit>]: T[k] extends Array<unknown> ? string[] : string;
 } & {
-    complete: 'true'|'false',
-    type: typeof TaskRecordType,
-};
+    complete: 'true' | 'false',
+}
 
-export type TaskID = number;
+export type TaskUID = number;
 
 /**
- * `[file path with extension]:[line number]`
+ *  {
+ *      [file path]: {
+ *          parent: number,
+ *          position: Pos
+ *      }
+ *  }
  */
-export type LocationString = string;
+export type TaskFileLocationRecord = Record<string, TaskFileLocation>;
 
-export interface TaskLocation {
-    filePath: string;
-    lineNumber: number;
-    parent: number;
-    pos: Pos;
-}
+export type TaskFileLocation = Omit<ListItemCache, 'task'|'id'>;
 
-export type MinTaskLocation = Pick<TaskLocation, 'filePath'|'lineNumber'>;
-
-export interface FileTaskLine extends Array<number | Task> {
-    0: number,
-    1: Task,
-    length: 2
-}
+export type MinTaskLocation = Pick<TaskLocation, 'filePath'> & { lineNumber: number };

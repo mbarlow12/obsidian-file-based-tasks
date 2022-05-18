@@ -1,16 +1,23 @@
-import { ListItemCache } from 'obsidian';
-import { RRule } from 'rrule';
-import { IndexedTask, TaskID } from '../Task';
+import { Task, TaskInstance, TaskUID } from '../Task';
 
-export interface LineTask extends ListItemCache {
-    name: string;
-    uid: number;
-    complete: boolean;
-    recurrence?: RRule;
-    dueDate?: Date;
-    tags: string[];
-    originalTaskText?: string;
+export type InstanceIndex = Record<string, TaskInstance[]>;
+export type TaskIndex = Record<TaskUID, IndexTask>
+export type TaskStoreState = {
+    index: TaskIndex,
+    instanceIndex: InstanceIndex
 }
-
-export type State = Record<string, LineTask>;
-export type TaskIndex = Record<TaskID, IndexedTask>
+/**
+ * id,
+ * uid,
+ * name,
+ * complete,
+ * recurrence,
+ * dueDate,
+ * tags,
+ * childUid,
+ * parentUids,
+ * created,
+ * updated,
+ * description,
+ */
+export type IndexTask = Omit<Task, 'instances'>

@@ -1,5 +1,5 @@
-import { LineTask, State } from '../Store/types';
-import { IndexedTask } from "../Task";
+import { InstanceIndex } from '../Store/types';
+import { Task, TaskUID } from "../Task";
 
 export enum EventType {
     REQUEST_UPDATE_INDEX = 'obsidian-file-tasks:request-index-update',
@@ -10,33 +10,47 @@ export enum EventType {
     REQUEST_DELETE_FILE  = 'obsidian-file-tasks:delete-file',
 }
 
-export enum IndexAction {
-    CREATE = 'create',
-    DELETE = 'delete',
-    MODIFY = 'modify',
-    RENAME = 'rename',
+export enum ActionType {
+    CREATE_TASK       = 'create',
+    DELETE_TASK       = 'delete_task',
+    MODIFY_TASK       = 'modify-task',
+    DELETE_TASKS      = 'delete-tasks',
+    MODIFY_FILE_TASKS = 'modify-file-tasks',
+    RENAME_FILE       = 'rename-file',
+    DELETE_FILE       = 'delete-file'
 }
 
-export interface TasksDeleted {
-    type: IndexAction.DELETE;
-    data: IndexedTask[]
+export interface TaskAction {
+    type: ActionType.CREATE_TASK | ActionType.DELETE_TASK | ActionType.MODIFY_TASK,
+    data: Task
 }
 
-export interface TaskModifiedData {
-    index: Record<number, IndexedTask>;
-    taskState: Record<string, LineTask>
+export interface DeleteTasks {
+    type: ActionType.DELETE_TASKS;
+    data: TaskUID[]
 }
 
-export interface TasksModified {
-    type: IndexAction.MODIFY,
-    data: TaskModifiedData
+export interface FileTasksData {
+    index: Record<number, Task>;
+    instanceIndex: InstanceIndex;
+    filePath: string;
 }
 
-export interface TasksCreated {
-    type: IndexAction.CREATE;
-    data: IndexedTask[];
+export interface ModifyFileTasks {
+    type: ActionType.MODIFY_FILE_TASKS,
+    data: FileTasksData
 }
 
-export type IndexUpdatedAction = TasksCreated | TasksModified | TasksDeleted;
+export interface DeleteFile {
+    type: ActionType.DELETE_FILE,
+    data: string
+}
 
-export type FileCacheUpdateHandler = (fileState: State, action: IndexAction) => void
+export interface RenameFile {
+    type: ActionType.RENAME_FILE,
+    data: { oldPath: string, newPath: string }
+}
+
+export type IndexUpdateAction = TaskAction | DeleteTasks | ModifyFileTasks | DeleteFile | RenameFile
+
+export type FileCacheUpdateHandler = ( action: IndexUpdateAction ) => void

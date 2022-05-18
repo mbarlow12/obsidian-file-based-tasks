@@ -1,9 +1,9 @@
 import { App, debounce, MarkdownView, Plugin, PluginManifest, TAbstractFile, TFile, TFolder } from 'obsidian';
 import { TaskEvents } from "./src/Events/TaskEvents";
-import { IndexAction } from './src/Events/types';
-import { indexedTaskToState, TaskStore } from "./src/Store/TaskStore";
-import { State } from './src/Store/types';
-import { Task } from "./src/Task";
+import { ActionType } from './src/Events/types';
+import { indexedTaskToInstanceIndex, TaskStore } from "./src/Store/TaskStore";
+import { InstanceIndex } from './src/Store/types';
+import { TaskInstance } from "./src/Task";
 import { emptyLineTask } from './src/Task/Task';
 import { CacheStatus, TaskFileManager } from "./src/TaskFileManager";
 import { TaskManagerSettings } from "./src/taskManagerSettings";
@@ -22,7 +22,7 @@ export default class ObsidianTaskManager extends Plugin {
     private vaultLoaded = false;
     private initialized = false;
     private taskEvents: TaskEvents;
-    private cursorTask: Task;
+    private cursorTask: TaskInstance;
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
@@ -87,7 +87,7 @@ export default class ObsidianTaskManager extends Plugin {
         if ( abstractFile instanceof TFile ) {
             const state = await this.taskFileManager.getFileTaskState( abstractFile );
             if ( state )
-                this.taskEvents.triggerFileCacheUpdate( state, IndexAction.MODIFY );
+                this.taskEvents.triggerFileCacheUpdate( state, ActionType.MODIFY_FILE_TASKS );
         }
     }
 
@@ -96,7 +96,7 @@ export default class ObsidianTaskManager extends Plugin {
             if ( this.taskFileManager.getFileStateHash(abstractFile.path) )
                 this.taskEvents.triggerFileCacheUpdate( {
                     [abstractFile.path]: emptyLineTask()
-                }, IndexAction.DELETE )
+                }, ActionType.DELETE_TASKS )
         }
     }
 
@@ -109,11 +109,11 @@ export default class ObsidianTaskManager extends Plugin {
      */
     private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
         if ( this.taskFileManager.getFileStateHash( oldPath ) ) {
-            const state: State = {
+            const state: InstanceIndex = {
                 [ abstractFile.path ]: emptyLineTask(),
                 [ oldPath ]: emptyLineTask()
             }
-            this.taskEvents.triggerFileCacheUpdate(state, IndexAction.RENAME)
+            this.taskEvents.triggerFileCacheUpdate(state, ActionType.RENAME_FILE)
         }
     }
 
@@ -138,14 +138,14 @@ export default class ObsidianTaskManager extends Plugin {
         }
         return Promise.all( tasks )
             .then( allTasks =>
-                allTasks.reduce( ( st, idxTask ) => ({ ...st, ...indexedTaskToState( idxTask ) }), {} as State )
+                allTasks.reduce( ( st, idxTask ) => ({ ...st, ...indexedTaskToInstanceIndex( idxTask ) }), {} as InstanceIndex )
             );
     }
 
     private async processVault() {
         if ( this.vaultLoaded ) return;
         const taskFileState = await this.processTasksDirectory();
-        let fileState: State;
+        let fileState: InstanceIndex;
         for ( const file of this.app.vault.getMarkdownFiles() ) {
             if ( file.path.includes( this.settings.taskDirectoryName ) )
                 continue;

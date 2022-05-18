@@ -1,64 +1,20 @@
 import { CachedMetadata, TFile } from "obsidian";
 import { parseTaskString } from "../Parser";
-import { State } from '../Store/types';
-import { minTaskLocStr, Task } from "../Task";
-import { hash } from "../util/hash";
-import { FileTaskCache, FileTaskRecord } from "./types";
+import { InstanceIndex } from '../Store/types';
+import { TaskInstance } from "../Task";
 
-export const getFileTaskState = (file: TFile, cache: CachedMetadata, contents: string): State => {
-    const contentLines = contents.split(/\r?\n/);
-    return (cache.listItems || []).filter(li => li.task !== undefined).reduce((st, cli) => {
-        const lineNumber = cli.position.start.line;
-        const locStr = minTaskLocStr({filePath: file.path, lineNumber})
-        return {
-            ...st,
-            [locStr]: {
-                ...cli,
-                ...parseTaskString(contentLines[lineNumber])
-            }
-        }
-    }, {} as State)
+export const getFileTaskState = ( file: TFile, cache: CachedMetadata, contents: string ): InstanceIndex => {
+    const contentLines = contents.split( /\r?\n/ );
+    return {
+        [ file.path ]: (cache.listItems || []).filter( li => li.task ).reduce( ( instances, lic ) =>
+            [
+                ...instances,
+                {
+                    ...parseTaskString( contentLines[ lic.position.start.line ] ),
+                    filePath: file.path,
+                    parent: lic.parent,
+                    position: lic.position,
+                }
+            ], [] as TaskInstance[] )
+    }
 };
-
-export const hashTaskCache = async (cache: FileTaskCache): Promise<string> => {
-    const sortedItems = Object.entries(cache).sort(([a], [b]) => a - b);
-    const msg = JSON.stringify(sortedItems);
-    return await hash(msg);
-}
-
-export const diffFileRecords = (a: FileTaskRecord, b: FileTaskRecord) => {
-  const aNotB: FileTaskRecord = {};
-  const bNotA: FileTaskRecord = {};
-
-  for (const aLine in a) {
-      if (!(aLine in b)) {
-          aNotB[aLine] = a[aLine];
-      }
-      else {
-          const itemA = a[aLine];
-          const itemB = b[aLine];
-          for (const prop of Object.getOwnPropertyNames(itemA) as (keyof Task)[]) {
-              if (!itemB[prop] || itemA[prop] !== itemB[prop]) {
-                  aNotB[aLine] = itemA;
-                  bNotA[aLine] = itemB;
-                  break;
-              }
-          }
-      }
-  }
-  for (const bLine in b) {
-      if (!(bLine in a))
-          bNotA[bLine] = b[bLine];
-  }
-  return [aNotB, bNotA];
-};
-
-export const fileRecordsEqual = (a: FileTaskRecord, b: FileTaskRecord) => {
-    const keysA = Object.keys(a);
-    const keysB = Object.keys(b);
-    if (keysA.length !== keysB.length)
-        return false;
-    const [aNotB, bNotA] = diffFileRecords(a, b);
-    return !(Object.keys(aNotB).length > 0 || Object.keys(bNotA).length > 0);
-
-}

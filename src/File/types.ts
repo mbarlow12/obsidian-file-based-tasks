@@ -1,4 +1,4 @@
-import {Task} from "../Task";
+import { TaskInstance } from "../Task";
 
 export interface TaskCacheItem {
     tid: string;
@@ -10,11 +10,9 @@ export interface TaskCacheItem {
     parentId?: number;
 }
 
-export type FileTaskRecord = Record<number, Task>;
+export type FileTaskRecord = Record<number, TaskInstance>;
 
 export type HierarchyItem = Pick<TaskCacheItem, 'name' | 'complete' | 'parentId' | 'parent'>;
-
-export type FileTaskCache = Record<number, TaskCacheItem> & {dirty: boolean};
 
 export type TaskHierarchy = Array<HierarchyItem>;
 
@@ -22,7 +20,7 @@ export type TreeNode<T> = {
     [k in keyof T]: T[k]
 }
 
-export type TH = Pick<Task, 'name'|'complete'> & {children?: string[]};
+export type TH = Pick<TaskInstance, 'name'|'complete'> & {children?: string[]};
 export type TaskTreeNode = TreeNode<TH>;
 
 export enum DiffType {
