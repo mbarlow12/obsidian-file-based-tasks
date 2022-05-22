@@ -1,3 +1,8 @@
+import { entries } from 'lodash';
+import { Pos } from 'obsidian';
+import { RRule } from 'rrule';
+import { pos, Task, TaskInstance } from './Task';
+import { taskUidToId } from './Task/Task';
 import data from './TestData'
 
 const bullets = [ '-', '*' ];
@@ -69,3 +74,79 @@ function shuffle<T>( a: Array<T> ): Array<T> {
     }
     return a;
 }
+
+export const baseDate = new Date( "5/18/2022, 2:00:00 PM" );
+export const testInts = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ];
+export const taskNames = testInts.map( i => `task number ${i}` );
+export const taskUids = testInts.map( i => i + 100000 );
+export const taskIds = taskUids.map( i => taskUidToId( i ) );
+export const filePaths = testInts.map( i => `path/to/file ${i}.md` )
+export const createTestTask = (
+    uid: number,
+    complete = false,
+    parentUids: number[] = [],
+    childUids: number[] = [],
+    updated = new Date( baseDate.getTime() ),
+    created = new Date( baseDate.getTime() - (24 * 60 * 60 * 1000) ),
+    instances: TaskInstance[] = [],
+    dueDate?: Date,
+    recurrence?: RRule,
+    tags?: string[],
+): Task => ({
+    id: (uid).toString( 16 ),
+    uid: uid,
+    name: `task with uid ${uid}`,
+    complete,
+    parentUids,
+    childUids,
+    instances,
+    updated,
+    created,
+    description: '',
+});
+export const testUidValue = ( uid: number ) => uid + 100000;
+export const createTestTaskInstance = (
+    uid: number,
+    position: Pos,
+    parent = -1,
+    filePath?: string,
+    complete = false,
+    indent = 0,
+    dueDate?: Date,
+    recurrence?: RRule,
+    tags?: string[],
+): TaskInstance => ({
+    id: uid > 0 ? uid.toString( 16 ) : '',
+    name: `task with uid ${uid}`,
+    complete,
+    filePath: filePath || `path/to/file with uid ${uid}.md`,
+    parent,
+    position,
+    rawText: `${new Array( indent * 2 )
+        .fill( ' ' ).join( '' )}- [${complete ? 'x' : ' '}] task with uid ${uid}`,
+});
+export const createPositionAtLine = ( line: number ) => pos( line, 0, 0, line, 0, 0 );
+export const createTestTaskInstances = (
+    data: Record<string, { line: number, uid: number, parent?: number }[]>
+): TaskInstance[] => entries( data ).reduce( ( tis, [ fp, lines ] ) => {
+    const instances = lines.map( ( { line, uid, parent } ) => {
+        return createTestTaskInstance( uid, createPositionAtLine( line ), parent || -1, fp )
+    } );
+    return [
+        ...tis,
+        ...instances
+    ]
+}, [] as TaskInstance[] );
+
+const test: TaskInstance[] = createTestTaskInstances(
+    {
+        'path/to/file 1': [
+            { line: 0, uid: 1 },
+            { line: 1, uid: 0 }
+        ],
+        'path/to/file 2': [
+            { line: 5, uid: 8 },
+            { line: 6, uid: 10, parent: 5 }
+        ]
+    },
+)

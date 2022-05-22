@@ -2,7 +2,7 @@ import { EventRef, FrontMatterCache, MetadataCache, TAbstractFile, TFile, TFolde
 import { TaskEvents } from "./Events/TaskEvents";
 import { getFileTaskState } from "./File";
 import { hashLineTask, indexedTaskToInstanceIndex, lineTaskToChecklist } from "./Store/TaskStore";
-import { InstanceIndex, TaskIndex, TaskStoreState } from './Store/types';
+import { TaskIndex, TaskInstanceIndex, TaskStoreState } from './Store/types';
 import {
     getTaskFromYaml,
     hashTask,
@@ -11,19 +11,19 @@ import {
     taskLocFromMinStr,
     taskLocFromStr,
     TaskRecordType,
-    taskToFileContents,
     taskToFilename,
+    taskToTaskFileContents,
     TaskYamlObject
 } from "./Task";
 
-export const hashFileTaskState = ( state: InstanceIndex ): string =>
+export const hashFileTaskState = ( state: TaskInstanceIndex ): string =>
     Object.keys( state )
         .map( locStr => state[ locStr ] )
         .sort( ( tA, tB ) => tA.position.start.line - tB.position.start.line )
         .map( hashLineTask )
         .join( '\n' );
 
-export const filterStateByPath = ( filePath: string, state: InstanceIndex ): InstanceIndex =>
+export const filterStateByPath = ( filePath: string, state: TaskInstanceIndex ): TaskInstanceIndex =>
     Object.keys( state )
         .filter( s => taskLocFromStr( s ).filePath === filePath )
         .reduce( ( fst, locStr ) => ({ ...fst, [ locStr ]: state[ locStr ] }), {} )
@@ -108,7 +108,7 @@ export class TaskFileManager {
     }
 
     public async getFileTaskState( file: TFile ) {
-        let state: InstanceIndex;
+        let state: TaskInstanceIndex;
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file );
             state = indexedTaskToInstanceIndex( idxTask );
@@ -155,10 +155,10 @@ export class TaskFileManager {
         const fullPath = this.getTaskPath( task );
         const file = this.vault.getAbstractFileByPath( fullPath );
         if ( !file ) {
-            return this.vault.create( fullPath, taskToFileContents( task ) );
+            return this.vault.create( fullPath, taskToTaskFileContents( task ) );
         }
         else {
-            return this.vault.modify( file as TFile, taskToFileContents( task ) )
+            return this.vault.modify( file as TFile, taskToTaskFileContents( task ) )
         }
     }
 
@@ -207,13 +207,13 @@ export class TaskFileManager {
         return task;
     }
 
-    public async readMarkdownFile( file: TFile ): Promise<InstanceIndex> {
+    public async readMarkdownFile( file: TFile ): Promise<TaskInstanceIndex> {
         const cache = this.mdCache.getFileCache( file );
         const contents = await this.vault.read( file );
         return getFileTaskState( file, cache, contents );
     }
 
-    public async writeStateToFile( file: TFile, index: TaskIndex, state: InstanceIndex ) {
+    public async writeStateToFile( file: TFile, index: TaskIndex, state: TaskInstanceIndex ) {
         if ( Object.keys( state ).filter( s => taskLocFromMinStr( s ).filePath !== file.path ).length > 0 )
             throw new Error( `State with invalid paths passed to ${file.path}.` )
 

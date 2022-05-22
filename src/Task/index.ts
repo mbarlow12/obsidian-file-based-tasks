@@ -3,7 +3,7 @@ import { MinTaskLocation, TaskFileLocation, TaskLocation } from "./types";
 
 export {
     getTaskFromYaml,
-    taskToFileContents,
+    taskToTaskFileContents,
     taskToJsonString,
     taskAsChecklist,
     taskToYamlObject,

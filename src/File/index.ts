@@ -1,9 +1,9 @@
 import { CachedMetadata, TFile } from "obsidian";
 import { parseTaskString } from "../Parser";
-import { InstanceIndex } from '../Store/types';
+import { TaskInstanceIndex } from '../Store/types';
 import { TaskInstance } from "../Task";
 
-export const getFileTaskState = ( file: TFile, cache: CachedMetadata, contents: string ): InstanceIndex => {
+export const getFileTaskState = ( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex => {
     const contentLines = contents.split( /\r?\n/ );
     return {
         [ file.path ]: (cache.listItems || []).filter( li => li.task ).reduce( ( instances, lic ) =>

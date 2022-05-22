@@ -1,5 +1,5 @@
 import { EventRef, Events as ObsEvents } from 'obsidian';
-import { InstanceIndex, TaskStoreState } from '../Store/types';
+import { TaskInstanceIndex, TaskStoreState } from '../Store/types';
 import { ActionType, EventType, FileCacheUpdateHandler } from "./types";
 
 
@@ -30,7 +30,7 @@ export class TaskEvents {
         return this._events.on(EventType.FILE_CACHE_UPDATE, handler)
     }
 
-    triggerFileCacheUpdate(fileState: InstanceIndex, action: ActionType) {
+    triggerFileCacheUpdate(fileState: TaskInstanceIndex, action: ActionType) {
         this._events.trigger(EventType.FILE_CACHE_UPDATE, fileState, action);
     }
 }

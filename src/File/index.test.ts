@@ -1,5 +1,5 @@
 import { CachedMetadata, TFile } from "obsidian";
-import { InstanceIndex } from '../Store/types';
+import { TaskInstanceIndex } from '../Store/types';
 import { getFileTaskState } from "./index";
 import { getFileContents, testTaskLines } from './TestData';
 
@@ -78,7 +78,7 @@ test( 'Basic representation', () => {
     const file = new TFile();
     file.path = 'file/path'
     const obj = getFileTaskState( file, cacheMetadata1, testContents1 );
-    const expected: InstanceIndex = {
+    const expected: TaskInstanceIndex = {
         'file/path': [ {
             id: '',
             uid: 0,
@@ -136,7 +136,7 @@ test( 'Representation with ids', () => {
     const file = new TFile();
     file.path = 'file/path'
     const obj = getFileTaskState( file, cacheMetadata2, testContents2 );
-    const expected: InstanceIndex = {
+    const expected: TaskInstanceIndex = {
         'file/path': [ {
             id: '12345',
             uid: Number.parseInt('12345', 16),
