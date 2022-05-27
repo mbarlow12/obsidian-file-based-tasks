@@ -1,11 +1,10 @@
 import { Task, TaskInstance, TaskUID } from '../Task';
 
-export type FileTaskInstanceIndex = Record<number, TaskInstance>;
-export type TaskInstanceIndex = Record<string, FileTaskInstanceIndex>;
-export type TaskIndex = Record<TaskUID, IndexTask>
+export type TaskInstanceIndex = Record<string, TaskInstance>;
+export type TaskIndex = Record<TaskUID, Task>
 export type TaskStoreState = {
-    index: TaskIndex,
-    instanceIndex: TaskInstanceIndex
+    instanceIndex: TaskInstanceIndex;
+    taskIndex: TaskIndex;
 }
 /**
  * id,

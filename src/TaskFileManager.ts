@@ -1,7 +1,7 @@
 import { EventRef, FrontMatterCache, MetadataCache, TAbstractFile, TFile, TFolder, Vault } from "obsidian";
 import { TaskEvents } from "./Events/TaskEvents";
 import { getFileTaskState } from "./File";
-import { hashLineTask, indexedTaskToInstanceIndex, lineTaskToChecklist } from "./Store/TaskStore";
+import { hashTaskInstance, indexedTaskToInstanceIndex, lineTaskToChecklist } from "./Store/TaskStore";
 import { TaskIndex, TaskInstanceIndex, TaskStoreState } from './Store/types';
 import {
     getTaskFromYaml,
@@ -20,7 +20,7 @@ export const hashFileTaskState = ( state: TaskInstanceIndex ): string =>
     Object.keys( state )
         .map( locStr => state[ locStr ] )
         .sort( ( tA, tB ) => tA.position.start.line - tB.position.start.line )
-        .map( hashLineTask )
+        .map( hashTaskInstance )
         .join( '\n' );
 
 export const filterStateByPath = ( filePath: string, state: TaskInstanceIndex ): TaskInstanceIndex =>

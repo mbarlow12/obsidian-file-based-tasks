@@ -1,7 +1,8 @@
 import { values } from 'lodash';
+import { getTasksFromInstanceIndex } from '../Store/TaskStore';
 import { TaskInstanceIndex } from '../Store/types';
 import { filePaths, taskIds, taskNames, taskUids } from '../TestHelpers';
-import { emptyTaskInstance, getTasksFromInstanceIndex } from './Task';
+import { emptyTaskInstance } from './Task';
 import { TaskInstance } from './types';
 
 

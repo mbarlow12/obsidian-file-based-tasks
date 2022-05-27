@@ -20,11 +20,18 @@ export interface TaskInstance extends ListItemCache {
     tags?: string[];
     rawText: string;
     filePath: string;
+    primary: boolean;
+}
+
+export type PrimaryTaskInstance = TaskInstance & {
+    primary: true,
+    created: Date,
+    updated: Date,
 }
 
 export type TaskLocation = Pick<TaskInstance, 'filePath'|'position'|'parent'>
 
-export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'rawText'> & {
+export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'rawText'|'primary'> & {
     uid: TaskUID;
     childUids: number[];
     parentUids: number[];
@@ -43,10 +50,9 @@ export type TaskInstanceYamlObject = YamlObject<TaskInstance, 'tags'|'dueDate'|'
 
 
 export type YamlObject<T, TOmit extends string|number|symbol> = {
-    [k in keyof Omit<T, 'complete' | TOmit>]: T[k] extends Array<unknown> ? string[] : string;
-} & {
-    complete: 'true' | 'false',
+    [k in keyof Omit<T, TOmit>]: T[k] extends Array<unknown> ? string[] : string;
 }
+
 
 export type TaskUID = number;
 
@@ -62,4 +68,4 @@ export type TaskFileLocationRecord = Record<string, TaskFileLocation>;
 
 export type TaskFileLocation = Omit<ListItemCache, 'task'|'id'>;
 
-export type MinTaskLocation = Pick<TaskLocation, 'filePath'> & { lineNumber: number };
+export type MinTaskLocation = Pick<TaskLocation, 'filePath'> & { line: number };

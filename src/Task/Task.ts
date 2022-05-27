@@ -1,7 +1,6 @@
 import { keys, pick, values } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
-import { TaskInstanceIndex } from '../Store/types';
 import { hash } from "../util/hash";
 import { emptyPosition, posFromStr, posStr, TaskInstanceYamlObject, TaskLocation } from "./index";
 import { NonEmptyString, Task, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
@@ -17,7 +16,8 @@ export const emptyTaskInstance = (): TaskInstance => {
         parent: -1,
         position: emptyPosition( 0 ),
         rawText: '',
-        filePath: ''
+        filePath: '',
+        primary: false,
     };
 };
 
@@ -41,10 +41,19 @@ export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
         ...emptyTask(),
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
-        ...({ uid: taskIdToUid(inst.id) || 0 }),
+        ...({ uid: taskIdToUid( inst.id ) || 0 }),
         instances: [ inst ],
     };
 }
+
+export const taskInstancesEqual = (
+    a: TaskInstance,
+    b: TaskInstance
+) => a.name === b.name &&
+    a.filePath === b.filePath &&
+    a.position.start.line === b.position.start.line &&
+    ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
+    ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid));
 
 export const instancesLocationsEqual = (
     instA: TaskInstance,
@@ -62,43 +71,7 @@ export const flattenInstanceIndex = (
         ...flattened,
         ...values( idx[ path ] )
     ], [] as TaskInstance[] )
-    .filter( ( inst, i, arr ) => arr.findIndex(check => instancesLocationsEqual(inst, check)) === i )
-
-export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): Record<string, Task> => {
-    const instances = flattenInstanceIndex( instIdx );
-    values( instances.reduce( ( iRec, inst ) => ({
-        ...iRec,
-        [ inst.name ]: {
-            ids: [ ...(iRec[ inst.name ] || { ids: [] }).ids, inst.id ]
-                .filter( ( s, i, arr ) => arr.indexOf( s ) === i ),
-            uids: [ ...(iRec[ inst.name ] || { uids: [] }).uids, inst.uid ]
-                .filter( ( id, i, arr ) => arr.indexOf( id ) === i )
-        }
-    }), {} as Record<string, { ids: string[], uids: number[] }> ) )
-        .forEach( ( { ids, uids } ) => {
-            if ( ids.length !== 1 || uids.length !== 1 )
-                throw new Error( 'Tasks with same name must all have the same id and uid (possibly zero).' )
-        } );
-
-    return instances.reduce( ( nameTaskMap, instance ) => {
-        return {
-            ...nameTaskMap,
-            [ instance.name ]: {
-                ...createTaskFromInstance( instance ),
-                instances: [ ...(nameTaskMap[ instance.name ]?.instances || []), instance ],
-                parentUids: [
-                    ...(nameTaskMap[ instance.name ]?.parentUids || []),
-                    getTaskInstanceParent( instance, instIdx )?.uid
-                ].filter( x => x )
-            }
-        }
-    }, {} as Record<string, Task> );
-}
-
-export const getTaskInstanceParent = (
-    instance: TaskInstance,
-    idx: TaskInstanceIndex
-): TaskInstance | null => instance.parent >= 0 ? idx[ instance.filePath ][ instance.parent ] : null;
+    .filter( ( inst, i, arr ) => arr.findIndex( check => instancesLocationsEqual( inst, check ) ) === i )
 
 export const taskUidToId = ( uid: number ) => uid.toString( 16 );
 
@@ -178,20 +151,22 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
         rawText,
         filePath,
         position,
-        parent
+        parent,
+        primary
     } = inst;
     return {
         rawText,
         filePath,
         position: posStr( position ),
         parent: `${parent}`,
-        complete: complete ? 'true' : 'false',
+        complete: complete.toString(),
+        primary: primary.toString()
     }
 }
 
 export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskInstanceYamlObject ): TaskInstance => {
     const { id, name, complete, dueDate, recurrence, tags } = tYaml
-    const { rawText, filePath, position, parent } = yaml;
+    const { rawText, filePath, position, parent, primary } = yaml;
     return {
         id,
         name,
@@ -203,12 +178,13 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
         dueDate: new Date( dueDate ),
         recurrence: rrulestr( recurrence ),
         position: posFromStr( position ),
-        parent: Number.parseInt( parent )
+        parent: Number.parseInt( parent ),
+        primary: primary === 'true',
     }
 }
 
-export const taskToBasename = ( task: Task ) => `${task.name} - ${task.id}`;
-export const taskToFilename = ( task: Task ) => `${taskToBasename( task )}.md`;
+export const taskToBasename = ( task: TaskInstance | Task ) => `${task.name}_${task.id}`;
+export const taskToFilename = ( task: TaskInstance | Task ) => `${taskToBasename( task )}.md`;
 
 export const isFilenameValid = ( f: TFile ): boolean => {
     const match = f.basename.match( taskFileNameRegex );

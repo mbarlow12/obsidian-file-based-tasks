@@ -1,7 +1,7 @@
 import { expect } from '@jest/globals';
 import { keys, omit, values } from 'lodash';
-import { emptyPosition, Task } from '../Task';
-import { emptyTask, emptyTaskInstance, getTasksFromInstanceIndex } from '../Task/Task';
+import { emptyPosition, LOC_DELIM, PrimaryTaskInstance, Task, taskLocationStr } from '../Task';
+import { emptyTask, emptyTaskInstance } from '../Task/Task';
 import {
     baseDate,
     createPositionAtLine,
@@ -12,22 +12,24 @@ import {
     taskNames,
     taskUids
 } from '../TestHelpers';
-import { createTask, modifyFileTasks } from './TaskStore';
-import { FileTaskInstanceIndex, TaskInstanceIndex, TaskStoreState } from './types';
+import { addFileTaskInstances, buildStateFromInstances, createTask, deleteTaskUids } from './TaskStore';
+import { TaskInstanceIndex, TaskStoreState } from './types';
 
 
 describe( 'task creation', () => {
 
     test( 'Test create task for empty state', () => {
-        const state: TaskStoreState = { index: {}, instanceIndex: {} }
         const task: Task = {
             ...emptyTask(),
             name: 'default task',
             uid: 1,
         };
-        const newState = createTask( task, state )
+        const newState = createTask( {
+            ...emptyTaskInstance(),
+            ...task
+        }, {} )
         expect( newState ).toStrictEqual( {
-            index: {
+            taskIndex: {
                 1: {
                     id: '1',
                     uid: 1,
@@ -37,7 +39,8 @@ describe( 'task creation', () => {
                     created: new Date( 0 ),
                     updated: new Date( 0 ),
                     complete: false,
-                    description: ''
+                    description: '',
+                    instances: []
                 }
             },
             instanceIndex: {}
@@ -45,27 +48,32 @@ describe( 'task creation', () => {
     } );
 
     test( 'Create task with instances for empty state', () => {
-        const instances = filePaths.slice( 0, 3 ).reduce( ( idx, fp ) => ({
+        const pathStrings = filePaths.slice( 0, 3 )
+            .map( filePath => taskLocationStr( { filePath, parent: -1, position: emptyPosition( 0 ) } ) );
+        const instances = filePaths.slice( 0, 3 ).reduce( ( idx, fp, i ) => ({
             ...idx,
-            [ fp ]: {
-                [ taskUids[ 0 ] ]: {
-                    ...emptyTaskInstance(),
-                    filePath: fp,
-                    name: taskNames[ 0 ],
-                    id: taskIds[ 0 ],
-                    uid: taskUids[ 0 ],
-                }
+            [ pathStrings[ i ] ]: {
+                ...emptyTaskInstance(),
+                filePath: fp,
+                name: taskNames[ 0 ],
+                id: taskIds[ 0 ],
+                uid: taskUids[ 0 ],
             }
         }), {} as TaskInstanceIndex );
-        const tasks = values( getTasksFromInstanceIndex( instances ) );
-        tasks[ 0 ].uid = taskUids[ 0 ];
-        tasks[ 0 ].updated = baseDate;
-        tasks[ 0 ].created = new Date( baseDate )
-        tasks[ 0 ].created.setDate( baseDate.getDate() - 1 )
+        const tasks = values( instances );
+        const primary: PrimaryTaskInstance = {
+            ...tasks[ 0 ],
+            primary: true,
+            updated: baseDate,
+            created: new Date( baseDate ),
+            uid: taskUids[ 0 ],
+        };
+        primary.created.setDate( baseDate.getDate() - 1 )
+        tasks[ 0 ] = primary;
 
-        const state = createTask( tasks[ 0 ], { index: {}, instanceIndex: {} } );
+        const state = createTask( tasks[ 0 ], {} );
         expect( state ).toStrictEqual( {
-            index: {
+            taskIndex: {
                 100001: {
                     id: (100001).toString( 16 ),
                     complete: false,
@@ -75,126 +83,158 @@ describe( 'task creation', () => {
                     childUids: [],
                     description: '',
                     updated: new Date( "5/18/2022, 2:00:00 PM" ),
-                    created: new Date( (new Date( "5/18/2022, 2:00:00 PM" )).getTime() - (24 * 60 * 60 * 1000) )
+                    created: new Date( (new Date( "5/18/2022, 2:00:00 PM" )).getTime() - (24 * 60 * 60 * 1000) ),
+                    instances: []
                 }
             },
-            instanceIndex: filePaths.slice( 0, 3 ).reduce( ( idx, fp ) => ({
+            instanceIndex: filePaths.slice( 0, 3 ).reduce( ( idx, filePath, i ) => ({
                 ...idx,
-                [ fp ]: {
-                    0: instances[ fp ][ taskUids[ 0 ] ]
-                }
+                [ pathStrings[ i ] ]: instances[ pathStrings[ i ] ]
             }), {} as TaskInstanceIndex )
         } as TaskStoreState )
     } );
 } )
 
-// test delete
-// test modify single task
+// delete
+describe( 'task deletion', () => {
+    test( 'Delete single task', () => {
+        const initialState: TaskStoreState = {
+            taskIndex: {
+                44: createTestTask( 44 ),
+            },
+            instanceIndex: {}
+        };
+        const newInstances = deleteTaskUids( [ 44 ], values( initialState.instanceIndex ) );
+        const newState = buildStateFromInstances( newInstances );
+        expect( Object.keys( newState.taskIndex ) ).toHaveLength( 0 );
+        expect( Object.keys( newState.instanceIndex ) ).toHaveLength( 0 );
+    } );
+
+    test( 'Delete single task and instances', () => {
+        const initialState: TaskStoreState = {
+            taskIndex: {
+                44: createTestTask( 44 ),
+            },
+            instanceIndex: {
+                [ `file/path1.md${LOC_DELIM}1` ]: createTestTaskInstance( 44, emptyPosition( 1 ) ),
+                [ `file/path2.md${LOC_DELIM}10` ]: createTestTaskInstance( 44, emptyPosition( 10 ) )
+            }
+        };
+        const newInstances = deleteTaskUids( [ 44 ], values( initialState.instanceIndex ) );
+        const newState = buildStateFromInstances( newInstances );
+        expect( Object.keys( newState.taskIndex ) ).toHaveLength( 0 );
+        expect( Object.keys( newState.instanceIndex ) ).toHaveLength( 0 );
+    } );
+
+    test( 'Delete non-existing tasks', () => {
+        const initialState: TaskStoreState = {
+            taskIndex: {
+                44: createTestTask( 44 ),
+            },
+            instanceIndex: {
+                [ `file/path1.md${LOC_DELIM}1` ]: createTestTaskInstance( 44, emptyPosition( 1 ) ),
+                [ `file/path1.md${LOC_DELIM}10` ]: createTestTaskInstance( 44, emptyPosition( 10 ) )
+            }
+        };
+        const newInstances = deleteTaskUids( [ 43 ], values( initialState.instanceIndex ) );
+        const newState = buildStateFromInstances( newInstances );
+        expect( newState ).toStrictEqual( initialState );
+    } );
+} );
+
 // test rename file
+describe( 'file renaming', () => {
+
+} );
 // test delete file
 // test modify file tasks
 
 describe( 'file modify tasks', () => {
     test( 'Single task instance, empty index, empty state', () => {
-        const initialState: TaskStoreState = { index: {}, instanceIndex: {} };
         const filePath = 'path/to/test file.md';
+        const taskLocStr = `${filePath}${LOC_DELIM}1`;
         const fileInstIndex: TaskInstanceIndex = {
-            [ filePath ]: { 1: createTestTaskInstance( 1, createPositionAtLine( 1 ) ) }
+            [ taskLocStr ]: createTestTaskInstance( 1, createPositionAtLine( 1 ) ),
         }
-        const newState = modifyFileTasks( fileInstIndex, initialState )
-        expect( 1 in newState.index ).toBeTruthy();
+        const newInstances = addFileTaskInstances( values( fileInstIndex ), [] );
+        const newState = buildStateFromInstances( newInstances );
+        expect( 1 in newState.taskIndex ).toBeTruthy();
         expect( filePath in newState.instanceIndex ).toBeTruthy();
         expect( 1 in newState.instanceIndex[ filePath ] ).toBeTruthy();
-        expect( newState.index[ 1 ].name ).toEqual( newState.instanceIndex[ filePath ][ 1 ].name )
-        expect( newState.index[ 1 ].id ).toEqual( newState.instanceIndex[ filePath ][ 1 ].id )
+        expect( newState.taskIndex[ 1 ].name ).toEqual( newState.instanceIndex[ taskLocStr ].name )
+        expect( newState.taskIndex[ 1 ].id ).toEqual( newState.instanceIndex[ taskLocStr ].id )
     } );
 
     test( 'Single task instance, all existing', () => {
         const initialState: TaskStoreState = {
-            index: {
+            taskIndex: {
                 44: createTestTask( 44 ),
             },
             instanceIndex: {
-                'file/path1.md': {
-                    4: createTestTaskInstance( 44, emptyPosition( 4 ) ),
-                },
-                'file/path2.md': {
-                    10: createTestTaskInstance( 44, emptyPosition( 25 ) )
-                }
+                [ `file/path1.md${LOC_DELIM}4` ]: createTestTaskInstance( 44, emptyPosition( 4 ) ),
+                [ `file/path2.md${LOC_DELIM}10` ]: createTestTaskInstance( 44, emptyPosition( 25 ) ),
             }
         };
-        const newState = modifyFileTasks( {
-            'file/path2.md': {
-                10: createTestTaskInstance( 44, emptyPosition( 25 ) )
-            }
-        }, initialState );
+        const newInstnaces = addFileTaskInstances(
+            [ createTestTaskInstance( 44, emptyPosition( 25 ) ) ],
+            values( initialState.instanceIndex ) );
+        const newState = buildStateFromInstances( newInstnaces );
 
-        expect(newState.index).toStrictEqual({
-            ...initialState.index,
-            ...keys( initialState.index ).reduce( ( idx, k ) => ({
+        expect( newState.taskIndex ).toStrictEqual( {
+            ...initialState.taskIndex,
+            ...keys( initialState.taskIndex ).reduce( ( idx, k ) => ({
                 ...idx,
                 [ Number.parseInt( k ) ]: {
-                    ...omit( initialState.index[ Number.parseInt( k ) ], 'instances' ),
-                    uid: initialState.index[ Number.parseInt( k ) ].uid,
+                    ...omit( initialState.taskIndex[ Number.parseInt( k ) ], 'instances' ),
+                    uid: initialState.taskIndex[ Number.parseInt( k ) ].uid,
                 }
             }), {} ),
-        })
+        } )
         expect( newState.instanceIndex ).toStrictEqual( {
             ...initialState.instanceIndex,
-            ...keys(initialState.instanceIndex).reduce(( idx, path) => ({
+            ...keys( initialState.instanceIndex ).reduce( ( idx, path ) => ({
                 ...idx,
-                [path]: keys(initialState.instanceIndex[path]).reduce((fidx, line) => ({
+                [ path ]: keys( initialState.instanceIndex[ path ] ).reduce( ( fidx, line ) => ({
                     ...fidx,
-                    [line]: {
-                        ...initialState.instanceIndex[path][Number.parseInt(line)],
+                    [ line ]: {
+                        ...initialState.instanceIndex[ `${path}${LOC_DELIM}${Number.parseInt( line )}` ],
                     }
-                }), {} as FileTaskInstanceIndex)
-            }), {})
+                }), {} as TaskInstanceIndex )
+            }), {} )
         } )
     } );
 
     test( 'Single new task from instance', () => {
-        const initialState: TaskStoreState = { index: {}, instanceIndex: {} };
         const testInstance = createTestTaskInstance( 0, emptyPosition( 0 ) );
-        const testIdx = {
-            [ testInstance.filePath ]: {
-                [ testInstance.position.start.line ]: testInstance
-            }
-        }
-        const newState = modifyFileTasks( testIdx, initialState );
-        expect( 100001 in newState.index ).toBeTruthy();
+        const newInstances = addFileTaskInstances( [ testInstance ], [] );
+        const newState = buildStateFromInstances( newInstances );
+        expect( 100001 in newState.taskIndex ).toBeTruthy();
     } );
 
     test( 'Full single file update (no old instances in same file)', () => {
         const initialState: TaskStoreState = {
-            index: {
+            taskIndex: {
                 44: createTestTask( 44 ),
                 898: createTestTask( 898 ),
                 100: createTestTask( 100 ),
             }, instanceIndex: {
-                'file/path1.md': {
-                    4: createTestTaskInstance( 44, emptyPosition( 4 ) ),
-                    45: createTestTaskInstance( 898, emptyPosition( 45 ) ),
-                    100: createTestTaskInstance( 100, emptyPosition( 100 ) ),
-                    60: createTestTaskInstance( 44, emptyPosition( 60 ) ),
-                },
+                [ `file/path1.md${LOC_DELIM}4` ]: createTestTaskInstance( 44, emptyPosition( 4 ) ),
+                [ `file/path1.md${LOC_DELIM}45` ]: createTestTaskInstance( 898, emptyPosition( 45 ) ),
+                [ `file/path1.md${LOC_DELIM}100` ]: createTestTaskInstance( 100, emptyPosition( 100 ) ),
+                [ `file/path1.md${LOC_DELIM}60` ]: createTestTaskInstance( 44, emptyPosition( 60 ) ),
             }
         };
 
         const newFileIndex: TaskInstanceIndex = {
-            'file/path2.md': {
-                1: createTestTaskInstance( 0, emptyPosition( 1 ) )
-            },
-            'file/path1.md': {
-                55: createTestTaskInstance( 898, emptyPosition( 55 ) ),
-                110: createTestTaskInstance( 100, emptyPosition( 110 ) ),
-                70: createTestTaskInstance( 44, emptyPosition( 70 ) ),
-            }
+            [ `file/path2.md${LOC_DELIM}1` ]: createTestTaskInstance( 0, emptyPosition( 1 ) ),
+            [ `file/path1.md${LOC_DELIM}55` ]: createTestTaskInstance( 898, emptyPosition( 55 ) ),
+            [ `file/path1.md${LOC_DELIM}110` ]: createTestTaskInstance( 100, emptyPosition( 110 ) ),
+            [ `file/path1.md${LOC_DELIM}70` ]: createTestTaskInstance( 44, emptyPosition( 70 ) ),
         };
-
-        const newState = modifyFileTasks( newFileIndex, initialState );
+        const newInstances = addFileTaskInstances( values( newFileIndex ), values( initialState.instanceIndex ) );
+        const newState = buildStateFromInstances( newInstances )
         expect( 'file/path2.md' in newState.instanceIndex ).toBeTruthy();
-        expect( newState.instanceIndex[ 'file/path2.md' ][ 1 ] ).toStrictEqual(
+        expect( newState.instanceIndex[ `file/path1.md${LOC_DELIM}1` ] ).toStrictEqual(
             {
                 ...createTestTaskInstance( 0, emptyPosition( 1 ) ),
                 uid: 899,
@@ -210,10 +250,14 @@ describe( 'file modify tasks', () => {
     } );
 
     test( 'Update existing task name from instance', () => {
+        const ti = createTestTaskInstance( 50, emptyPosition( 4 ) );
+        ti.name = 'a new name';
+        const newInstances = addFileTaskInstances([ti], []);
+        const newState = buildStateFromInstances(newInstances)
+        expect( 50 in newState.taskIndex ).toBeTruthy();
+        expect( newState.taskIndex[ 50 ].name ).toEqual( 'a new name' );
     } );
 
-    test( 'Mixed and misc. test', () => {
-    } )
 } )
 
 describe( 'test store reducer', () => {

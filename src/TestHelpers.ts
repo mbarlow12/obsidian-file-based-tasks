@@ -112,12 +112,14 @@ export const createTestTaskInstance = (
     filePath?: string,
     complete = false,
     indent = 0,
+    primary = false,
     dueDate?: Date,
     recurrence?: RRule,
     tags?: string[],
 ): TaskInstance => ({
     id: uid > 0 ? uid.toString( 16 ) : '',
     name: `task with uid ${uid}`,
+    primary,
     complete,
     filePath: filePath || `path/to/file with uid ${uid}.md`,
     parent,
@@ -137,16 +139,3 @@ export const createTestTaskInstances = (
         ...instances
     ]
 }, [] as TaskInstance[] );
-
-const test: TaskInstance[] = createTestTaskInstances(
-    {
-        'path/to/file 1': [
-            { line: 0, uid: 1 },
-            { line: 1, uid: 0 }
-        ],
-        'path/to/file 2': [
-            { line: 5, uid: 8 },
-            { line: 6, uid: 10, parent: 5 }
-        ]
-    },
-)

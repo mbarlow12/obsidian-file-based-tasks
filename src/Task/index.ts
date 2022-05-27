@@ -1,5 +1,5 @@
 import { Loc, Pos } from "obsidian";
-import { MinTaskLocation, TaskFileLocation, TaskLocation } from "./types";
+import { MinTaskLocation, TaskFileLocation, TaskInstance, TaskLocation } from "./types";
 
 export {
     getTaskFromYaml,
@@ -61,10 +61,7 @@ export const taskFileLocationFromStr = ( str: string ): { filePath: string, loca
     }
 }
 
-export const taskLocationStr = ( { filePath, position, parent }: TaskLocation ): string => [ filePath, posStr( position ) ].join( LOC_DELIM );
-
-export const minTaskLocStr = ( { filePath, lineNumber }: MinTaskLocation ): string => [ filePath,
-                                                                                        `${lineNumber}` ].join( LOC_DELIM );
+export const taskLocationStr = ( { filePath, position }: TaskLocation ): string => [ filePath, `${position.start.line}` ].join( LOC_DELIM );
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 
@@ -79,7 +76,7 @@ export const taskLocFromStr = ( locationStr: string ): TaskLocation => {
 
 export const taskLocFromMinStr = ( locStr: string ): MinTaskLocation => {
     const [ filePath, lineNumber ] = locStr.split( LOC_DELIM );
-    return { filePath, lineNumber: Number.parseInt( lineNumber ) }
+    return { filePath, line: Number.parseInt( lineNumber ) }
 }
 
 export const locationsEqual = ( locA: TaskLocation, locB: TaskLocation ) => {
@@ -93,3 +90,8 @@ export const positionsEqual = ( p1: Pos, p2: Pos ) => {
 export const locsEqual = ( l1: Loc, l2: Loc ) => {
     return l1.line === l2.line && l1.col === l2.col && l1.offset === l2.offset;
 }
+export const taskLocationFromInstance = (
+    { filePath, parent, position }: TaskInstance
+): TaskLocation => ({
+    filePath, parent, position
+});
