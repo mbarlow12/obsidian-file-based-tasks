@@ -142,42 +142,9 @@ export const modifyTask = (
 } );
 
 
-export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): Record<TaskUID, Task> => {
-    const { parents, children } = keys( instIdx )
-        .reduce( ( { parents, children }, locStr ) => ({
-            parents: {
-                ...parents,
-                ...(instIdx[ locStr ].parent > -1 && { [ locStr ]: instIdx[ locStr ] })
-            },
-            children: {
-                ...children,
-                ...(instIdx[ locStr ].parent > -1 && { [ locStr ]: [ ...children[ locStr ], instIdx[ locStr ].uid ] })
-            }
-        }), { parents: {}, children: {} } as { parents: TaskInstanceIndex, children: Record<string, number[]> } )
-
-    return keys( instIdx ).reduce( ( uidTaskMap, taskLocStr ) => {
-        const instance = instIdx[ taskLocStr ];
-        return {
-            ...uidTaskMap,
-            [ instance.uid ]: {
-                ...createTaskFromInstance( instance ),
-                instances: [ ...(uidTaskMap[ instance.name ]?.instances || []), instance ],
-                parentUids: [
-                    ...(uidTaskMap[ instance.uid ]?.parentUids || []),
-                    parents[ taskLocStr ]
-                ].filter( x => x ),
-                childUids: [
-                    ...(uidTaskMap[ instance.uid ]?.childUids || []),
-                    ...(children[ taskLocStr ] || [])
-                ]
-            }
-        };
-    }, {} as Record<string, Task> );
-}
-
-export const taskInstancesFromTask = (task: Task): TaskInstance[] => {
-    const primary = createPrimaryTaskInstance(task);
-    return [primary, ...task.instances];
+export const taskInstancesFromTask = ( task: Task ): TaskInstance[] => {
+    const primary = createPrimaryTaskInstance( task );
+    return [ primary, ...task.instances ];
 };
 
 const reducer = ( instanceIndex: TaskInstanceIndex, { data, type }: IndexUpdateAction ): TaskInstance[] => {
@@ -227,6 +194,39 @@ const reducer = ( instanceIndex: TaskInstanceIndex, { data, type }: IndexUpdateA
     return values( instanceIndex )
 };
 
+export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): Record<TaskUID, Task> => {
+    validateInstanceIndex( values( instIdx ) );
+    const { parents, children } = keys( instIdx )
+        .reduce( ( { parents, children }, locStr ) => ({
+            parents: {
+                ...parents,
+                ...(instIdx[ locStr ].parent > -1 && { [ locStr ]: instIdx[ locStr ] })
+            },
+            children: {
+                ...children,
+                ...(instIdx[ locStr ].parent > -1 && { [ locStr ]: [ ...children[ locStr ], instIdx[ locStr ].uid ] })
+            }
+        }), { parents: {}, children: {} } as { parents: TaskInstanceIndex, children: Record<string, number[]> } )
+
+    return keys( instIdx ).reduce( ( uidTaskMap, taskLocStr ) => {
+        const instance = instIdx[ taskLocStr ];
+        return {
+            ...uidTaskMap,
+            [ instance.uid ]: {
+                ...createTaskFromInstance( instance ),
+                instances: [ ...(uidTaskMap[ instance.uid ]?.instances || []), instance ],
+                parentUids: [
+                    ...(uidTaskMap[ instance.uid ]?.parentUids || []),
+                    parents[ taskLocStr ]
+                ].filter( x => x ),
+                childUids: [
+                    ...(uidTaskMap[ instance.uid ]?.childUids || []),
+                    ...(children[ taskLocStr ] || [])
+                ]
+            }
+        };
+    }, {} as Record<string, Task> );
+}
 export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreState => {
     const instanceIndex = instances.reduce( ( idx, inst ) => ({
         ...idx,
@@ -280,20 +280,7 @@ export class TaskStore {
 }
 
 export const validateInstanceIndex = ( instances: TaskInstance[] ) => {
-    const uidMap = instances
-        .filter( ti => ti.id !== '' || ti.uid > 0 )
-        .reduce( ( im, inst ) => ({
-            ...im,
-            [ inst.uid ]: {
-                ids: (im[ inst.uid ].ids || new Set()).add( inst.id ),
-                names: (im[ inst.uid ].names || new Set()).add( inst.name )
-            }
-        }), {} as Record<number, { ids: Set<string>, names: Set<string> }> );
-    for ( const uid in uidMap ) {
-        const { ids, names } = uidMap[ uid ];
-        if ( ids.size !== 1 || names.size !== 1 )
-            throw new Error( 'Tasks with same name must all have the same id and uid (possibly zero).' )
-        if ( taskIdToUid( [ ...ids ][ 0 ] ) !== Number.parseInt( uid ) )
-            throw new Error( 'Task uids and ids must match.' )
-    }
+    const diffIds = instances.filter( inst => inst.uid !== taskIdToUid( inst.id ) );
+    if ( diffIds.length )
+        throw new Error( 'Task uids and ids must match.' )
 };

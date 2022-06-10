@@ -2,8 +2,8 @@ import { keys, pick, values } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
 import { hash } from "../util/hash";
-import { emptyPosition, posFromStr, posStr, TaskInstanceYamlObject, TaskLocation } from "./index";
-import { NonEmptyString, Task, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
+import { emptyPosition, posFromStr, posStr, Task, TaskInstanceYamlObject, TaskLocation } from "./index";
+import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
 
 const taskFileNameRegex = /^(?<name>\w.*)(?= - \d+) - (?<id>\d+)(?:.md)?/;

@@ -1,20 +1,24 @@
 import { CachedMetadata, TFile } from "obsidian";
 import { parseTaskString } from "../Parser";
 import { TaskInstanceIndex } from '../Store/types';
-import { TaskInstance } from "../Task";
+import { taskLocationStr } from "../Task";
 
 export const getFileTaskState = ( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex => {
     const contentLines = contents.split( /\r?\n/ );
-    return {
-        [ file.path ]: (cache.listItems || []).filter( li => li.task ).reduce( ( instances, lic ) =>
-            [
-                ...instances,
-                {
-                    ...parseTaskString( contentLines[ lic.position.start.line ] ),
+
+    return (cache.listItems || []).filter(li => li.task)
+        .reduce((instIdx, lic) => {
+            const task = parseTaskString(contentLines[lic.position.start.line]);
+            const locStr = taskLocationStr({filePath: file.path, position: lic.position, parent: lic.parent});
+            return {
+                ...instIdx,
+                [ locStr ]: {
+                    ...task,
+                    primary: false,
                     filePath: file.path,
                     parent: lic.parent,
-                    position: lic.position,
+                    position: lic.position
                 }
-            ], [] as TaskInstance[] )
-    }
+            }
+        }, {} as TaskInstanceIndex)
 };
