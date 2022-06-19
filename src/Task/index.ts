@@ -61,6 +61,8 @@ export const taskFileLocationFromStr = ( str: string ): { filePath: string, loca
     }
 }
 
+export const instanceIndexKey = (filePath: string, line: number) => [ filePath, line.toString()].join( LOC_DELIM );
+
 export const taskLocationStr = ( { filePath, position }: TaskLocation ): string => [ filePath, `${position.start.line}` ].join( LOC_DELIM );
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );

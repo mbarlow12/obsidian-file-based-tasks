@@ -2,7 +2,15 @@ import { keys, pick, values } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
 import { hash } from "../util/hash";
-import { emptyPosition, posFromStr, posStr, Task, TaskInstanceYamlObject, TaskLocation } from "./index";
+import {
+    emptyPosition,
+    posFromStr,
+    posStr,
+    PrimaryTaskInstance,
+    Task,
+    TaskInstanceYamlObject,
+    TaskLocation
+} from "./index";
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
 
@@ -37,12 +45,17 @@ export const emptyTask = (): Task => {
     }
 }
 
+export const isPrimaryInstance = ( inst: TaskInstance ): inst is PrimaryTaskInstance => {
+    return inst.primary
+}
+
 export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
         ...emptyTask(),
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
         ...({ uid: taskIdToUid( inst.id ) || 0 }),
-        instances: [ inst ],
+        ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated')),
+        instances: [ inst ]
     };
 }
 

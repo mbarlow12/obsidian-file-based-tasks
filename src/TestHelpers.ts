@@ -1,7 +1,7 @@
 import { entries } from 'lodash';
 import { Pos } from 'obsidian';
 import { RRule } from 'rrule';
-import { pos, Task, TaskInstance } from './Task';
+import { pos, PrimaryTaskInstance, Task, TaskInstance } from './Task';
 import { taskUidToId } from './Task/Task';
 import data from './TestData'
 
@@ -95,7 +95,7 @@ export const createTestTask = (
 ): Task => ({
     id: (uid).toString( 16 ),
     uid: uid,
-    name: `task with uid ${uid}`,
+    name: `test task with uid ${uid}`,
     complete,
     parentUids,
     childUids,
@@ -118,7 +118,8 @@ export const createTestTaskInstance = (
     tags?: string[],
 ): TaskInstance => ({
     id: uid > 0 ? uid.toString( 16 ) : '',
-    name: `task with uid ${uid}`,
+    uid,
+    name: `test task with uid ${uid}`,
     primary,
     complete,
     filePath: filePath || `path/to/file with uid ${uid}.md`,
@@ -126,6 +127,22 @@ export const createTestTaskInstance = (
     position,
     rawText: `${new Array( indent * 2 )
         .fill( ' ' ).join( '' )}- [${complete ? 'x' : ' '}] task with uid ${uid}`,
+});
+export const createTestPrimaryTaskInstance = (
+    uid: number,
+    position: Pos,
+    parent = -1,
+    complete = false,
+    updated = new Date( baseDate.getTime() ),
+    created = new Date( baseDate.getTime() - (24 * 60 * 60 * 1000) ),
+    dueDate?: Date,
+    recurrence?: RRule,
+    tags?: string[]
+): PrimaryTaskInstance => ({
+    ...createTestTaskInstance(uid, position, parent, `tasks/test task with uid ${uid}_${uid}.md`, complete, 0, true, dueDate, recurrence, tags),
+    primary: true,
+    created,
+    updated
 });
 export const createPositionAtLine = ( line: number ) => pos( line, 0, 0, line, 0, 0 );
 export const createTestTaskInstances = (
