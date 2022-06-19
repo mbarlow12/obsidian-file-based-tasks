@@ -41,9 +41,14 @@ export const locStr = ( { line, col, offset }: Loc ): string => [ line, col, off
 export const posStr = ( { start, end }: Pos ): string => [ locStr( start ), locStr( end ) ].join( LOC_DELIM );
 
 /* 'tasks/some greate task - 332.md||0||0||0||1||4||80||-1' */
-export const taskFileLocationToStr = ( filePath: string, { position, parent }: TaskFileLocation ): string => [ filePath,
-                                                                                                               posStr( position ),
-                                                                                                               `${parent}` ].join( LOC_DELIM );
+export const taskFileLocationToStr = (
+    filePath: string,
+    { position, parent }: TaskFileLocation
+): string => [
+    filePath,
+    `${parent}`,
+    posStr( position )
+].join( LOC_DELIM );
 
 export const taskFileLocationFromStr = ( str: string ): { filePath: string, location: TaskFileLocation } => {
     const [ filePath, sLine, sCol, sOffset, eLine, eCol, eOffset, parent ] = str.split( LOC_DELIM )
@@ -61,9 +66,17 @@ export const taskFileLocationFromStr = ( str: string ): { filePath: string, loca
     }
 }
 
-export const instanceIndexKey = (filePath: string, line: number) => [ filePath, line.toString()].join( LOC_DELIM );
+export const instanceIndexKey = ( filePath: string, line: number ) => [ filePath, line.toString() ].join( LOC_DELIM );
 
-export const taskLocationStr = ( { filePath, position }: TaskLocation ): string => [ filePath, `${position.start.line}` ].join( LOC_DELIM );
+export const taskLocationStr = ( { filePath, position }: TaskLocation ): string => [
+    filePath, `${position.start.line}`
+].join( LOC_DELIM );
+
+export const taskLocationStrFromInstance = ( {
+    filePath,
+    position,
+    parent
+}: TaskInstance ) => taskLocationStr( { filePath, position, parent } );
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 

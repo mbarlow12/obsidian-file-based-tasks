@@ -145,7 +145,7 @@ test( 'Representation with ids', () => {
     file.path = 'file/path'
     const obj = getFileTaskState( file, cacheMetadata2, testContents2 );
     const expected: TaskInstanceIndex = {
-        [ `file/path${LOC_DELIM}` ]: {
+        [ `file/path${LOC_DELIM}0` ]: {
             id: '12345',
             uid: Number.parseInt( '12345', 16 ),
             name: 't1',

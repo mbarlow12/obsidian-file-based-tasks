@@ -1,8 +1,17 @@
-import { entries } from 'lodash';
+import { entries, values } from 'lodash';
 import { Pos } from 'obsidian';
 import { RRule } from 'rrule';
-import { pos, PrimaryTaskInstance, Task, TaskInstance } from './Task';
-import { taskUidToId } from './Task/Task';
+import { TaskInstanceIndex } from './Store/types';
+import {
+    emptyPosition,
+    pos,
+    PrimaryTaskInstance,
+    Task,
+    TaskInstance,
+    taskLocationStrFromInstance,
+    taskLocFromStr
+} from './Task';
+import { isPrimaryInstance, taskUidToId } from './Task/Task';
 import data from './TestData'
 
 const bullets = [ '-', '*' ];
@@ -139,7 +148,7 @@ export const createTestPrimaryTaskInstance = (
     recurrence?: RRule,
     tags?: string[]
 ): PrimaryTaskInstance => ({
-    ...createTestTaskInstance(uid, position, parent, `tasks/test task with uid ${uid}_${uid}.md`, complete, 0, true, dueDate, recurrence, tags),
+    ...createTestTaskInstance(uid, position, parent, `tasks/test task with uid ${uid}_${taskUidToId(uid)}.md`, complete, 0, true, dueDate, recurrence, tags),
     primary: true,
     created,
     updated
@@ -156,3 +165,39 @@ export const createTestTaskInstances = (
         ...instances
     ]
 }, [] as TaskInstance[] );
+
+export const createTestInstanceIndex = (
+    fileMap: Map<number, string[]>,
+): TaskInstanceIndex => {
+    const insts = [...fileMap.keys()].reduce((instList, uid) => {
+        const fileInsts = fileMap.get(uid).map(locstr => {
+            const {filePath, position, parent} = taskLocFromStr(locstr);
+            return createTestTaskInstance(uid, position, parent, filePath);
+        })
+        return instList.concat(fileInsts)
+    }, []);
+    return insts.reduce((idx, inst) => {
+        return {
+            ...idx,
+            [taskLocationStrFromInstance(inst)]: inst
+        }
+    }, {})
+}
+
+export const addTestPrimaryTasksToIndex = ( idx: TaskInstanceIndex ): TaskInstanceIndex => {
+    const allUids = new Set(values(idx).map(i => i.uid));
+    const primaryUids = new Set(values(idx).filter(inst => isPrimaryInstance(inst)).map(i => i.uid));
+    const missingUids = [...allUids].filter(uid => !primaryUids.has(uid));
+    const pIdx: TaskInstanceIndex = missingUids.reduce((pidx, uid) => {
+        const inst = values(idx).find(i => i.uid === uid);
+        const pInst = createTestPrimaryTaskInstance(inst.uid, emptyPosition(0), -1);
+        return {
+            ...pidx,
+            [taskLocationStrFromInstance(pInst)]: pInst
+        };
+    }, {});
+    return {
+        ...pIdx,
+        ...idx
+    };
+}

@@ -41,7 +41,7 @@ describe( 'task utilities', () => {
             }
         }), {} as TaskInstanceIndex );
         expect( () => getTasksFromInstanceIndex( instances ) )
-            .toThrow( 'Tasks with same name must all have the same id and uid (possibly zero).' )
+            .toThrow( 'Task uids and ids must match.' )
     } );
 
     test( 'Differing task instance uids throw error', () => {
@@ -56,7 +56,7 @@ describe( 'task utilities', () => {
             } as TaskInstance,
         }), {} as TaskInstanceIndex );
         expect( () => getTasksFromInstanceIndex( instances ) )
-            .toThrow( 'Tasks with same name must all have the same id and uid (possibly zero).' )
+            .toThrow( 'Task uids and ids must match.' )
     } );
 
     test( 'Several instances several tasks', () => {
