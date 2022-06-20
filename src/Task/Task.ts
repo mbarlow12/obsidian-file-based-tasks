@@ -54,7 +54,7 @@ export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
         ...emptyTask(),
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
         ...({ uid: taskIdToUid( inst.id ) || 0 }),
-        ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated')),
+        ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated' )),
         instances: [ inst ]
     };
 }
@@ -119,9 +119,9 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         instances: instances.map( taskInstanceFromYaml( yaml ) ),
         childUids: childUids.map( Number.parseInt ),
         parentUids: parentUids.map( Number.parseInt ),
-        recurrence: rrulestr( recurrence ),
-        tags,
-        dueDate: new Date( dueDate ),
+        ...(tags && tags.length && { tags }),
+        ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
+        ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
         description: ''
     };
 }
@@ -151,9 +151,9 @@ export const taskToYamlObject = ( task: Task ): TaskYamlObject => {
         updated: updated.toISOString(),
         childUids: childUids.map( c => `${c}` ),
         parentUids: parentUids.map( c => `${c}` ),
-        tags,
-        dueDate: dueDate.toISOString(),
-        recurrence: (recurrence || '').toString(),
+        ...(tags && {tags}),
+        ...(dueDate && { dueDate: dueDate.toISOString() }),
+        ...(recurrence && {recurrence: recurrence.toString()}),
         instances: instances.map( taskInstanceToYamlObject )
     };
 }
@@ -183,16 +183,16 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
     return {
         id,
         name,
-        tags,
         rawText,
         filePath,
         uid: taskIdToUid( id ),
         complete: complete === 'true',
-        dueDate: new Date( dueDate ),
-        recurrence: rrulestr( recurrence ),
         position: posFromStr( position ),
         parent: Number.parseInt( parent ),
         primary: primary === 'true',
+        ...(tags && tags.length && { tags }),
+        ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
+        ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
     }
 }
 

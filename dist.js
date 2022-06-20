@@ -7,7 +7,7 @@ const os = require('os');
 
 const config = require('./local.config');
 const pwd = process.env.PWD;
-const files = ['styles.css', 'main.js', 'manifest.json'];
+const files = ['styles.css', 'manifest.json'];
 
 files.forEach(f => {
     const fp = path.resolve(pwd, f);

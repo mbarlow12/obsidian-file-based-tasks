@@ -21,10 +21,10 @@ export const hashTaskInstance = (
 
 export const renderTags = ( tags?: string[] ): string => ``;
 export const renderRecurrence = ( rrule?: RRule ): string => ``;
-export const renderDueDate = ( dueDate: Date ) => dueDate.toLocaleString();
+export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
 export const lineTaskToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
-    `- [${complete}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ), `^${id}`
+    `- [${complete ? 'x' : ' '}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ), `^${id}`
 ].join( ' ' );
 
 export const indexTaskFromTask = ( task: Task ): IndexTask => ({
@@ -194,8 +194,10 @@ export const modifyTask = (
 
 
 export const taskInstancesFromTask = ( task: Task ): TaskInstance[] => {
-    const primary = createPrimaryTaskInstance( task );
-    return [ primary, ...task.instances ];
+    const hasPrimary = task.instances.filter( inst => isPrimaryInstance( inst ) ).length === 1;
+    if ( hasPrimary )
+        return [ ...task.instances ]
+    return [ createPrimaryTaskInstance( task ), ...task.instances ];
 };
 
 const reducer = ( state: TaskStoreState, { data, type }: IndexUpdateAction ): TaskInstance[] => {
@@ -285,9 +287,14 @@ export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): TaskInd
     }, {} as Record<string, Task> );
 }
 export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreState => {
+    const completedUids: Set<number> = instances.reduce(( uids, instance) => {
+        if (instance.complete)
+            uids.add(instance.uid);
+        return uids;
+    }, new Set()as Set<number>);
     const instanceIndex = instances.reduce( ( idx, inst ) => ({
         ...idx,
-        [ taskLocationStr( inst ) ]: inst
+        [ taskLocationStr( inst ) ]: completedUids.has(inst.uid) ? {...inst, complete: true}: inst
     }), {} as TaskInstanceIndex );
     return {
         instanceIndex,
@@ -299,7 +306,7 @@ export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreS
 export class TaskStore {
     private events: TaskEvents;
     private state: TaskStoreState;
-    private fileCacheRef: EventRef;
+    private readonly fileCacheRef: EventRef;
 
     constructor( taskEvents: TaskEvents ) {
         this.events = taskEvents;
@@ -321,6 +328,7 @@ export class TaskStore {
 
     private update() {
         this.notifySubscribers( { ...this.state } )
+        console.log(this.state);
     }
 
     private notifySubscribers( data: TaskStoreState ) {
@@ -332,6 +340,7 @@ export class TaskStore {
         this.state = buildStateFromInstances( instances.filter(
             ( inst, i, arr ) => arr.findIndex( fInst => taskInstancesEqual( inst, fInst ) ) === i )
         );
+        this.update();
     }
 }
 

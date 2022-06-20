@@ -135,7 +135,7 @@ export default class ObsidianTaskManager extends Plugin {
                 allTasks.reduce( (
                     st,
                     idxTask
-                ) => [...st, ...taskInstancesFromTask(idxTask)], {} as TaskInstance[] )
+                ) => [...st, ...taskInstancesFromTask(idxTask)], [] as TaskInstance[] )
             );
     }
 

@@ -3,7 +3,7 @@ import { parseTaskString } from "../Parser";
 import { TaskInstanceIndex } from '../Store/types';
 import { taskLocationStr } from "../Task";
 
-export const getFileTaskState = ( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex => {
+export const getFileInstanceIndex = ( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex => {
     const contentLines = contents.split( /\r?\n/ );
 
     return (cache.listItems || []).filter(li => li.task)

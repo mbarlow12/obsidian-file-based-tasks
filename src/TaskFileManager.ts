@@ -1,20 +1,22 @@
+import { values } from 'lodash';
 import { EventRef, FrontMatterCache, MetadataCache, TAbstractFile, TFile, TFolder, Vault } from "obsidian";
 import { TaskEvents } from "./Events/TaskEvents";
-import { getFileTaskState } from "./File";
-import { hashTaskInstance, indexedTaskToInstanceIndex, lineTaskToChecklist } from "./Store/TaskStore";
+import { getFileInstanceIndex } from "./File";
+import { hashTaskInstance, lineTaskToChecklist, taskInstancesFromTask } from "./Store/TaskStore";
 import { TaskIndex, TaskInstanceIndex, TaskStoreState } from './Store/types';
 import {
     getTaskFromYaml,
     hashTask,
     parseTaskFilename,
     Task,
+    taskLocationStrFromInstance,
     taskLocFromMinStr,
-    taskLocFromStr,
     TaskRecordType,
     taskToFilename,
     taskToTaskFileContents,
     TaskYamlObject
 } from "./Task";
+import { isPrimaryInstance } from './Task/Task';
 
 export const hashFileTaskState = ( state: TaskInstanceIndex ): string =>
     Object.keys( state )
@@ -23,10 +25,10 @@ export const hashFileTaskState = ( state: TaskInstanceIndex ): string =>
         .map( hashTaskInstance )
         .join( '\n' );
 
-export const filterStateByPath = ( filePath: string, state: TaskInstanceIndex ): TaskInstanceIndex =>
-    Object.keys( state )
-        .filter( s => taskLocFromStr( s ).filePath === filePath )
-        .reduce( ( fst, locStr ) => ({ ...fst, [ locStr ]: state[ locStr ] }), {} )
+export const filterIndexByPath = ( filePath: string, index: TaskInstanceIndex ): TaskInstanceIndex =>
+    Object.keys( index )
+        .filter( s => taskLocFromMinStr( s ).filePath === filePath )
+        .reduce( ( fst, locStr ) => ({ ...fst, [ locStr ]: index[ locStr ] }), {} )
 
 export enum CacheStatus {
     CLEAN = 'CLEAN',
@@ -63,10 +65,10 @@ export class TaskFileManager {
         this.fileStates = {};
     }
 
-    public async handleIndexUpdate( { index, instanceIndex }: TaskStoreState ) {
+    public async handleIndexUpdate( { taskIndex, instanceIndex }: TaskStoreState ) {
         const deleteMarks = new Set( Object.keys( this.fileStates ) )
-        for ( const taskId in index ) {
-            const idxTask = index[ taskId ];
+        for ( const taskId in taskIndex ) {
+            const idxTask = taskIndex[ taskId ];
             const newTaskHash = await hashTask( idxTask );
             const taskFilePath = this.getTaskPath( idxTask )
             deleteMarks.delete( taskFilePath )
@@ -83,18 +85,19 @@ export class TaskFileManager {
         }
 
         const filePaths = Object.keys( instanceIndex )
+            .filter(fp => !isPrimaryInstance(instanceIndex[fp]))
             .map( s => taskLocFromMinStr( s ).filePath )
             .filter( ( fp, i, fps ) => fps.indexOf( fp ) === i );
 
-        for ( const path in filePaths ) {
-            const newState = filterStateByPath( path, instanceIndex );
+        for ( const path of filePaths ) {
+            const newState = filterIndexByPath( path, instanceIndex );
             const newHash = hashFileTaskState( newState );
             deleteMarks.delete( path )
             if ( path in this.fileStates && this.fileStates[ path ].hash === newHash )
                 continue
 
             const file = this.vault.getAbstractFileByPath( path ) as TFile;
-            const hash = await this.writeStateToFile( file, index, newState )
+            const hash = await this.writeStateToFile( file, taskIndex, newState )
 
             if ( hash !== newHash )
                 throw Error( `Something went wrong when hashing the state for ${file.path}` )
@@ -104,14 +107,17 @@ export class TaskFileManager {
                 status: CacheStatus.CLEAN,
             }
         }
-        [ ...deleteMarks ].map( this.vault.getAbstractFileByPath ).map( async d => await this.deleteFile( d ) );
+        [ ...deleteMarks ].map( path => this.vault.getAbstractFileByPath(path) ).map( async d => await this.deleteFile( d ) );
     }
 
     public async getFileTaskState( file: TFile ) {
         let state: TaskInstanceIndex;
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file );
-            state = indexedTaskToInstanceIndex( idxTask );
+            state = taskInstancesFromTask( idxTask ).reduce( ( idx, inst ) => ({
+                ...idx,
+                [ taskLocationStrFromInstance( inst ) ]: inst
+            }), {} );
         }
         else {
             state = await this.readMarkdownFile( file )
@@ -188,10 +194,10 @@ export class TaskFileManager {
 
     private static taskYamlFromFrontmatter( cfm: FrontMatterCache ): TaskYamlObject {
         const {
-                  type, id, name, locations, complete, created, updated, parents, children, recurrence
-              } = cfm;
+            type, id, uid, name, instances, complete, created, updated, parentUids, childUids, recurrence, dueDate
+        } = cfm;
         return {
-            type, id, name, locations, complete, created, updated, parents, children, recurrence
+            type, id, uid, name, instances, complete, created, updated, parentUids, childUids, recurrence, dueDate
         } as unknown as TaskYamlObject
     }
 
@@ -210,7 +216,7 @@ export class TaskFileManager {
     public async readMarkdownFile( file: TFile ): Promise<TaskInstanceIndex> {
         const cache = this.mdCache.getFileCache( file );
         const contents = await this.vault.read( file );
-        return getFileTaskState( file, cache, contents );
+        return getFileInstanceIndex( file, cache, contents );
     }
 
     public async writeStateToFile( file: TFile, index: TaskIndex, state: TaskInstanceIndex ) {
@@ -265,7 +271,11 @@ export class TaskFileManager {
 
     private async deleteTasksFromFile( deleted: TFile ) {
         const contents = (await this.vault.read( deleted ));
-        const state = getFileTaskState( deleted, this.mdCache.getFileCache( deleted ), contents )
-
+        const linesToDelete = values(getFileInstanceIndex( deleted, this.mdCache.getFileCache( deleted ), contents )).map(inst => inst.position.start.line);
+        const newContents = contents.split('\n');
+        for (const lineToDelete of linesToDelete) {
+            newContents[lineToDelete] = null;
+        }
+        await this.vault.modify(deleted, newContents.filter(l => l !== null).join('\n'))
     }
 }

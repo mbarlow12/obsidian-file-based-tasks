@@ -1,7 +1,8 @@
+import { expect } from '@jest/globals';
 import { CachedMetadata, TFile } from "obsidian";
 import { TaskInstanceIndex } from '../Store/types';
 import { LOC_DELIM } from '../Task';
-import { getFileTaskState } from "./index";
+import { getFileInstanceIndex } from "./index";
 import { getFileContents, testTaskLines } from './TestData';
 
 const testContents1 = `- [ ] t1
@@ -78,7 +79,7 @@ const cacheMetadata2: CachedMetadata = {
 test( 'Basic representation', () => {
     const file = new TFile();
     file.path = 'file/path'
-    const obj = getFileTaskState( file, cacheMetadata1, testContents1 );
+    const obj = getFileInstanceIndex( file, cacheMetadata1, testContents1 );
     const expected: TaskInstanceIndex = {
         [ `file/path${LOC_DELIM}0` ]: {
             id: '',
@@ -143,7 +144,7 @@ test( 'Basic representation', () => {
 test( 'Representation with ids', () => {
     const file = new TFile();
     file.path = 'file/path'
-    const obj = getFileTaskState( file, cacheMetadata2, testContents2 );
+    const obj = getFileInstanceIndex( file, cacheMetadata2, testContents2 );
     const expected: TaskInstanceIndex = {
         [ `file/path${LOC_DELIM}0` ]: {
             id: '12345',
@@ -181,11 +182,10 @@ test( 'Test filecontents', async () => {
     const f1 = new TFile();
     f1.path = 'test/path1';
     const f2 = new TFile();
-    f2.path = 'test/path2';
+    f2.path = 'test/path1';
     const c1 = getFileContents( testTaskLines.slice( 0, 6 ), { 0: [ 1 ], 1: [ 2, 3 ], 3: [ 4 ] } );
     const c2 = getFileContents( testTaskLines.slice( 0, 6 ), { 0: [ 1 ], 1: [ 2, 3 ], 3: [ 4 ] } );
-    const fc1 = getFileTaskState( f1, c1.cache, c1.contents );
-    const fc2 = getFileTaskState( f2, c2.cache, c2.contents );
-    console.log( fc1 );
-    console.log( fc2 );
+    const fc1 = getFileInstanceIndex( f1, c1.cache, c1.contents );
+    const fc2 = getFileInstanceIndex( f2, c2.cache, c2.contents );
+    expect(fc1).toStrictEqual(fc2);
 } );
