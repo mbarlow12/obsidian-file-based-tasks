@@ -1,3 +1,4 @@
+import { values } from 'lodash';
 import {
   App,
   Editor,
@@ -5,30 +6,55 @@ import {
   EditorSuggest,
   EditorSuggestContext,
   EditorSuggestTriggerInfo,
+  EventRef,
   Instruction,
   TFile
 } from "obsidian";
+import { TaskEvents } from './Events/TaskEvents';
+import { TaskStoreState } from './Store/types';
 import { Task } from "./Task";
 
 
-export class TaskEditorSuggest implements EditorSuggest<Task>{
+export class TaskEditorSuggest extends EditorSuggest<Task>{
   static taskLinePattern = /(-|\*) \[(\s|x)?\]/
-  static pattern =  /(?:-|\*) \[(\s|x)?\]\s+[^\r\n]+(?!\|\|)$/gm;
+  static textPattern = /[-*] \[ \] (?<taskName>[\w ]+)/;
 
   context: EditorSuggestContext | null;
   limit: number;
   app: App;
+  taskState: TaskStoreState;
 
-  constructor(app: App) {
+  private events: TaskEvents;
+  private indexUpdateEventRef: EventRef;
+
+  constructor(app: App, events: TaskEvents, taskState: TaskStoreState) {
+    super(app);
     this.app = app;
+    this.events = events;
+    this.taskState = taskState;
+    this.subscribe();
   }
 
-  close(): void {
+  subscribe() {
+    this.indexUpdateEventRef = this.events.registerIndexUpdatedHandler(this.updateState.bind(this));
   }
+
+  unsubscribe() {
+    this.events.off(this.indexUpdateEventRef);
+  }
+
+  updateState(state: TaskStoreState) {
+    this.taskState = state;
+  }
+
+  // close(): void {
+  // }
 
   getSuggestions(context: EditorSuggestContext): Task[] | Promise<Task[]> {
-    // const search = context.query;
-    return []
+    const searchText = context.query;
+    const tasks = values(this.taskState.taskIndex).filter(t => t.name.startsWith(searchText));
+
+    return [...tasks.slice(0, 5)]
   }
 
   onTrigger(cursor: EditorPosition, editor: Editor, file: TFile): EditorSuggestTriggerInfo | null {
@@ -36,8 +62,8 @@ export class TaskEditorSuggest implements EditorSuggest<Task>{
     if (!line.match(TaskEditorSuggest.taskLinePattern))
       return null;
 
-    const match = line.match(TaskEditorSuggest.pattern);
-    if (match) {
+    const match = line.match(TaskEditorSuggest.textPattern);
+    if (match && match.groups?.taskName?.length >= 3) {
       const start = line.indexOf(match[1]);
       return {
         start: {
@@ -52,10 +78,14 @@ export class TaskEditorSuggest implements EditorSuggest<Task>{
     return null;
   }
 
-  open(): void {
-  }
+  // open(): void {
+  // }
 
   renderSuggestion(value: Task, el: HTMLElement): void {
+    const elem = new HTMLElement();
+    elem.setAttr('tag', 'p');
+    elem.innerText = value.name;
+    el.appendChild(elem);
   }
 
   selectSuggestion(value: Task, evt: MouseEvent | KeyboardEvent): void {

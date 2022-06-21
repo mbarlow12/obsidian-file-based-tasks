@@ -1,6 +1,6 @@
-import { Task, TaskInstance, TaskUID } from '../Task';
+import { PrimaryTaskInstance, Task, TaskInstance, TaskUID } from '../Task';
 
-export type TaskInstanceIndex = Record<string, TaskInstance>;
+export type TaskInstanceIndex = Record<string, TaskInstance|PrimaryTaskInstance>;
 export type TaskIndex = Record<TaskUID, Task>
 export type TaskStoreState = {
     instanceIndex: TaskInstanceIndex;

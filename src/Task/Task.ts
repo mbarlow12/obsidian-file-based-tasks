@@ -45,9 +45,17 @@ export const emptyTask = (): Task => {
     }
 }
 
-export const isPrimaryInstance = ( inst: TaskInstance ): inst is PrimaryTaskInstance => {
+export const isPrimaryInstance = ( inst: TaskInstance | PrimaryTaskInstance ): inst is PrimaryTaskInstance => {
     return inst.primary
 }
+
+export const isTask = ( t: TaskInstance | Task ): t is Task => (
+    'created' in t &&
+    'updated' in t &&
+    'instances' in t &&
+    'parentUids' in t &&
+    'childUids' in t
+);
 
 export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
@@ -151,9 +159,9 @@ export const taskToYamlObject = ( task: Task ): TaskYamlObject => {
         updated: updated.toISOString(),
         childUids: childUids.map( c => `${c}` ),
         parentUids: parentUids.map( c => `${c}` ),
-        ...(tags && {tags}),
+        ...(tags && { tags }),
         ...(dueDate && { dueDate: dueDate.toISOString() }),
-        ...(recurrence && {recurrence: recurrence.toString()}),
+        ...(recurrence && { recurrence: recurrence.toString() }),
         instances: instances.map( taskInstanceToYamlObject )
     };
 }

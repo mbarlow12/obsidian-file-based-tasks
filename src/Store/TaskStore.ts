@@ -12,7 +12,14 @@ import {
     taskLocationStr,
     taskToFilename,
 } from "../Task";
-import { createTaskFromInstance, isPrimaryInstance, taskIdToUid, taskInstancesEqual, taskUidToId } from "../Task/Task";
+import {
+    createTaskFromInstance,
+    isPrimaryInstance,
+    isTask,
+    taskIdToUid,
+    taskInstancesEqual,
+    taskUidToId
+} from "../Task/Task";
 import { IndexTask, TaskIndex, TaskInstanceIndex, TaskStoreState } from './types';
 
 export const hashTaskInstance = (
@@ -54,8 +61,8 @@ const createPrimaryTaskInstance = (
         parent: -1,
         position: emptyPosition( 0 ),
         primary: true,
-        created,
-        updated,
+        created: isTask(instance) ? instance.created : created,
+        updated: isTask(instance) ? instance.updated: updated,
         recurrence,
         dueDate,
         tags
@@ -75,7 +82,11 @@ export const createTask = (
 export const deleteTaskInstanceFile = (
     filePath: string,
     taskInstances: TaskInstance[]
-): TaskInstance[] => taskInstances.filter( ti => ti.filePath !== filePath );
+): TaskInstance[] => {
+    const uidstoDelete = taskInstances.filter(i => i.filePath === filePath)
+        .reduce((uids, i) => uids.add(i.uid), new Set as Set<number>);
+    return taskInstances.filter( ti => !uidstoDelete.has(ti.uid) );
+}
 
 export const renameTaskInstanceFile = (
     oldPath: string,

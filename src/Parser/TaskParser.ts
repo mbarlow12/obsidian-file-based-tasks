@@ -2,6 +2,7 @@ import { RRule } from "rrule";
 import { TaskInstance } from '../Task';
 import { taskIdToUid } from "../Task/Task";
 
+// (\-|\*) \[ \] (?<taskInfo>[^\^\r\n]+)
 // pattern = -/* [x] [something]
 const strictPattern = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(\d|\w)[^^]*)(?: \^(?<id>[0-9A-Za-z]+))?$/;
 

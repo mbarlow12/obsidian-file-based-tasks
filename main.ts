@@ -6,6 +6,7 @@ import { taskInstancesFromTask, TaskStore } from "./src/Store/TaskStore";
 import { TaskInstance } from "./src/Task";
 import { CacheStatus, TaskFileManager } from "./src/TaskFileManager";
 import { TaskManagerSettings } from "./src/taskManagerSettings";
+import { TaskEditorSuggest } from './src/TaskSuggest';
 
 const DEFAULT_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
@@ -22,6 +23,7 @@ export default class ObsidianTaskManager extends Plugin {
     private initialized = false;
     private taskEvents: TaskEvents;
     private cursorTask: TaskInstance;
+    taskSuggesster: TaskEditorSuggest;
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
@@ -35,17 +37,20 @@ export default class ObsidianTaskManager extends Plugin {
                 this.taskEvents = new TaskEvents( this.app.workspace );
                 this.taskStore = new TaskStore( this.taskEvents );
                 this.taskFileManager =
-                    new TaskFileManager( this.app.vault, this.app.metadataCache, this.taskEvents, this.settings.taskDirectoryName )
+                    new TaskFileManager( this.app.vault, this.app.metadataCache, this.taskEvents, this.settings.taskDirectoryName, this.settings.backlogFileName )
                 await this.registerEvents();
                 await this.processVault()
                 // this.registerEditorSuggest(new TaskEditorSuggest(this.app, this.index))
                 this.initialized = true;
+                this.taskSuggesster = new TaskEditorSuggest(app, this.taskEvents, this.taskStore.getState());
+                this.registerEditorSuggest(this.taskSuggesster)
             }
         } );
     }
 
     onunload() {
         this.taskStore?.unload();
+        this.taskSuggesster?.unsubscribe();
     }
 
     async loadSettings() {
@@ -86,7 +91,7 @@ export default class ObsidianTaskManager extends Plugin {
 
         if ( abstractFile instanceof TFile ) {
             const state = await this.taskFileManager.getFileTaskState( abstractFile );
-            if ( state )
+            if ( state !== null )
                 this.taskEvents.triggerFileCacheUpdate( {type: ActionType.MODIFY_FILE_TASKS, data: state});
         }
     }
