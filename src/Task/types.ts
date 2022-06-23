@@ -18,9 +18,11 @@ export interface TaskInstance extends ListItemCache {
     recurrence?: RRule;
     dueDate?: Date;
     tags?: string[];
+    links?: string[];
     rawText: string;
     filePath: string;
     primary: boolean;
+    completedDate?: Date;
 }
 
 export type PrimaryTaskInstance = TaskInstance & {

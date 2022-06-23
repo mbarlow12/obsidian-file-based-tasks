@@ -30,7 +30,7 @@ export const renderTags = ( tags?: string[] ): string => ``;
 export const renderRecurrence = ( rrule?: RRule ): string => ``;
 export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
-export const lineTaskToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
+export const taskInstanceToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
     `- [${complete ? 'x' : ' '}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ), `^${id}`
 ].join( ' ' );
 
@@ -103,6 +103,7 @@ export const addFileTaskInstances = (
         throw new Error( 'All instance from a file must have the same file path.' );
     const existingInstances = values( existingIndex ).filter( inst => inst.filePath !== paths[ 0 ] );
     let nextId = (Math.max( ...existingInstances.map( e => e.uid ), 0 ) || MIN_UID) + 1;
+    return [...values(existingIndex).filter(inst => inst.filePath !== paths[ 0 ]), ...values(fileIndex)];
     return values( [ ...existingInstances, ...values( fileIndex ) ].reduce( (
         acc,
         instance
@@ -298,6 +299,36 @@ export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): TaskInd
     }, {} as Record<string, Task> );
 }
 export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreState => {
+    const taskIndex: TaskIndex = {};
+    const existingIndex: TaskInstanceIndex = {};
+    const newInstanceIndex = instances.reduce(
+        (acc, i) => ({...acc, [taskLocationStr(i)]: i}), {} as TaskInstanceIndex
+    );
+    const instanceIndex = instances.reduce( (
+        acc,
+        instance
+    ) => {
+        let { uid, id } = instance;
+        if ( id === '' || uid === 0 ) {
+            uid = findUidFromInstance( instance,
+                newInstanceIndex,
+                {
+                    taskIndex,
+                    instanceIndex: existingIndex
+                } );
+            if ( uid === 0 || (taskIndex[ uid ].complete) ) {
+                uid = nextId++;
+                const pInst = createPrimaryTaskInstance( { ...instance, id, uid } );
+                acc[ instanceIndexKey( pInst.filePath, pInst.position.start.line ) ] = pInst;
+            }
+
+            id = taskUidToId( uid );
+        }
+
+        const key = instanceIndexKey( instance.filePath, instance.position.start.line );
+        acc[ key ] = { ...instance, id, uid };
+        return acc;
+    }, {} as TaskInstanceIndex );
     const completedUids: Set<number> = instances.reduce(( uids, instance) => {
         if (instance.complete)
             uids.add(instance.uid);
@@ -348,15 +379,24 @@ export class TaskStore {
 
     initialize( instances: TaskInstance[] ) {
         validateInstanceIndex( instances );
+        let nextId = Math.max(...instances.map(i => i.uid), MIN_UID);
         this.state = buildStateFromInstances( instances.filter(
             ( inst, i, arr ) => arr.findIndex( fInst => taskInstancesEqual( inst, fInst ) ) === i )
+            .map(inst => {
+               if (inst.uid === 0 || !inst.id || inst.id === '')
+                   inst.uid = nextId++;
+               return {
+                   ...inst,
+                   id: taskUidToId(inst.uid)
+               };
+            })
         );
         this.update();
     }
 }
 
 export const validateInstanceIndex = ( instances: TaskInstance[] ) => {
-    const diffIds = instances.filter( inst => inst.uid !== taskIdToUid( inst.id ) );
+    const diffIds = instances.filter( inst => inst.uid !== 0 && inst.uid !== taskIdToUid( inst.id ) );
     if ( diffIds.length )
         throw new Error( 'Task uids and ids must match.' )
 };

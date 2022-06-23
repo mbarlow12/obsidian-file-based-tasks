@@ -63,7 +63,7 @@ export class TaskEditorSuggest extends EditorSuggest<Task>{
       return null;
 
     const match = line.match(TaskEditorSuggest.textPattern);
-    if (match && match.groups?.taskName?.length >= 3) {
+    if (match && match.groups?.taskName?.length >= 2) {
       const start = line.indexOf(match[1]);
       return {
         start: {
