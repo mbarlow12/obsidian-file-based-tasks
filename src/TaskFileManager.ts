@@ -213,7 +213,7 @@ export class TaskFileManager {
             .map( async d => await this.deleteFile( d ) );
     }
 
-    public async getInstanceIndexFromFile( file: TFile, ignoreLines?: number[] ) {
+    public async getInstanceIndexFromFile( file: TFile, cursorLine?: number) {
         let state: TaskInstanceIndex;
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file );
@@ -224,8 +224,11 @@ export class TaskFileManager {
         }
         else {
             state = await this.readMarkdownFile( file )
-            for (const line of ignoreLines)
-                delete state[instanceIndexKey(file.path, line)];
+            if (cursorLine) {
+                const cursorKey = instanceIndexKey(file.path, cursorLine);
+                if (cursorKey in state && state[cursorKey].uid === 0)
+                    delete state[cursorKey];
+            }
         }
         const newHash = hashFileTaskState( state );
         const fileState = this.getFileStateHash( file.path );
