@@ -1,5 +1,6 @@
 import { EventRef, Events as ObsEvents } from 'obsidian';
 import { TaskStoreState } from '../Store/types';
+import { TaskManagerSettings } from '../taskManagerSettings';
 import { EventType, FileCacheUpdateHandler, IndexUpdateAction } from "./types";
 
 
@@ -16,6 +17,22 @@ export class TaskEvents {
 
     public off(ref: EventRef) {
         this._events.offref(ref)
+    }
+
+    triggerRequestSettings() {
+        this._events.trigger(EventType.REQUEST_SETTINGS_UPDATE)
+    }
+
+    onSettingsRequest(handler: () => void) {
+        return this._events.on(EventType.REQUEST_SETTINGS_UPDATE, handler);
+    }
+
+    triggerSettingsUpdate(settings: TaskManagerSettings) {
+        this._events.trigger(EventType.SETTINGS_UPDATE, settings);
+    }
+
+    onSettingsUpdate(handler: (settings: TaskManagerSettings) => void) {
+        return this._events.on(EventType.SETTINGS_UPDATE, handler);
     }
 
     triggerIndexUpdated(data: TaskStoreState) {

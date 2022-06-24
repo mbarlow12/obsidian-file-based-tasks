@@ -5,6 +5,8 @@ export enum EventType {
     REQUEST_UPDATE_INDEX = 'obsidian-file-tasks:request-index-update',
     INDEX_UPDATED = 'obsidian-file-tasks:index-update',
     FILE_CACHE_UPDATE = 'obsidian-file-tasks:file-cache-update',
+    REQUEST_SETTINGS_UPDATE = 'obsidian-file-tasks:request-settings',
+    SETTINGS_UPDATE = 'obsidian-file-tasks:settings-update',
     BACKLOG_UPDATE = 'obsidian-file-tasks:backlog-update',
     REQUEST_DELETE_TASK = 'obsidian-file-tasks:delete-task',
     REQUEST_DELETE_FILE = 'obsidian-file-tasks:delete-file',

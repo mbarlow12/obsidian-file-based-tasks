@@ -1,5 +1,8 @@
-import { expect } from '@jest/globals';
+import { expect, jest } from '@jest/globals';
 import { keys, values } from 'lodash';
+import { EventRef, Events } from 'obsidian';
+import { TaskEvents } from '../Events/TaskEvents';
+import { DEFAULT_TASK_MANAGER_SETTINGS } from '../Settings';
 import {
     emptyPosition,
     instanceIndexKey,
@@ -22,11 +25,11 @@ import {
 } from '../TestHelpers';
 import {
     addFileTaskInstances,
-    buildStateFromInstances,
     createTask,
     deleteTaskUids,
     findUidFromInstance,
-    getTasksFromInstanceIndex
+    getTasksFromInstanceIndex,
+    TaskStore
 } from './TaskStore';
 import { TaskInstanceIndex, TaskStoreState } from './types';
 
@@ -36,7 +39,23 @@ const EMPTY_STATE: TaskStoreState = {
     instanceIndex: {}
 };
 
+const mockedEvents = jest.mocked( {
+    on( name: string, callback: ( ...data: any ) => any, ctx?: any ): EventRef {
+        return {};
+    },
+    off( name: string, callback: ( ...data: any ) => any ) {
+    },
+    offref( ref: EventRef ) {
+    },
+    trigger( name: string, ...data ) {
+    },
+    tryTrigger( evt: EventRef, args: any[] ) {
+    }
+} as Events );
+const store = new TaskStore( new TaskEvents( mockedEvents ), DEFAULT_TASK_MANAGER_SETTINGS )
+
 describe( 'task creation', () => {
+
 
     test( 'Test create task for empty state', () => {
         const newState = createTask( {
@@ -88,7 +107,7 @@ describe( 'task deletion', () => {
             instanceIndex: {}
         };
         const newInstances = deleteTaskUids( [ 44 ], values( initialState.instanceIndex ) );
-        const newState = buildStateFromInstances( newInstances );
+        const newState = store.buildStateFromInstances( newInstances );
         expect( Object.keys( newState.taskIndex ) ).toHaveLength( 0 );
         expect( Object.keys( newState.instanceIndex ) ).toHaveLength( 0 );
     } );
@@ -104,7 +123,7 @@ describe( 'task deletion', () => {
             }
         };
         const newInstances = deleteTaskUids( [ 44 ], values( initialState.instanceIndex ) );
-        const newState = buildStateFromInstances( newInstances );
+        const newState = store.buildStateFromInstances( newInstances );
         expect( Object.keys( newState.taskIndex ) ).toHaveLength( 0 );
         expect( Object.keys( newState.instanceIndex ) ).toHaveLength( 0 );
     } );
@@ -127,7 +146,7 @@ describe( 'task deletion', () => {
             }
         ;
         const newInstances = deleteTaskUids( [ 43 ], values( instances ) );
-        const newState = buildStateFromInstances( newInstances );
+        const newState = store.buildStateFromInstances( newInstances );
         expect( newState ).toStrictEqual( initialState );
     } );
 } );
@@ -147,7 +166,7 @@ describe( 'file modify tasks', () => {
             [ taskLocStr ]: createTestTaskInstance( 1, createPositionAtLine( 1 ), -1, filePath ),
         }
         const newInstances = addFileTaskInstances( fileInstIndex, { taskIndex: {}, instanceIndex: {} } );
-        const newState = buildStateFromInstances( newInstances );
+        const newState = store.buildStateFromInstances( newInstances );
         expect( 1 in newState.taskIndex ).toBeTruthy();
         expect( taskLocStr in newState.instanceIndex ).toBeTruthy();
         expect( newState.instanceIndex[ taskLocStr ].uid ).toEqual( 1 )
@@ -173,7 +192,7 @@ describe( 'file modify tasks', () => {
                 [ instanceIndexKey( testInst.filePath, testInst.position.start.line ) ]: testInst
             },
             initialState );
-        const newState = buildStateFromInstances( newInstnaces );
+        const newState = store.buildStateFromInstances( newInstnaces );
 
         expect( newState.taskIndex ).toStrictEqual( {
             ...initialState.taskIndex,
@@ -197,8 +216,10 @@ describe( 'file modify tasks', () => {
             instanceIndex: {},
             taskIndex: {}
         } );
-        const newState = buildStateFromInstances( newInstances );
+        const newState = store.buildStateFromInstances( newInstances );
         expect( 100000 in newState.taskIndex ).toBeTruthy();
+        expect(newState.taskIndex[100000].name).toEqual('test task with uid 0');
+        expect(newState.taskIndex[100000].instances).toHaveLength(2);
     } );
 
     test( 'Full single file update (no old instances in same file)', () => {
@@ -236,7 +257,7 @@ describe( 'file modify tasks', () => {
             [ `file/path1.md${LOC_DELIM}70` ]: createTestTaskInstance( 44, emptyPosition( 70 ), -1, existingFile ),
         };
         const newInstances = addFileTaskInstances( newFileIndex, initialState );
-        const newState = buildStateFromInstances( newInstances )
+        const newState = store.buildStateFromInstances( newInstances )
         for ( const line of [ 55, 110, 70 ] )
             expect( `file/path1.md${LOC_DELIM}${line}` in newState.instanceIndex ).toBeTruthy();
         for ( const line of [ 4, 45, 100, 60 ] )
@@ -250,7 +271,7 @@ describe( 'file modify tasks', () => {
         const newInstances = addFileTaskInstances( {
             [ instanceIndexKey( ti.filePath, ti.position.start.line ) ]: ti
         }, { taskIndex: {}, instanceIndex: {} } );
-        const newState = buildStateFromInstances( newInstances )
+        const newState = store.buildStateFromInstances( newInstances )
         expect( 50 in newState.taskIndex ).toBeTruthy();
         expect( newState.taskIndex[ 50 ].name ).toEqual( 'a new name' );
     } );
@@ -280,11 +301,11 @@ describe( 'find uinque uids', () => {
         const state: TaskStoreState = { instanceIndex: initialIndex, taskIndex };
         const newInstance = createTestTaskInstance( 0, emptyPosition( 10 ), -1, 'test/file/path2.md' );
         newInstance.name = 'a new task name';
-        const uid = findUidFromInstance(newInstance, {
-            [taskLocationStrFromInstance(newInstance)]: newInstance
-        }, state);
-        expect(uid).toEqual(0);
-    });
+        const uid = findUidFromInstance( newInstance, {
+            [ taskLocationStrFromInstance( newInstance ) ]: newInstance
+        }, state );
+        expect( uid ).toEqual( 0 );
+    } );
 
     test( 'return uid for base matching task', () => {
         const fileMap = new Map()
@@ -310,24 +331,24 @@ describe( 'find uinque uids', () => {
             taskFileLocationToStr( 'test/file2.md', { position: emptyPosition( 5 ), parent: 4 } )
         ] );
         fileMap.set( 99, [
-            taskFileLocationToStr( 'test/file2.md', {position: emptyPosition( 4 ), parent: -1} )
+            taskFileLocationToStr( 'test/file2.md', { position: emptyPosition( 4 ), parent: -1 } )
         ] );
-        const initialIndex = addTestPrimaryTasksToIndex( createTestInstanceIndex(fileMap));
-        const taskIndex = getTasksFromInstanceIndex(initialIndex);
+        const initialIndex = addTestPrimaryTasksToIndex( createTestInstanceIndex( fileMap ) );
+        const taskIndex = getTasksFromInstanceIndex( initialIndex );
         const state: TaskStoreState = { instanceIndex: initialIndex, taskIndex };
 
         const newFileMap = new Map();
         newFileMap.set( 0, [
-            taskFileLocationToStr('test/file2.md', {position: emptyPosition(20), parent: -1}),
-            taskFileLocationToStr('test/file2.md', {position: emptyPosition(21), parent: 20})
+            taskFileLocationToStr( 'test/file2.md', { position: emptyPosition( 20 ), parent: -1 } ),
+            taskFileLocationToStr( 'test/file2.md', { position: emptyPosition( 21 ), parent: 20 } )
         ] );
-        const newFileIndex = createTestInstanceIndex(newFileMap);
-        keys(newFileIndex).forEach(k => {
-           const inst = newFileIndex[k];
-           if (inst.parent > -1)
-               inst.name = 'test task with uid 100';
-        });
-        const uid = findUidFromInstance(values(newFileIndex)[1], newFileIndex, state);
-        expect(uid).toEqual(0);
+        const newFileIndex = createTestInstanceIndex( newFileMap );
+        keys( newFileIndex ).forEach( k => {
+            const inst = newFileIndex[ k ];
+            if ( inst.parent > -1 )
+                inst.name = 'test task with uid 100';
+        } );
+        const uid = findUidFromInstance( values( newFileIndex )[ 1 ], newFileIndex, state );
+        expect( uid ).toEqual( 0 );
     } );
 } );
