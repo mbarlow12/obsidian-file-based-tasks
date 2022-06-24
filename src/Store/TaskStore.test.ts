@@ -218,8 +218,8 @@ describe( 'file modify tasks', () => {
         } );
         const newState = store.buildStateFromInstances( newInstances );
         expect( 100000 in newState.taskIndex ).toBeTruthy();
-        expect(newState.taskIndex[100000].name).toEqual('test task with uid 0');
-        expect(newState.taskIndex[100000].instances).toHaveLength(2);
+        expect( newState.taskIndex[ 100000 ].name ).toEqual( 'test task with uid 0' );
+        expect( newState.taskIndex[ 100000 ].instances ).toHaveLength( 2 );
     } );
 
     test( 'Full single file update (no old instances in same file)', () => {
@@ -351,4 +351,11 @@ describe( 'find uinque uids', () => {
         const uid = findUidFromInstance( values( newFileIndex )[ 1 ], newFileIndex, state );
         expect( uid ).toEqual( 0 );
     } );
+} );
+
+describe( 'Index file instances', () => {
+
+    test( 'single task, no children', () => {
+
+    });
 } );

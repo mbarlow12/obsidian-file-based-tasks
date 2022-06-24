@@ -11,7 +11,6 @@ import {
     TaskInstance,
     taskLocationStr,
     taskToFilename,
-    TaskUID,
 } from "../Task";
 import {
     createTaskFromInstance,
@@ -181,20 +180,62 @@ export const modifyTask = (
     return inst;
 } );
 
-export const createIndexFileTaskInstance = ( filePath: string, task: Task, filteredTasks: Task[]) => {
-    const taskIndex: TaskIndex = filteredTasks.reduce((idx, t) => ({[t.uid]: t}), {});
-    let line = 0;
-    const uidLineMap: Record<TaskUID, number[]> = {};
-    return filteredTasks.reduce((instIdx, fTask) => {
-        uidLineMap[fTask.uid] = [...(uidLineMap[fTask.uid] || []), line];
-        const inst: TaskInstance = {
-            ...omit(createPrimaryTaskInstance(fTask, DEFAULT_TASKS_DIR, fTask.created), 'created', 'updated'),
-            filePath,
-            parent: -1,
-            position: emptyPosition(line),
-        } ;
-        inst.rawText = taskInstanceToChecklist(inst);
-    }, {} as TaskInstanceIndex);
+export const indexFileInstancesFromTask = ( filePath: string, task: Task, index: TaskIndex, startLine = 0 ) => {
+    const useTab = true;
+    const tabSize = 4;
+    const parent: TaskInstance = {
+        ...omit( createPrimaryTaskInstance( task ), 'created', 'updated' ),
+        filePath,
+        parent: -1,
+        position: emptyPosition( startLine ),
+    };
+    parent.rawText = taskInstanceToChecklist( parent );
+    const children: TaskInstance[] = task.childUids.sort().map( ( cuid ): Task => index[ cuid ] )
+        .reduce( ( c, child ) => {
+            return [
+                ...c,
+                ...indexFileInstancesFromTask( filePath, child, index, ++startLine )
+            ]
+        }, [] as TaskInstance[] )
+        .map( inst => ({
+            ...inst,
+            parent: parent.position.start.line,
+            position: {
+                end: inst.position.end,
+                start: {
+                    ...inst.position.start,
+                    col: inst.position.start.col + (useTab ? 1 : (inst.position.start.col === 0 ? 2 : tabSize))
+                }
+            }
+        }) );
+    return [ parent, ...children ];
+};
+
+export const createIndexFileTaskInstances = ( filePath: string, taskIndex: TaskIndex ) => {
+    const childUids = values(taskIndex).reduce((s, t) => new Set([...s, ...t.childUids]), new Set<number>());
+    const allInstances = values( taskIndex )
+        .sort( ( a, b ) => a.created.getTime() - b.created.getTime() )
+        .reduce( ( instIdx, fTask ) => {
+            const instances = indexFileInstancesFromTask(filePath, fTask, taskIndex);
+            return [
+                ...instIdx,
+                ...instances
+            ]
+        }, [] as TaskInstance[] )
+        .filter(inst => inst.parent > -1 || !childUids.has(inst.uid))
+        .map((inst, lineNum) => {
+            const line = lineNum + inst.position.start.line;
+            const parent = inst.parent === -1 ? -1 : lineNum + inst.parent;
+            return {
+                ...inst,
+                parent,
+                position: {
+                    start: { ...inst.position.start, line },
+                    end: { ...inst.position.end }
+                }
+            };
+        });
+    return allInstances.reduce((idx, i) => ({ ...idx, [taskLocationStr(i)]: i}), {} as TaskInstanceIndex);
 }
 
 export const taskInstancesFromTask = ( task: Task ): TaskInstance[] => {
@@ -387,10 +428,11 @@ export class TaskStore {
             return acc;
         }, {} as TaskInstanceIndex );
         const taskIndex = getTasksFromInstanceIndex( instanceIndex );
-        const indexFilesInstanceIndex = Object.entries(this.settings.indexFiles || {}).reduce((idx, [filename, query]) => {
-            const filteredTasks = filterTasksByQuery(values(taskIndex), query);
-            return {}
-        }, {} as TaskInstanceIndex)
+        const indexFilesInstanceIndex = Object.entries( this.settings.indexFiles || {} )
+            .reduce( ( idx, [ filename, query ] ) => {
+                const filteredTasks = filterTasksByQuery( values( taskIndex ), query );
+                return {}
+            }, {} as TaskInstanceIndex )
         return {
             instanceIndex,
             taskIndex,
@@ -398,19 +440,19 @@ export class TaskStore {
     }
 }
 
-export const queryTask = (t: Task, {value, field, op}: TaskQueryBlock) => {
-    const tVal = t[field];
+export const queryTask = ( t: Task, { value, field, op }: TaskQueryBlock ) => {
+    const tVal = t[ field ];
     switch ( op ) {
         case Operator.EQ:
             return tVal === value;
         case Operator.GT:
             return tVal > value;
         case Operator.INCLUDES:
-            return Array.isArray(tVal) && tVal.findIndex( tv => tv === value) > -1;
+            return Array.isArray( tVal ) && tVal.findIndex( tv => tv === value ) > -1;
         case Operator.GTE:
             return tVal >= value;
         case Operator.LIKE:
-            return typeof tVal === 'string' && tVal.includes(value.toString());
+            return typeof tVal === 'string' && tVal.includes( value.toString() );
         case Operator.LT:
             return tVal < value;
         case Operator.LTE:
@@ -420,12 +462,12 @@ export const queryTask = (t: Task, {value, field, op}: TaskQueryBlock) => {
     }
 }
 
-export const filterTasksByQuery = (tasks: Task[], query?: TaskQuery): Task[] => {
-    return tasks.filter(task => {
-        if ( isQueryBlock(query) ) {
-            return queryTask(task, query);
+export const filterTasksByQuery = ( tasks: Task[], query?: TaskQuery ): Task[] => {
+    return tasks.filter( task => {
+        if ( isQueryBlock( query ) ) {
+            return queryTask( task, query );
         }
-    });
+    } );
 }
 
 export const validateInstanceIndex = ( instances: TaskInstance[] ) => {
