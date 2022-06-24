@@ -14,7 +14,7 @@ import {
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
 
-const taskFileNameRegex = /^(?<name>\w.*)(?= - \d+) - (?<id>\d+)(?:.md)?/;
+const taskFileNameRegex = /^(?<name>\w.*)(?=_[\w\d]+)(?<id>[\w\d]+)(?:.md)?/;
 
 export const emptyTaskInstance = (): TaskInstance => {
     return {

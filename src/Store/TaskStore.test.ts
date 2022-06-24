@@ -198,7 +198,7 @@ describe( 'file modify tasks', () => {
             taskIndex: {}
         } );
         const newState = buildStateFromInstances( newInstances );
-        expect( 100001 in newState.taskIndex ).toBeTruthy();
+        expect( 100000 in newState.taskIndex ).toBeTruthy();
     } );
 
     test( 'Full single file update (no old instances in same file)', () => {

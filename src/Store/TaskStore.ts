@@ -31,7 +31,8 @@ export const renderRecurrence = ( rrule?: RRule ): string => ``;
 export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
 export const taskInstanceToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
-    `- [${complete ? 'x' : ' '}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ), `^${id}`
+    `- [${complete ? 'x' : ' '}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ),
+    `^${id}`
 ].join( ' ' );
 
 export const indexTaskFromTask = ( task: Task ): IndexTask => ({
@@ -61,8 +62,8 @@ const createPrimaryTaskInstance = (
         parent: -1,
         position: emptyPosition( 0 ),
         primary: true,
-        created: isTask(instance) ? instance.created : created,
-        updated: isTask(instance) ? instance.updated: updated,
+        created: isTask( instance ) ? instance.created : created,
+        updated: isTask( instance ) ? instance.updated : updated,
         recurrence,
         dueDate,
         tags
@@ -83,9 +84,9 @@ export const deleteTaskInstanceFile = (
     filePath: string,
     taskInstances: TaskInstance[]
 ): TaskInstance[] => {
-    const uidstoDelete = taskInstances.filter(i => i.filePath === filePath)
-        .reduce((uids, i) => uids.add(i.uid), new Set as Set<number>);
-    return taskInstances.filter( ti => !uidstoDelete.has(ti.uid) );
+    const uidstoDelete = taskInstances.filter( i => i.filePath === filePath )
+        .reduce( ( uids, i ) => uids.add( i.uid ), new Set as Set<number> );
+    return taskInstances.filter( ti => !uidstoDelete.has( ti.uid ) );
 }
 
 export const renameTaskInstanceFile = (
@@ -101,34 +102,7 @@ export const addFileTaskInstances = (
     const paths = Array.from( values( fileIndex ).reduce( ( acc, inst ) => acc.add( inst.filePath ), new Set ) );
     if ( paths.length !== 1 )
         throw new Error( 'All instance from a file must have the same file path.' );
-    const existingInstances = values( existingIndex ).filter( inst => inst.filePath !== paths[ 0 ] );
-    let nextId = (Math.max( ...existingInstances.map( e => e.uid ), 0 ) || MIN_UID) + 1;
-    return [...values(existingIndex).filter(inst => inst.filePath !== paths[ 0 ]), ...values(fileIndex)];
-    return values( [ ...existingInstances, ...values( fileIndex ) ].reduce( (
-        acc,
-        instance
-    ) => {
-        let { uid, id } = instance;
-        if ( id === '' || uid === 0 ) {
-            uid = findUidFromInstance( instance,
-                fileIndex,
-                {
-                    taskIndex,
-                    instanceIndex: existingIndex
-                } );
-            if ( uid === 0 || (taskIndex[ uid ].complete) ) {
-                uid = nextId++;
-                const pInst = createPrimaryTaskInstance( { ...instance, id, uid } );
-                acc[ instanceIndexKey( pInst.filePath, pInst.position.start.line ) ] = pInst;
-            }
-
-            id = taskUidToId( uid );
-        }
-
-        const key = instanceIndexKey( instance.filePath, instance.position.start.line );
-        acc[ key ] = { ...instance, id, uid };
-        return acc;
-    }, {} as TaskInstanceIndex ) );
+    return [ ...values( existingIndex ).filter( inst => inst.filePath !== paths[ 0 ] ), ...values( fileIndex ) ];
 };
 
 export const arraysEqual = <T>( a: T[], b: T[] ): boolean => {
@@ -139,7 +113,7 @@ export const arraysEqual = <T>( a: T[], b: T[] ): boolean => {
 export const findUidFromInstance = (
     instance: TaskInstance,
     fileIndex: TaskInstanceIndex,
-    { taskIndex, instanceIndex }: TaskStoreState
+    { instanceIndex }: TaskStoreState
 ): number => {
     if ( instance.uid !== 0 )
         return instance.uid;
@@ -147,6 +121,7 @@ export const findUidFromInstance = (
         return taskIdToUid( instance.id );
 
     const existingInsts = values( instanceIndex );
+    const taskIndex = getTasksFromInstanceIndex(instanceIndex);
     const nameUids: Map<string, number[]> = existingInsts.reduce( ( nUids, inst ) => {
         if ( !nUids.has( inst.name ) )
             nUids.set( inst.name, [ inst.uid ] )
@@ -299,11 +274,22 @@ export const getTasksFromInstanceIndex = ( instIdx: TaskInstanceIndex ): TaskInd
     }, {} as Record<string, Task> );
 }
 export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreState => {
-    const taskIndex: TaskIndex = {};
-    const existingIndex: TaskInstanceIndex = {};
-    const newInstanceIndex = instances.reduce(
-        (acc, i) => ({...acc, [taskLocationStr(i)]: i}), {} as TaskInstanceIndex
-    );
+    let nextId = Math.max(...instances.map(i => i.uid), MIN_UID) + 1;
+    const [ existingIndex, newInstancesIndex ] = instances.reduce( ( [ eidx, nidx ], i ) => [
+        {
+            ...eidx,
+            ...(i.uid > 0 && { [ taskLocationStr( i ) ]: i })
+        }, {
+            ...nidx,
+            ...(i.uid === 0 && { [ taskLocationStr( i ) ]: i })
+        }
+    ], [ {}, {} ] as TaskInstanceIndex[] )
+    const taskIndex: TaskIndex = getTasksFromInstanceIndex( existingIndex );
+    const completedUids: Set<number> = instances.reduce( ( uids, instance ) => {
+        if ( instance.complete )
+            uids.add( instance.uid );
+        return uids;
+    }, new Set() as Set<number> );
     const instanceIndex = instances.reduce( (
         acc,
         instance
@@ -311,7 +297,7 @@ export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreS
         let { uid, id } = instance;
         if ( id === '' || uid === 0 ) {
             uid = findUidFromInstance( instance,
-                newInstanceIndex,
+                newInstancesIndex,
                 {
                     taskIndex,
                     instanceIndex: existingIndex
@@ -326,18 +312,9 @@ export const buildStateFromInstances = ( instances: TaskInstance[] ): TaskStoreS
         }
 
         const key = instanceIndexKey( instance.filePath, instance.position.start.line );
-        acc[ key ] = { ...instance, id, uid };
+        acc[ key ] = { ...instance, id, uid, complete: completedUids.has(uid) || instance.complete };
         return acc;
     }, {} as TaskInstanceIndex );
-    const completedUids: Set<number> = instances.reduce(( uids, instance) => {
-        if (instance.complete)
-            uids.add(instance.uid);
-        return uids;
-    }, new Set()as Set<number>);
-    const instanceIndex = instances.reduce( ( idx, inst ) => ({
-        ...idx,
-        [ taskLocationStr( inst ) ]: completedUids.has(inst.uid) ? {...inst, complete: true}: inst
-    }), {} as TaskInstanceIndex );
     return {
         instanceIndex,
         taskIndex: getTasksFromInstanceIndex( instanceIndex ),
@@ -370,7 +347,7 @@ export class TaskStore {
 
     private update() {
         this.notifySubscribers( { ...this.state } )
-        console.log(this.state);
+        console.log( this.state );
     }
 
     private notifySubscribers( data: TaskStoreState ) {
@@ -379,17 +356,9 @@ export class TaskStore {
 
     initialize( instances: TaskInstance[] ) {
         validateInstanceIndex( instances );
-        let nextId = Math.max(...instances.map(i => i.uid), MIN_UID);
+        console.log('initializing with instances', instances);
         this.state = buildStateFromInstances( instances.filter(
             ( inst, i, arr ) => arr.findIndex( fInst => taskInstancesEqual( inst, fInst ) ) === i )
-            .map(inst => {
-               if (inst.uid === 0 || !inst.id || inst.id === '')
-                   inst.uid = nextId++;
-               return {
-                   ...inst,
-                   id: taskUidToId(inst.uid)
-               };
-            })
         );
         this.update();
     }

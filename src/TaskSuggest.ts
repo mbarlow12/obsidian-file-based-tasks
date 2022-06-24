@@ -11,13 +11,15 @@ import {
   TFile
 } from "obsidian";
 import { TaskEvents } from './Events/TaskEvents';
+import { TaskParser } from './Parser/TaskParser';
 import { TaskStoreState } from './Store/types';
 import { Task } from "./Task";
 
 
 export class TaskEditorSuggest extends EditorSuggest<Task>{
-  static taskLinePattern = /(-|\*) \[(\s|x)?\]/
-  static textPattern = /[-*] \[ \] (?<taskName>[\w ]+)/;
+  static pat = /^\s*[-*] \[(?<complete>\s|x)?]\s+/;
+  static taskLinePattern = /^[ \t]*[-*] \[[ x]?]/
+  static textPattern = /^[ \t]*[-*] \[[ x]?][ \t]+(?<taskName>(?:\d|\w).*)(?!\^[\w\d]+$)/;
 
   context: EditorSuggestContext | null;
   limit: number;
@@ -26,12 +28,14 @@ export class TaskEditorSuggest extends EditorSuggest<Task>{
 
   private events: TaskEvents;
   private indexUpdateEventRef: EventRef;
+  private parser: TaskParser;
 
   constructor(app: App, events: TaskEvents, taskState: TaskStoreState) {
     super(app);
     this.app = app;
     this.events = events;
     this.taskState = taskState;
+    this.parser = new TaskParser();
     this.subscribe();
   }
 
@@ -59,19 +63,26 @@ export class TaskEditorSuggest extends EditorSuggest<Task>{
 
   onTrigger(cursor: EditorPosition, editor: Editor, file: TFile): EditorSuggestTriggerInfo | null {
     const line = editor.getLine(cursor.line);
-    if (!line.match(TaskEditorSuggest.taskLinePattern))
-      return null;
+    const parsedTask = this.parser.parseLine(line);
+    if (
+        parsedTask &&
+        parsedTask.uid === 0 &&
+        !parsedTask.tags?.length &&
+        !parsedTask.recurrence &&
+        !parsedTask.dueDate &&
+        !parsedTask.links &&
+        parsedTask.name?.length > 1
+    ) {
 
-    const match = line.match(TaskEditorSuggest.textPattern);
-    if (match && match.groups?.taskName?.length >= 2) {
-      const start = line.indexOf(match[1]);
+      console.log('matched name: ' + parsedTask.name);
+      const start = line.indexOf(parsedTask.name);
       return {
         start: {
           line: cursor.line,
           ch: start
         },
         end: cursor,
-        query: match[1].trim()
+        query: parsedTask.name.trim()
       }
     }
 
@@ -82,10 +93,12 @@ export class TaskEditorSuggest extends EditorSuggest<Task>{
   // }
 
   renderSuggestion(value: Task, el: HTMLElement): void {
-    const elem = new HTMLElement();
-    elem.setAttr('tag', 'p');
-    elem.innerText = value.name;
-    el.appendChild(elem);
+    const base = createDiv();
+    base.createDiv({
+      text: value.name,
+      cls: 'my-cool-class'
+    });
+    el.appendChild(base);
   }
 
   selectSuggestion(value: Task, evt: MouseEvent | KeyboardEvent): void {
