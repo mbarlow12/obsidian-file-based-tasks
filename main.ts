@@ -55,7 +55,7 @@ export default class ObsidianTaskManager extends Plugin {
         } );
     }
 
-    set activeFile(f: TFile) {
+    set activeFile( f: TFile ) {
         this._activeFile = f;
     }
 
@@ -97,15 +97,21 @@ export default class ObsidianTaskManager extends Plugin {
 
             console.log( `${file.path} just opened` );
             this.activeFile = file;
-            const storedIndex = filterIndexByPath(file.path, this.taskStore.getState().instanceIndex);
+            const {instanceIndex, taskIndex} = this.taskStore.getState();
+            const storedIndex = filterIndexByPath( file.path, instanceIndex );
             const index = await this.taskFileManager.readMarkdownFile( file );
             const hash = hashFileTaskState( index );
             const storedHash = hashFileTaskState( storedIndex );
 
-            if (storedHash !== hash) {
-                this.taskFileManager.setFileStateHash(file.path, { status: CacheStatus.DIRTY, hash: storedHash});
-                await this.taskFileManager.writeStateToFile(file, filterIndexByPath(file.path, storedIndex));
+            if ( storedHash !== hash ) {
+                this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.DIRTY, hash: storedHash } );
+                if ( this.settings.indexFiles.has( file.path) )
+                    await this.taskFileManager.writeIndexFile(file, instanceIndex, taskIndex);
+                else
+                    await this.taskFileManager.writeStateToFile( file, filterIndexByPath( file.path, storedIndex ) );
             }
+            else
+                this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.CLEAN, hash: storedHash } );
 
             console.log( hashFileTaskState( index ) );
         } ) );

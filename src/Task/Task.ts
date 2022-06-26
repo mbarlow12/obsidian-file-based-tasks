@@ -1,4 +1,4 @@
-import { keys, pick, values } from 'lodash';
+import { isEqual, keys, pick, values } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
 import { hash } from "../util/hash";
@@ -73,8 +73,13 @@ export const taskInstancesEqual = (
 ) => a.name === b.name &&
     a.filePath === b.filePath &&
     a.position.start.line === b.position.start.line &&
+    a.complete === b.complete &&
     ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
-    ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid));
+    ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid)) &&
+    isEqual((a.tags || []).sort(), (b.tags || []).sort()) &&
+    !(a.recurrence || b.recurrence) || isEqual(a.recurrence, b.recurrence) &&
+    a.dueDate === b.dueDate &&
+    a.completedDate === b.completedDate;
 
 export const instancesLocationsEqual = (
     instA: TaskInstance,

@@ -25,13 +25,15 @@ import {
 } from '../TestHelpers';
 import {
     addFileTaskInstances,
+    createIndexFileTaskInstances,
     createTask,
     deleteTaskUids,
     findUidFromInstance,
     getTasksFromInstanceIndex,
+    indexFileInstancesFromTask,
     TaskStore
 } from './TaskStore';
-import { TaskInstanceIndex, TaskStoreState } from './types';
+import { TaskIndex, TaskInstanceIndex, TaskStoreState } from './types';
 
 
 const EMPTY_STATE: TaskStoreState = {
@@ -169,9 +171,10 @@ describe( 'file modify tasks', () => {
         const newState = store.buildStateFromInstances( newInstances );
         expect( 1 in newState.taskIndex ).toBeTruthy();
         expect( taskLocStr in newState.instanceIndex ).toBeTruthy();
-        expect( newState.instanceIndex[ taskLocStr ].uid ).toEqual( 1 )
-        expect( newState.taskIndex[ 1 ].name ).toEqual( newState.instanceIndex[ taskLocStr ].name )
-        expect( newState.taskIndex[ 1 ].id ).toEqual( newState.instanceIndex[ taskLocStr ].id )
+        expect( newState.instanceIndex[ taskLocStr ].uid ).toEqual( 1 );
+        expect( newState.taskIndex[ 1 ].name ).toEqual( newState.instanceIndex[ taskLocStr ].name );
+        expect( newState.taskIndex[ 1 ].id ).toEqual( newState.instanceIndex[ taskLocStr ].id );
+        expect( 'Backlog.md||0' in newState.instanceIndex).toBeTruthy();
     } );
 
     test( 'Single task instance, all existing', () => {
@@ -204,9 +207,11 @@ describe( 'file modify tasks', () => {
             }
         } );
         const expTestTask = createTestTaskInstance( 44, emptyPosition( 25 ) );
+        const expBacklogTask = createTestTaskInstance(44, emptyPosition(0), -1, 'Backlog.md', false, 0, true);
         expect( newState.instanceIndex ).toStrictEqual( {
             ...initialState.instanceIndex,
-            [ taskLocationStr( taskLocationFromInstance( expTestTask ) ) ]: expTestTask
+            [ taskLocationStr( taskLocationFromInstance( expTestTask ) ) ]: expTestTask,
+            [ taskLocationStr(expBacklogTask)]: expBacklogTask
         } );
     } );
 
@@ -353,9 +358,86 @@ describe( 'find uinque uids', () => {
     } );
 } );
 
+const testUids = [ 100001, 100002, 100003, 100004, 100005, 100006, 110011 ];
+const testTasks = testUids.map( (uid, i) => {
+    const t = createTestTask( uid );
+    t.created.setSeconds(t.created.getSeconds() + i)
+    return t;
+} );
+
 describe( 'Index file instances', () => {
 
-    test( 'single task, no children', () => {
+    test( 'instances from task, no children', () => {
+        const task = createTestTask( 100001 );
+        const instances = indexFileInstancesFromTask( 'test/path.md', task, {} )
+        expect( instances ).toHaveLength( 1 );
+        expect( instances[ 0 ].filePath ).toEqual( 'test/path.md' );
+        expect( instances[ 0 ].name ).toEqual( 'test task with uid 100001' );
+    } );
 
-    });
+    test( 'instances from task with children', () => {
+        const parent = {...testTasks[ 0 ]};
+        const children = [...testTasks.slice( 1, 3 )];
+        parent.childUids = children.map( c => c.uid );
+        const index: TaskIndex = [ parent, ...children ].reduce( ( idx, t ) => ({ ...idx, [ t.uid ]: t }) );
+        const instances = indexFileInstancesFromTask( 'test index.md', parent, index );
+        expect( instances ).toHaveLength( 3 );
+        for ( let i = 0; i < 3; i++ ) {
+            const { filePath, position, parent, uid, name } = instances[ i ];
+            expect( filePath ).toEqual( 'test index.md' );
+            expect( position.start.line ).toEqual( i );
+            expect( parent ).toEqual( i === 0 ? -1 : 0 );
+            expect( name ).toEqual( testTasks[ i ].name );
+            expect( uid ).toEqual( testUids[ i ] );
+        }
+    } );
+
+    test( 'index file instances, no children', () => {
+        const index = [...testTasks].reduce( ( acc, t ) => ({ ...acc, [ t.uid ]: t }), {} as TaskIndex );
+        const instanceIndex = createIndexFileTaskInstances( 'index file.md', index );
+        const instances = values( instanceIndex );
+        expect( instances.length ).toEqual( testUids.length );
+        for ( let i = 0; i < instances.length; i++ ) {
+            const { filePath, position, parent, uid, name } = instances[ i ];
+            expect( filePath ).toEqual( 'index file.md' );
+            expect( position.start.line ).toEqual( i );
+            expect( parent ).toEqual( -1 );
+            expect( name ).toEqual( testTasks[ i ].name );
+            expect( uid ).toEqual( testUids[ i ] );
+        }
+    } );
+
+    test( 'index file instances, with children', () => {
+        let parents = [...testTasks].slice( 0, testTasks.length - 3 );
+        let children = [...testTasks].slice( testTasks.length - 3 );
+        parents[ 0 ].childUids = children.slice( 0, 2 ).map( c => c.uid );
+        children[ 0 ].childUids = [ children[ 2 ].uid ];
+        let taskIndex = [ ...parents, ...children ].reduce( ( acc, t ) => ({
+            ...acc,
+            [ t.uid ]: t
+        }), {} as TaskIndex );
+        let instanceIndex = createIndexFileTaskInstances( 'index file.md', taskIndex );
+        let insts = values( instanceIndex ).sort( ( a, b ) => a.position.start.line - b.position.start.line );
+        expect( insts ).toHaveLength( testTasks.length );
+        for ( let i = 0; i < insts.length; i++ ) {
+            const inst = insts[i];
+            if ( inst.parent > -1) {
+                expect(taskIndex[insts[inst.parent].uid].childUids.includes(inst.uid)).toBeTruthy();
+            }
+            else {
+                expect(insts.filter(ins => ins.uid === inst.uid)).toHaveLength(1);
+            }
+        }
+
+        parents = [...testTasks].map(t => ({...t, childUids: []})).slice(0, testTasks.length - 1);
+        children = [{...testTasks[testTasks.length - 1]}];
+        parents[parents.length - 1].childUids = children.map(c => c.uid);
+        taskIndex = [...parents, ...children].reduce((acc, t) => ({
+            ...acc,
+            [t.uid]: t
+        }), {});
+        instanceIndex = createIndexFileTaskInstances('index file', taskIndex);
+        insts = values(instanceIndex).sort((a,b) => a.position.start.line - b.position.start.line);
+        expect( insts ).toHaveLength( testTasks.length );
+    } );
 } );
