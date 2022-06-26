@@ -96,24 +96,6 @@ export const renameTaskInstanceFile = (
     taskInstances: TaskInstance[]
 ): TaskInstance[] => taskInstances.map( ti => ti.filePath === oldPath ? { ...ti, filePath: newPath } : ti );
 
-export const diffTaskInstanceIndexes = (a: TaskInstanceIndex, b: TaskInstanceIndex) => {
-  const aNotB: TaskInstanceIndex = {};
-  const bNotA: TaskInstanceIndex = {};
-  for (const key in a) {
-      if (!(key in b))
-          aNotB[key] = a[key];
-      else {
-          // if task in a !== task in b, use b as the override
-          if (!taskInstancesEqual(a[key], b[key]))
-              bNotA[key] = b[key];
-      }
-  }
-  for (const key in b) {
-      if (!(key in a))
-          bNotA[key] = b[key];
-  }
-};
-
 export const addFileTaskInstances = (
     fileIndex: TaskInstanceIndex,
     { taskIndex, instanceIndex: existingIndex }: TaskStoreState,
@@ -122,11 +104,6 @@ export const addFileTaskInstances = (
     const paths = Array.from( values( fileIndex ).reduce( ( acc, inst ) => acc.add( inst.filePath ), new Set ) );
     if ( paths.length !== 1 )
         throw new Error( 'All instance from a file must have the same file path.' );
-    const existingInstances = values( existingIndex ).map(ei => {
-       if (ei.uid in fileTaskIndex) {
-           const fileTask = fileTaskIndex[ei.uid];
-       }
-    });
     return [
         ...values( existingIndex ).filter( inst => inst.filePath !== paths[ 0 ] )
             .map( existingInst => ({
@@ -428,6 +405,13 @@ export class TaskStore {
     initialize( instances: TaskInstance[] ) {
         this.nextId = Math.max( Math.max( ...instances.map( ( { uid } ) => uid ) ) + 1, this.nextId );
         validateInstanceIndex( instances );
+        const uniqueInstances = instances.filter(
+            ( inst, i, arr ) => arr.findIndex( fInst => taskInstancesEqual( inst, fInst ) ) === i
+        );
+        const [ withIds, noIds ] = uniqueInstances.reduce( ( [ wi, ni ]: TaskInstance[][], i ) => [
+            [ ...wi, ...(i.uid > 0 && [ i ]) ],
+            [ ...ni, ...(i.uid === 0 && [ i ]) ]
+        ], [ [], [] ] );
         console.log( 'initializing with instances', instances );
         this.state = this.buildStateFromInstances( instances.filter(
             ( inst, i, arr ) => arr.findIndex( fInst => taskInstancesEqual( inst, fInst ) ) === i )
@@ -436,16 +420,10 @@ export class TaskStore {
     }
 
     buildStateFromInstances( instances: TaskInstance[] ): TaskStoreState {
-        const existingInstanceIndex = {...this.state.instanceIndex};
-        const [newInstances, updatedInstances] = instances.reduce(([ni, ui], i) => {
-            if (i.uid === 0)
-                ni.push(i);
-            else
-                ui.push(i);
-            return [ni, ui];
-        }, [[], []] as TaskInstance[][]);
-        const newInstancesIndex = instances.filter(i => i.uid === 0).reduce((idx, i) => ({...idx, [taskLocationStr(i)]: i}), {} as TaskInstanceIndex)
-        const existingTaskIndex: TaskIndex = {...this.state.taskIndex};
+        const existingInstanceIndex = { ...this.state.instanceIndex };
+        const newInstancesIndex = instances.filter( i => i.uid === 0 )
+            .reduce( ( idx, i ) => ({ ...idx, [ taskLocationStr( i ) ]: i }), {} as TaskInstanceIndex )
+        const existingTaskIndex: TaskIndex = { ...this.state.taskIndex };
         const completedUids: Set<number> = values( existingInstanceIndex ).reduce( ( uids, instance ) => {
             if ( instance.complete )
                 uids.add( instance.uid );
