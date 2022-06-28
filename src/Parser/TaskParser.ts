@@ -60,9 +60,9 @@ const parseDueDate = (dueDate: string): Date | null => chrono.parseDate(dueDate)
 
 export class TaskParser {
   private settings: ParserSettings;
-  private static LINK_REGEX = /\[\[[^\]]+\]\]/g;
-  private static LINE_REGEX = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(?:\d|\w).*)$/;
-  private static ID_REGEX = /\^[\w\d]+$/;
+  public static LINK_REGEX = /\[\[[^\]]+\]\]/g;
+  public static LINE_REGEX = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(?:\d|\w).*)$/;
+  public static ID_REGEX = /\^[\w\d]+$/;
 
   constructor(settings = DEFAULT_PARSER_SETTINGS) {
     this.settings = settings;
@@ -106,8 +106,8 @@ export class TaskParser {
           .replace(TaskParser.LINK_REGEX, '').trim();
       return pTask;
     }
-    else
-      return null;
+
+    return null;
   }
 
   get namePattern() {

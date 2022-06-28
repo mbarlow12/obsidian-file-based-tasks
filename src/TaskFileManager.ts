@@ -24,7 +24,6 @@ import {
     TaskInstance,
     taskLocationStr,
     taskLocationStrFromInstance,
-    taskLocFromMinStr,
     TaskRecordType,
     taskToFilename,
     taskToTaskFileContents,
@@ -163,10 +162,12 @@ export class TaskFileManager {
 
         const { instanceIndex, taskIndex } = this.taskStoreState;
 
+        const taskFilePaths = this.tasksDirectory.children.map( c => c.path );
         for ( const taskId in taskIndex ) {
             const idxTask = taskIndex[ taskId ];
             const newTaskHash = await hashTask( idxTask );
             const taskFilePath = this.getTaskPath( idxTask )
+            taskFilePaths.remove( taskFilePath );
             if (
                 taskFilePath in this.fileStates &&
                 this.fileStates[ taskFilePath ].hash === newTaskHash
@@ -177,6 +178,8 @@ export class TaskFileManager {
             };
             await this.storeTaskFile( idxTask );
         }
+        for ( const tfp in taskFilePaths )
+            await this.deleteFile( this.vault.getAbstractFileByPath( tfp ) );
 
         const filePaths = values( instanceIndex ).filter( inst => !isPrimaryInstance( inst ) )
             .map( inst => inst.filePath )
@@ -197,9 +200,9 @@ export class TaskFileManager {
             }
             let hash: string;
             if ( this.pluginSettings.indexFiles.has( file.path ) )
-                hash = await this.writeIndexFile( file, newFileInstanceIndex, taskIndex )
+                hash = await this.writeIndexFile( file, instanceIndex, taskIndex )
             else
-                hash = await this.writeStateToFile( file, newFileInstanceIndex );
+                hash = await this.writeStateToFile( file, this.taskStoreState );
 
             if ( hash !== newHash )
                 throw Error( `Something went wrong when hashing the state for ${file.path}` )
@@ -214,80 +217,6 @@ export class TaskFileManager {
                 await this.deleteFile( this.vault.getAbstractFileByPath( cachePath ) );
         }
     }
-
-    // public async handleIndexUpdate( { taskIndex, instanceIndex }: TaskStoreState ) {
-    //     const deleteMarks = new Set( Object.keys( this.fileStates ) )
-    //     // update task files
-    //     for ( const taskId in taskIndex ) {
-    //         const idxTask = taskIndex[ taskId ];
-    //         const newTaskHash = await hashTask( idxTask );
-    //         const taskFilePath = this.getTaskPath( idxTask )
-    //         deleteMarks.delete( taskFilePath )
-    //         if (
-    //             taskFilePath in this.fileStates &&
-    //             this.fileStates[ taskFilePath ].hash === newTaskHash
-    //         ) continue;
-    //         this.fileStates[ taskFilePath ] = {
-    //             status: CacheStatus.CLEAN,
-    //             hash: newTaskHash
-    //         };
-    //         await this.storeTaskFile( idxTask )
-    //     }
-    //
-    //     const filePaths = Object.keys( instanceIndex )
-    //         .filter( fp => !isPrimaryInstance( instanceIndex[ fp ] ) )
-    //         .map( s => taskLocFromMinStr( s ).filePath )
-    //         .filter( ( fp, i, fps ) => fps.indexOf( fp ) === i )
-    //         .filter( fp => !fp.includes( this._backlogFileName ) );
-    //
-    //     // update note files
-    //     for ( const path of filePaths ) {
-    //         const newState = filterIndexByPath( path, instanceIndex );
-    //         const newHash = hashFileTaskState( newState );
-    //         deleteMarks.delete( path )
-    //         if ( path in this.fileStates && this.fileStates[ path ].hash === newHash )
-    //             continue
-    //         const file = this.vault.getAbstractFileByPath( path ) as TFile;
-    //         this.fileStates[ file.path ] = {
-    //             hash: newHash,
-    //             status: CacheStatus.CLEAN,
-    //         }
-    //         const hash = await this.writeStateToFile( file, newState )
-    //
-    //         if ( hash !== newHash )
-    //             throw Error( `Something went wrong when hashing the state for ${file.path}` )
-    //
-    //     }
-    //     // update backlog
-    //     const backlog = await this.getBacklogFile();
-    //     deleteMarks.delete(backlog.path);
-    //     const backlogHash = hashFileTaskState( values( instanceIndex )
-    //         .filter( i => isPrimaryInstance( i ) && i.complete === false )
-    //         .reduce( ( idx, i ) => ({ ...idx, [ taskLocationStrFromInstance( i ) ]: i }), {} ) );
-    //     if ( !(backlog.path in this.fileStates) || this.fileStates[ backlog.path ].hash !== backlogHash ) {
-    //         this.fileStates[ backlog.path ] = {
-    //             hash: backlogHash,
-    //             status: CacheStatus.CLEAN
-    //         };
-    //         await this.writeIndexFile( backlog, { taskIndex, instanceIndex } );
-    //     }
-    //
-    //     const complete = await this.getCompletedFile();
-    //     deleteMarks.delete(complete.path);
-    //     const completeHash = hashFileTaskState( values( instanceIndex )
-    //         .filter( i => isPrimaryInstance( i ) && i.complete === true )
-    //         .reduce( ( idx, i ) => ({ ...idx, [ taskLocationStrFromInstance( i ) ]: i }), {} ) );
-    //     if ( !(complete.path in this.fileStates) || this.fileStates[ complete.path ].hash !== completeHash ) {
-    //         this.fileStates[ complete.path ] = {
-    //             hash: completeHash,
-    //             status: CacheStatus.CLEAN
-    //         };
-    //         await this.writeIndexFile( complete, { taskIndex, instanceIndex }, true );
-    //     }
-    //
-    //     [ ...deleteMarks ].map( path => this.vault.getAbstractFileByPath( path ) )
-    //         .map( async d => await this.deleteFile( d ) );
-    // }
 
     public async getInstanceIndexFromFile( file: TFile, cursorLine?: number ) {
         let state: TaskInstanceIndex;
@@ -355,8 +284,8 @@ export class TaskFileManager {
         const pathParts = file.path.split( '/' );
         if ( pathParts.length < 2 )
             return false;
-        const parent = pathParts[ pathParts.length - 2 ];
-        if ( parent !== this.tasksDirString )
+        const parent = file.parent;
+        if ( parent !== this.tasksDirectory )
             return false;
         const { name, id } = parseTaskFilename( file );
         if ( !(name && id) )
@@ -404,6 +333,8 @@ export class TaskFileManager {
         return (cache.listItems || []).filter( li => li.task )
             .reduce( ( instIdx, lic ) => {
                 const task = this.parser.parseLine( contentLines[ lic.position.start.line ] );
+                if ( !task )
+                    return instIdx;
                 const locStr = taskLocationStr( { filePath: file.path, position: lic.position, parent: lic.parent } );
                 return {
                     ...instIdx,
@@ -412,7 +343,7 @@ export class TaskFileManager {
                         primary: false,
                         filePath: file.path,
                         parent: lic.parent,
-                        position: {...lic.position}
+                        position: { ...lic.position }
                     }
                 }
             }, {} as TaskInstanceIndex )
@@ -422,7 +353,12 @@ export class TaskFileManager {
         return this.vault.getMarkdownFiles().filter( f => f.parent === this.tasksDirectory );
     }
 
-    public renderTaskInstance( instance: TaskInstance, taskIndex: TaskIndex ): string {
+    public renderTaskInstance(
+        instance: TaskInstance,
+        taskIndex: TaskIndex,
+        instanceIndex: TaskInstanceIndex,
+        links = false
+    ): string {
         let { useTab, tabSize } = getVaultConfig( this.vault );
         tabSize ||= 4;
         useTab ||= false;
@@ -437,9 +373,14 @@ export class TaskFileManager {
                 const text = this.mdCache.fileToLinktext( file, inst.filePath );
                 return `[[${text}#^${inst.id}|${inst.name}]]`
             } );
-        const parent = [ baseLine, ...taskLinks, `^${instance.id}` ].join( ' ' );
-        const pad = (useTab ? 1 : tabSize as number) * instance.position.start.col;
-        return parent.padStart( parent.length + pad, useTab ? '\t' : ' ' );
+        const instanceLine = [ baseLine, ...(links && taskLinks || []), `^${instance.id}` ].join( ' ' );
+        const colSize = useTab ? 1 : tabSize as number;
+        const parent = instance.parent > -1 && instanceIndex[ instanceIndexKey( instance.filePath, instance.parent ) ];
+        // for some reason, regardless of tabSize, Obsidian always has the first col as 2
+        // if that's the case, need to explicitly override it for proper formatting
+        const colFromParent = parent && Math.ceil( (parent.position.start.col || 0) / colSize ) * colSize + colSize || 0
+        const col = instance.position.start.col || (parent && colFromParent) || 0;
+        return instanceLine.padStart( instanceLine.length + Math.ceil( col / colSize ) * colSize, useTab ? '\t' : ' ' );
     }
 
     public async writeIndexFile(
@@ -447,47 +388,27 @@ export class TaskFileManager {
         instanceIndex: TaskInstanceIndex,
         taskIndex: TaskIndex
     ): Promise<string> {
-        const lines = values( instanceIndex )
-            .sort( ( a, b ) => a.position.start.line - b.position.start.line )
-            .reduce( ( acc: string[], t ) => [ ...acc, this.renderTaskInstance( t, taskIndex ) ], [] );
+        instanceIndex = filterIndexByPath( file.path, instanceIndex );
+        const lines = new Array(values(instanceIndex).length).fill('');
+        for (const inst of values(instanceIndex)) {
+            lines[inst.position.start.line] = this.renderTaskInstance(inst, taskIndex, instanceIndex, true);
+        }
         await this.vault.modify( file, lines.join( '\n' ) );
         return hashFileTaskState( instanceIndex );
     }
 
-    public async writeStateToFile( file: TFile, state: TaskInstanceIndex ) {
-        if ( Object.keys( state ).filter( s => taskLocFromMinStr( s ).filePath !== file.path ).length > 0 )
-            throw new Error( `State with invalid paths passed to ${file.path}.` )
-
+    public async writeStateToFile( file: TFile, { instanceIndex, taskIndex }: TaskStoreState ) {
+        const fileIndex = filterIndexByPath( file.path, instanceIndex );
         const contents = (await this.vault.read( file ));
         const contentLines = contents.split( '\n' );
-        const config = getVaultConfig( this.vault );
 
-        let useTab = false;
-        let tabSize = 4;
-        if ( config.hasOwnProperty( 'useTab' ) && typeof config.useTab === "boolean" )
-            useTab = config.useTab;
-        if ( config.hasOwnProperty( 'tabSize' ) && typeof config.tabSize === 'number' )
-            tabSize = config.tabSize;
-
-        for ( const locStr in state ) {
-            const lineTask = state[ locStr ];
+        for ( const locStr in fileIndex ) {
+            const lineTask = fileIndex[ locStr ];
             const lineNumber = lineTask.position.start.line;
-            const checklistItem = taskInstanceToChecklist( lineTask );
-            const parent = lineTask.parent > -1 && state[ instanceIndexKey( lineTask.filePath, lineTask.parent ) ];
-            const colSize = useTab ? 1 : tabSize;
-            const colFromParent = !parent ? 0 : parent.position.start.col ? parent.position.start.col + colSize : colSize;
-            // for some reason, regardless of tabSize, Obsidian always has the first col as 2
-            // if that's the case, need to explicitly override it for proper formatting
-            const col = lineTask.position.start.col >= 0 ?
-                        (!useTab && lineTask.position.start.col === 2) ?
-                            colSize :
-                            lineTask.position.start.col :
-                        colFromParent;
-            const char = useTab ? '\t' : ' ';
-            contentLines[ lineNumber ] = checklistItem.padStart( checklistItem.length + col, char );
+            contentLines[ lineNumber ] = this.renderTaskInstance( lineTask, taskIndex, fileIndex );
         }
         await this.vault.modify( file, contentLines.filter( cl => cl !== null ).join( '\n' ) )
-        return hashFileTaskState( state )
+        return hashFileTaskState( fileIndex )
     }
 
     public getTaskPath( task: Task ): string {
@@ -495,7 +416,7 @@ export class TaskFileManager {
     }
 
     public async deleteFile( file: TAbstractFile ) {
-        if (!file)
+        if ( !file )
             return;
         if ( file instanceof TFile ) {
             if ( this.isTaskFile( file ) )

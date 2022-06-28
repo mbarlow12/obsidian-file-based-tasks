@@ -181,7 +181,7 @@ export const taskToYamlObject = ( task: Task ): TaskYamlObject => {
         tags,
         dueDate,
         recurrence
-    } = task
+    } = task;
     return {
         type: TaskRecordType,
         id: id,
@@ -208,6 +208,8 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
         parent,
         primary
     } = inst;
+    if (isNaN(position.start.col))
+        throw new Error(`instance: ${inst.name} in ${inst.filePath} at ${position.start.line} has NaN column`);
     return {
         rawText,
         filePath,
@@ -261,7 +263,8 @@ export const parseTaskFilename = ( f: TFile ) => {
 
 export const taskToTaskFileContents = ( task: Task ): string => {
     const yamlObject = taskToYamlObject( task );
-    return `---\n${stringifyYaml( yamlObject )}---\n${task.description || ''}`;
+    const data = `---\n${stringifyYaml( yamlObject )}---\n${task.description || ''}`;
+    return data;
 }
 
 export const taskToJsonString = ( task: Task ): string => {
