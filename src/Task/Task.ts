@@ -1,6 +1,7 @@
 import { isEqual, keys, pick, values } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
+import { taskInstanceToChecklist } from '../Store/TaskStore';
 import { hash } from "../util/hash";
 import {
     emptyPosition,
@@ -49,6 +50,31 @@ export const isPrimaryInstance = ( inst: TaskInstance | PrimaryTaskInstance ): i
     return inst.primary
 }
 
+export const taskInstanceFromTask = (
+    filePath: string,
+    line: number,
+    task: Task
+): TaskInstance => {
+    const { name, complete, id, uid, tags, dueDate, recurrence, completedDate } = task;
+    const inst: TaskInstance = {
+        uid,
+        id,
+        name,
+        complete,
+        tags,
+        dueDate,
+        recurrence,
+        parent: -1,
+        filePath,
+        position: emptyPosition( line ),
+        completedDate,
+        rawText: '',
+        primary: false
+    };
+    inst.rawText = taskInstanceToChecklist(inst);
+    return inst;
+};
+
 export const isTask = ( t: TaskInstance | Task ): t is Task => (
     'created' in t &&
     'updated' in t &&
@@ -61,7 +87,7 @@ export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
         ...emptyTask(),
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
-        ...({ uid: taskIdToUid( inst.id ) || 0 }),
+        ...({ uid: inst.uid || taskIdToUid( inst.id ) || 0 }),
         ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated' )),
         instances: [ inst ]
     };
@@ -70,16 +96,18 @@ export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
 export const taskInstancesEqual = (
     a: TaskInstance,
     b: TaskInstance
-) => a.name === b.name &&
-    a.filePath === b.filePath &&
-    a.position.start.line === b.position.start.line &&
-    a.complete === b.complete &&
-    ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
-    ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid)) &&
-    isEqual((a.tags || []).sort(), (b.tags || []).sort()) &&
-    !(a.recurrence || b.recurrence) || isEqual(a.recurrence, b.recurrence) &&
-    a.dueDate === b.dueDate &&
-    a.completedDate === b.completedDate;
+) => {
+    return a.name === b.name &&
+        a.filePath === b.filePath &&
+        a.position.start.line === b.position.start.line &&
+        a.complete === b.complete &&
+        ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
+        ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid)) &&
+        isEqual( (a.tags || []).sort(), (b.tags || []).sort() ) &&
+        (!(a.recurrence || b.recurrence) || isEqual( a.recurrence, b.recurrence )) &&
+        a.dueDate === b.dueDate &&
+        a.completedDate === b.completedDate;
+}
 
 export const instancesLocationsEqual = (
     instA: TaskInstance,
@@ -206,7 +234,7 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
         ...(tags && tags.length && { tags }),
         ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
         ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
-    }
+    } as TaskInstance;
 }
 
 export const taskToBasename = ( task: TaskInstance | Task ) => `${task.name}_${task.id}`;

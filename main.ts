@@ -15,7 +15,8 @@ import { TaskEvents } from "./src/Events/TaskEvents";
 import { ActionType, IndexUpdateAction } from './src/Events/types';
 import { DEFAULT_TASK_MANAGER_SETTINGS } from './src/Settings';
 import { taskInstancesFromTask, TaskStore } from "./src/Store/TaskStore";
-import { instanceIndexKey, TaskInstance } from "./src/Task";
+import { TaskInstanceIndex } from './src/Store/types';
+import { instanceIndexKey, TaskInstance, taskLocationStr } from "./src/Task";
 import { CacheStatus, filterIndexByPath, hashFileTaskState, TaskFileManager } from "./src/TaskFileManager";
 import { TaskManagerSettings } from "./src/taskManagerSettings";
 import { TaskEditorSuggest } from './src/TaskSuggest';
@@ -83,7 +84,6 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.metadataCache.on( 'changed', this.handleCacheChanged.bind( this ) ) );
         const resolvedRef = this.app.metadataCache.on( 'resolve', debounce( async () => {
             if ( !this.vaultLoaded ) {
-                console.log( 'vault not loaded on resolve' );
                 await this.processVault();
                 this.vaultLoaded = true;
             }
@@ -92,12 +92,11 @@ export default class ObsidianTaskManager extends Plugin {
             }
         }, 500, true ) );
         this.registerEvent( this.app.workspace.on( 'file-open', async ( file ) => {
-            if ( !file )
+            if ( !file || this.ignorePath( file.path ) )
                 return;
 
-            console.log( `${file.path} just opened` );
             this.activeFile = file;
-            const {instanceIndex, taskIndex} = this.taskStore.getState();
+            const { instanceIndex, taskIndex } = this.taskStore.getState();
             const storedIndex = filterIndexByPath( file.path, instanceIndex );
             const index = await this.taskFileManager.readMarkdownFile( file );
             const hash = hashFileTaskState( index );
@@ -105,16 +104,18 @@ export default class ObsidianTaskManager extends Plugin {
 
             if ( storedHash !== hash ) {
                 this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.DIRTY, hash: storedHash } );
-                if ( this.settings.indexFiles.has( file.path) )
-                    await this.taskFileManager.writeIndexFile(file, instanceIndex, taskIndex);
+                if ( this.settings.indexFiles.has( file.path ) )
+                    await this.taskFileManager.writeIndexFile( file, instanceIndex, taskIndex );
                 else
                     await this.taskFileManager.writeStateToFile( file, filterIndexByPath( file.path, storedIndex ) );
             }
             else
                 this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.CLEAN, hash: storedHash } );
-
-            console.log( hashFileTaskState( index ) );
         } ) );
+    }
+
+    private ignorePath( filePath: string ) {
+        return this.settings.ignoredPaths.filter( ignored => filePath.includes( ignored ) ).length > 0;
     }
 
     private async handleCacheChanged( file: TFile, data: string, cache: CachedMetadata ) {
@@ -126,21 +127,22 @@ export default class ObsidianTaskManager extends Plugin {
             }
         }
 
-        if ( file !== this.activeFile )
+        if ( file !== this.activeFile || this.ignorePath( file.path ) )
             return
 
         if ( !this.taskFileManager.testAndSetFileStatus( file.path, CacheStatus.CLEAN ) ) {
-            console.log( `dirty path ${file.path} changed, setting cache to clean` );
             return;
         }
 
-        console.log( `clean ${file.path} changed, checking state` );
         const { line } = this.app.workspace.getActiveViewOfType( MarkdownView ).editor.getCursor();
         const fileInstanceIndex = await this.taskFileManager.getInstanceIndexFromFile( file );
-        if ( fileInstanceIndex !== null ) {
-            const cursorLineKey = instanceIndexKey( file.path, line );
-            if ( cursorLineKey in fileInstanceIndex && fileInstanceIndex[ cursorLineKey ].uid === 0 )
-                delete fileInstanceIndex[ instanceIndexKey( file.path, line ) ]
+        const cursorLineKey = instanceIndexKey( file.path, line );
+        if ( cursorLineKey in fileInstanceIndex && fileInstanceIndex[ cursorLineKey ].uid === 0 )
+            delete fileInstanceIndex[ instanceIndexKey( file.path, line ) ]
+        const existingFileInstanceIndex: TaskInstanceIndex = values( this.taskStore.getState().instanceIndex )
+            .filter( i => i.filePath === file.path )
+            .reduce( ( idx, i ) => ({ ...idx, [ taskLocationStr( i ) ]: i }), {} );
+        if ( hashFileTaskState( fileInstanceIndex ) !== hashFileTaskState( existingFileInstanceIndex ) ) {
             if ( !(file.path in this.changeDebouncers) )
                 this.changeDebouncers[ file.path ] = debounce(
                     this.taskEvents.triggerFileCacheUpdate.bind( this.taskEvents ),
@@ -203,7 +205,7 @@ export default class ObsidianTaskManager extends Plugin {
         const taskInstances = await this.processTasksDirectory();
         let fileTaskInstances: TaskInstance[] = [];
         for ( const file of this.app.vault.getMarkdownFiles() ) {
-            if ( file.path.includes( this.settings.taskDirectoryName ) )
+            if ( file.path.includes( this.settings.taskDirectoryName ) || this.ignorePath( file.path ) )
                 continue;
             const fileInstanceIdx = await this.taskFileManager.readMarkdownFile( file );
             fileTaskInstances = [

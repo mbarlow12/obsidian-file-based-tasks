@@ -10,7 +10,8 @@ export interface TaskManagerSettings {
     taskPrefix?: string;
     parserSettings: ParserSettings;
     fileManagerSettings: FileManagerSettings;
-    indexFiles?: Map<string, TaskQuery>
+    indexFiles?: Map<string, TaskQuery>;
+    ignoredPaths?: string[];
 }
 
 export enum Operator {

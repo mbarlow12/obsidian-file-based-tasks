@@ -136,7 +136,7 @@ export const createTestTaskInstance = (
     position,
     rawText: `${new Array( indent * 2 )
         .fill( ' ' ).join( '' )}- [${complete ? 'x' : ' '}] task with uid ${uid}`,
-});
+} as TaskInstance);
 export const createTestPrimaryTaskInstance = (
     uid: number,
     position: Pos,

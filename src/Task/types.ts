@@ -11,7 +11,9 @@ export type Char =
 
 export type NonEmptyString = `${Char}${string}`
 
-export interface TaskInstance extends ListItemCache {
+type ExListItemCache = ListItemCache & {primary: boolean}
+
+interface TaskInstanceBase extends ListItemCache {
     uid?: number;
     name: string;
     complete: boolean;
@@ -25,11 +27,17 @@ export interface TaskInstance extends ListItemCache {
     completedDate?: Date;
 }
 
-export type PrimaryTaskInstance = TaskInstance & {
+export interface ITaskInstance extends TaskInstanceBase {
+    primary: false;
+}
+
+export interface PrimaryTaskInstance extends TaskInstanceBase {
     primary: true,
     created: Date,
     updated: Date,
 }
+
+export type TaskInstance = ITaskInstance | PrimaryTaskInstance;
 
 export type TaskLocation = Pick<TaskInstance, 'filePath'|'position'|'parent'>
 
