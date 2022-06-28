@@ -7,6 +7,7 @@
     "dev": "rollup --config rollup.config.js -w",
     "build": "rollup --config rollup.config.js --environment BUILD:production && ./dist.js",
     "build:wp": "webpack --progress --color --mode=development",
+    "build:wpp": "webpack --progress --color --mode=production",
     "build:eb": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "test": "jest"
   },

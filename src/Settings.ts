@@ -9,7 +9,7 @@ export const DEFAULT_TASK_MANAGER_SETTINGS: TaskManagerSettings = {
     taskPrefix: '#task',
     parserSettings: DEFAULT_PARSER_SETTINGS,
     fileManagerSettings: DEFAULT_FILE_MANAGER_SETTINGS,
-    ignoredPaths: ['daily', 'templates'],
+    ignoredPaths: ['templates'],
     indexFiles: new Map( [
         [
             'Backlog.md',
