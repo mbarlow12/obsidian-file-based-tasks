@@ -495,6 +495,8 @@ export class TaskFileManager {
     }
 
     public async deleteFile( file: TAbstractFile ) {
+        if (!file)
+            return;
         if ( file instanceof TFile ) {
             if ( this.isTaskFile( file ) )
                 await this.vault.delete( file )
