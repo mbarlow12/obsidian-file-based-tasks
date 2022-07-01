@@ -1,4 +1,4 @@
-import { isEqual, omit, pick, values } from 'lodash';
+import { isEqual, omit, pick } from 'lodash';
 import { EventRef } from "obsidian";
 import { RRule } from "rrule";
 import { TaskEvents } from "../Events/TaskEvents";
@@ -11,7 +11,6 @@ import {
     TaskLocation,
     taskLocation,
     taskLocationFromInstance,
-    taskLocationStr,
     taskToFilename,
 } from "../Task";
 import {
@@ -20,7 +19,6 @@ import {
     isTask,
     taskIdToUid,
     taskInstanceFromTask,
-    taskInstancesEqual,
     taskUidToId
 } from "../Task/Task";
 import { isQueryBlock, Operator, TaskManagerSettings, TaskQuery, TaskQueryBlock } from '../taskManagerSettings';
@@ -101,7 +99,7 @@ export const createTask = (
     const instances: TaskInstance[] = [ createPrimaryInstance( task ) ];
     if ( !task.filePath.includes( task.name ) )
         instances.push( task )
-    return [...instanceIndex.values(), ...instances];
+    return [ ...instanceIndex.values(), ...instances ];
 };
 
 export const deleteTaskInstanceFile = (
@@ -682,43 +680,41 @@ export class TaskStore {
     }
 
     initialize( instances: TaskInstance[] ) {
-        this.nextId = Math.max( Math.max( ...instances.map( ( { uid } ) => uid ) ) + 1, this.nextId );
+        const instanceIndex: TaskInstanceIndex = new Map();
+        this.nextId = Math.max( Math.max( ...instances.map( ( inst ) => {
+            instanceIndex.set(taskLocationFromInstance(inst), inst);
+            return inst.uid
+        } ) ) + 1, this.nextId );
         validateInstanceIndex( instances );
-        const uniqueInstances = instances.filter( (
-            inst,
-            i,
-            insts
-        ) => insts.findIndex( ( fInst ) => taskInstancesEqual( fInst, inst ) ) === i );
-        const [ withIds, noIds ] = uniqueInstances.reduce( ( [ wi, ni ]: TaskInstance[][], i ) => [
-            [ ...wi, ...(i.uid > 0 ? [ i ] : []) ],
-            [ ...ni, ...(i.uid === 0 ? [ i ] : []) ]
-        ], [ [], [] ] );
-        const idTaskInstanceIndex = withIds.reduce( ( idx, inst ) => ({
-            ...idx,
-            [ taskLocationStr( inst ) ]: inst
-        }), {} as TaskInstanceIndex );
-
-        for ( let i = 0; i < noIds.length; i++ ) {
-            const noIdInst = noIds[ i ];
-            const matching = values( idTaskInstanceIndex )
-                .filter( widInst => this.taskInstancesAreSameTask( noIdInst, widInst, idTaskInstanceIndex ) );
-            let uid = 0;
-            if ( matching.length > 0 ) {
-                const match = matching[ 0 ];
-                uid = match.uid;
+        instances = instances.sort( INSTANCE_COMPARATOR );
+        const nameMap: Map<string, TaskLocation[]> = instances.reduce( (
+            np: Map<string, TaskLocation[]>,
+            i
+        ) => np.set( i.name, [ ...(np.get( i.name ) || []), taskLocationFromInstance( i ) ] ), new Map() )
+        for ( let i = 0; i < instances.length; i++ ) {
+            const inst = instances[ i ];
+            if ( inst.uid === 0 ) {
+                const match = nameMap.get(inst.name).filter(({line, filePath}) => {
+                    const candidate = this.findInstanceByLocation(filePath, line, instances);
+                    return this.taskInstancesAreSameTask(inst, candidate, instanceIndex)
+                });
+                if (match.length > 0) {
+                    inst.uid = this.findInstanceByLocation(match[0].filePath, match[0].line, instances).uid;
+                }
+                else
+                    inst.uid = this.nextId++;
+                inst.id = taskUidToId(inst.uid);
             }
             else {
-                uid = this.nextId++;
-            }
-            idTaskInstanceIndex[ taskLocationStr( noIdInst ) ] = { ...noIdInst, uid, id: taskUidToId( uid ) };
-        }
 
-        this.state = this.buildStateFromInstances( values( idTaskInstanceIndex ) );
-        this.notifySubscribers();
+            }
+        }
+        // this.state = this.buildStateFromInstances( values( idTaskInstanceIndex ) );
+        // this.notifySubscribers();
     }
 
     buildStateFromInstances( instances: TaskInstance[] ): TaskStoreState {
-        return { taskIndex: new Map(), instanceIndex: new Map()};
+        return { taskIndex: new Map(), instanceIndex: new Map() };
     }
 
     private findParent( instance: TaskInstance, instanceList: TaskInstance[] = this.taskInstances ): TaskInstance {
@@ -760,9 +756,9 @@ export const getTaskQueryFilter = ( taskQuery?: TaskQuery ): ( t: Task ) => bool
 export const filterTasksByQuery = ( tasks: TaskIndex, query?: TaskQuery ): TaskIndex => {
     const filtered: TaskIndex = new Map();
     for ( const [ uid, task ] of tasks.entries() ) {
-        if (isQueryBlock( query ))
-            if ( queryTask(task, query))
-                filtered.set(uid, task);
+        if ( isQueryBlock( query ) )
+            if ( queryTask( task, query ) )
+                filtered.set( uid, task );
     }
     return filtered;
 }
