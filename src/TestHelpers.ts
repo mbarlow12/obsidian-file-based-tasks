@@ -9,7 +9,7 @@ import {
     Task,
     TaskInstance,
     taskLocationStrFromInstance,
-    taskLocFromStr
+    taskLocFromPosStr
 } from './Task';
 import { isPrimaryInstance, taskUidToId } from './Task/Task';
 import data from './TestData'
@@ -171,7 +171,7 @@ export const createTestInstanceIndex = (
 ): TaskInstanceIndex => {
     const insts = [...fileMap.keys()].reduce((instList, uid) => {
         const fileInsts = fileMap.get(uid).map(locstr => {
-            const {filePath, position, parent} = taskLocFromStr(locstr);
+            const {filePath, position, parent} = taskLocFromPosStr(locstr);
             return createTestTaskInstance(uid, position, parent, filePath);
         })
         return instList.concat(fileInsts)

@@ -1,7 +1,9 @@
 import * as chrono from "chrono-node";
 import { RRule } from "rrule";
-import { TaskInstance } from '../Task';
+import { ParsedTask } from '../Task';
 import { taskIdToUid } from "../Task/Task";
+
+export const INVALID_NAME_CHARS = /[\\/|^#\][]/g;
 
 export interface ParserSettings {
   tokens: {
@@ -13,8 +15,6 @@ export interface ParserSettings {
   prefix: string;
 }
 
-// (\-|\*) \[ \] (?<taskInfo>[^\^\r\n]+)
-// pattern = -/* [x] [something]
 export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
   tokens: {
     tag: '#',
@@ -24,8 +24,6 @@ export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
   },
   prefix: ''
 };
-const strictPattern = /^\s*[-*] \[(?<complete>\s|x)?]\s+(?<taskLine>(\d|\w)[^^]*)(?:[ \t]\^(?<id>[\w\d]+))?$/;
-export type ParsedTask = Pick<TaskInstance, 'id'|'name'|'tags'|'recurrence'|'dueDate'|'complete'|'uid'|'rawText'|'links'>
 
 // const parseTags = (tags: string): string[] => [];
 const parseRecurrence = (recurrence: string): RRule | null => {
@@ -38,25 +36,6 @@ const parseRecurrence = (recurrence: string): RRule | null => {
   }
 }
 const parseDueDate = (dueDate: string): Date | null => chrono.parseDate(dueDate);
-
-// export function parseTaskString(line: string): ParsedTask | null {
-//   const match = line.match(strictPattern);
-//   if (match) {
-//     const {complete, taskLine, id: id, tags, recurrence, dueDate} = match.groups;
-//     return {
-//       uid: taskIdToUid(id),
-//       complete: complete === 'x',
-//       name: taskLine.trim(),
-//       id: id || '',
-//       rawText: line,
-//       ...(tags && {tags: parseTags(tags) }),
-//       ...(recurrence &&{recurrence: parseRecurrence(recurrence)}),
-//       ...(dueDate && {dueDate: new Date(dueDate)})
-//     };
-//   }
-//   else
-//     return null;
-// }
 
 export class TaskParser {
   private settings: ParserSettings;
@@ -84,6 +63,7 @@ export class TaskParser {
         complete: complete === 'x',
         name: '',
         rawText: line,
+        primary: false,
       }
       const tags = taskLine.match(this.tagRegex) || [];
       if (tags.length)
@@ -103,7 +83,9 @@ export class TaskParser {
           .replace(TaskParser.ID_REGEX, '')
           .replace(this.recurrenceRegex, '')
           .replace(this.dueDateRegex, '')
-          .replace(TaskParser.LINK_REGEX, '').trim();
+          .replace(TaskParser.LINK_REGEX, '')
+          .replace(INVALID_NAME_CHARS, '_')
+          .replace(/(\s+_|_\s+|\s+_\s+)/g, ' ').trim();
       return pTask;
     }
 

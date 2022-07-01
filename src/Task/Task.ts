@@ -1,11 +1,11 @@
-import { isEqual, keys, pick, values } from 'lodash';
+import { isEqual, pick } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
-import { taskInstanceToChecklist } from '../Store/TaskStore';
+import { filterUnique, findInstanceParent, taskInstanceToChecklist } from '../Store/TaskStore';
 import { hash } from "../util/hash";
 import {
     emptyPosition,
-    posFromStr,
+    parsePosStr,
     posStr,
     PrimaryTaskInstance,
     Task,
@@ -15,7 +15,7 @@ import {
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
 
-const taskFileNameRegex = /^(?<name>\w.*)(?=_[\w\d]+)(?<id>[\w\d]+)(?:.md)?/;
+const taskFileNameRegex = /^(?<name>\w.*)(?=\([\w\d]+\))(?<id>[\w\d]+)(?:.md)?/;
 
 export const emptyTaskInstance = (): TaskInstance => {
     return {
@@ -71,7 +71,7 @@ export const taskInstanceFromTask = (
         rawText: '',
         primary: false
     };
-    inst.rawText = taskInstanceToChecklist(inst);
+    inst.rawText = taskInstanceToChecklist( inst );
     return inst;
 };
 
@@ -82,6 +82,28 @@ export const isTask = ( t: TaskInstance | Task ): t is Task => (
     'parentUids' in t &&
     'childUids' in t
 );
+
+export const createTaskFromPrimary = ( primary: PrimaryTaskInstance ): Task => {
+    const {
+        name, uid, completedDate, updated, created, complete, dueDate, recurrence, tags
+    } = primary;
+    return {
+        name,
+        uid,
+        id: taskUidToId(uid),
+        complete,
+        updated,
+        created,
+        instances: [ primary ],
+        completedDate,
+        dueDate,
+        recurrence,
+        tags,
+        childUids: [],
+        parentUids: [],
+        description: ''
+    }
+};
 
 export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
@@ -100,11 +122,9 @@ export const taskInstancesEqual = (
     return a.name === b.name &&
         a.filePath === b.filePath &&
         a.position.start.line === b.position.start.line &&
-        a.complete === b.complete &&
-        ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
         ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid)) &&
-        isEqual( (a.tags || []).sort(), (b.tags || []).sort() ) &&
-        (!(a.recurrence || b.recurrence) || isEqual( a.recurrence, b.recurrence )) &&
+        (a.tags || []).sort().join( ' ' ) === (b.tags || []).sort().join( ' ' ) &&
+        (a.recurrence === b.recurrence || a.recurrence.toString() === b.recurrence.toString()) &&
         a.dueDate === b.dueDate &&
         a.completedDate === b.completedDate;
 }
@@ -118,21 +138,12 @@ export const instancesLocationsEqual = (
 );
 
 
-export const flattenInstanceIndex = (
-    idx: Record<string, Record<number, TaskInstance>>
-): TaskInstance[] => keys( idx )
-    .reduce( ( flattened, path ) => [
-        ...flattened,
-        ...values( idx[ path ] )
-    ], [] as TaskInstance[] )
-    .filter( ( inst, i, arr ) => arr.findIndex( check => instancesLocationsEqual( inst, check ) ) === i )
-
 export const taskUidToId = ( uid: number ) => uid.toString( 16 );
 
 export const taskIdToUid = ( id: string ) => isNaN( Number.parseInt( id, 16 ) ) ? 0 : Number.parseInt( id, 16 );
 
 export const baseTasksSame = ( tA: TaskInstance, tB: TaskInstance ): boolean => {
-    return tA.id === tB.id && tA.name == tB.name && tA.complete === tB.complete;
+    return tA.uid === tB.uid && tA.name == tB.name && tA.complete === tB.complete;
 }
 
 export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
@@ -148,7 +159,8 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         uid,
         recurrence,
         tags,
-        dueDate
+        dueDate,
+        completedDate,
     } = yaml;
     return {
         uid: Number.parseInt( uid ),
@@ -163,6 +175,7 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         ...(tags && tags.length && { tags }),
         ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
         ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
+        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
         description: ''
     };
 }
@@ -208,8 +221,8 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
         parent,
         primary
     } = inst;
-    if (isNaN(position.start.col))
-        throw new Error(`instance: ${inst.name} in ${inst.filePath} at ${position.start.line} has NaN column`);
+    if ( isNaN( position.start.col ) )
+        throw new Error( `instance: ${inst.name} in ${inst.filePath} at ${position.start.line} has NaN column` );
     return {
         rawText,
         filePath,
@@ -221,8 +234,8 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
 }
 
 export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskInstanceYamlObject ): TaskInstance => {
-    const { id, name, complete, dueDate, recurrence, tags } = tYaml
-    const { rawText, filePath, position, parent, primary } = yaml;
+    const { id, name, complete, dueDate, recurrence, tags, completedDate } = tYaml
+    const { rawText, filePath, position, parent, primary, links } = yaml;
     return {
         id,
         name,
@@ -230,12 +243,14 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
         filePath,
         uid: taskIdToUid( id ),
         complete: complete === 'true',
-        position: posFromStr( position ),
+        position: parsePosStr( position ),
         parent: Number.parseInt( parent ),
         primary: primary === 'true',
         ...(tags && tags.length && { tags }),
         ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
         ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
+        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
+        ...(links && links.length && { links })
     } as TaskInstance;
 }
 
@@ -275,11 +290,11 @@ export const taskToJsonString = ( task: Task ): string => {
         name, complete, created: `${created}`
     };
     ret.locations = instances
-        .map( ( { filePath, position, parent } ) => ({ filePath, position, parent }) )
+        .map( ( { filePath, position: { start: { line } } } ) => ({ filePath, line }) )
         .sort( ( a, b ) => {
             const comp = a.filePath.localeCompare( b.filePath );
             if ( comp === 0 ) {
-                return a.position.start.line - b.position.start.line;
+                return a.line - b.line;
             }
             return comp;
         } );
@@ -326,3 +341,43 @@ export const compareArrays = <T>( first: T[], second: T[] ): [ T[], T[] ] => {
     }
     return [ Array.from( firstItems ), Array.from( secondItems ) ];
 };
+
+export const taskInstancesAreSameTask = (
+    instA: TaskInstance,
+    instB: TaskInstance,
+    allInstances: TaskInstance[],
+) => {
+    if ( instA.uid === 0 || instB.uid === 0 ) {
+        if (
+            instA.name !== instB.name ||
+            !isEqual( instA.tags?.sort(), instB.tags?.sort() ) ||
+            instA.recurrence.toString() !== instB.recurrence.toString() ||
+            instA.dueDate !== instB.dueDate ||
+            (-1 in [ instA.parent, instB.parent ] && instA.parent !== instB.parent)
+        )
+            return false;
+
+        const parentA = findInstanceParent( instA, allInstances );
+        const parentB = findInstanceParent( instB, allInstances );
+        if ( (parentA && parentB) && !taskInstancesAreSameTask( parentA, parentB, allInstances ) )
+            return false;
+
+        const [ childrenA, childrenB ] = allInstances.reduce( ( [ a, b ]: string[][], inst ) => {
+            if ( inst.filePath === instA.filePath && inst.parent === instA.position.start.line )
+                return [ [ ...a, inst.name ], b ];
+            if ( inst.filePath === instB.filePath && inst.parent === instB.position.start.line )
+                return [ a, [ ...b, inst.name ] ];
+            return [ a, b ];
+        }, [ [], [] ] ).map( childNames => filterUnique( childNames ) );
+        if (
+            (childrenA.length !== childrenB.length) ||
+            childrenA.filter( ca => !(ca in childrenB) ).length !== 0 ||
+            childrenB.filter( cb => !(cb in childrenA) ).length !== 0
+        )
+            return false;
+    }
+    else {
+        return instA.uid === instB.uid;
+    }
+    return true;
+}

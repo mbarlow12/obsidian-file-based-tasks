@@ -1,4 +1,3 @@
-import { TaskInstanceIndex } from '../Store/types';
 import { Task, TaskInstance, TaskUID } from "../Task";
 
 export enum EventType {
@@ -44,7 +43,7 @@ export interface DeleteTasks {
 
 export interface ModifyFileTasks {
     type: ActionType.MODIFY_FILE_TASKS,
-    data: TaskInstanceIndex,
+    data: TaskInstance[],
 }
 
 export interface DeleteFile {

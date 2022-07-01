@@ -19,11 +19,9 @@ import {
     getTaskFromYaml,
     hashTask,
     instanceIndexKey,
-    parseTaskFilename,
     Task,
     TaskInstance,
     taskLocationStr,
-    taskLocationStrFromInstance,
     TaskRecordType,
     taskToFilename,
     taskToTaskFileContents,
@@ -44,9 +42,8 @@ export const DEFAULT_FILE_MANAGER_SETTINGS: FileManagerSettings = {
     completedFileName: 'Complete.md'
 }
 
-export const hashFileTaskState = ( state: TaskInstanceIndex ): string =>
-    values( state )
-        .sort( ( tA, tB ) => tA.position.start.line - tB.position.start.line )
+export const hashInstanceList = ( instances: TaskInstance[] ): string =>
+    instances.sort( ( tA, tB ) => tA.position.start.line - tB.position.start.line )
         .map( hashTaskInstance )
         .join( '\n' );
 
@@ -188,7 +185,7 @@ export class TaskFileManager {
         // update note files
         for ( const path of filePaths ) {
             const newFileInstanceIndex = filterIndexByPath( path, instanceIndex );
-            const newHash = hashFileTaskState( newFileInstanceIndex );
+            const newHash = hashInstanceList( newFileInstanceIndex );
             if ( path in this.fileStates && this.fileStates[ path ].hash === newHash )
                 continue
             let file = this.vault.getAbstractFileByPath( path ) as TFile;
@@ -218,29 +215,21 @@ export class TaskFileManager {
         }
     }
 
-    public async getInstanceIndexFromFile( file: TFile, cursorLine?: number ) {
-        let state: TaskInstanceIndex;
+    public async getInstanceIndexFromFile( file: TFile, cache: CachedMetadata, data: string ) {
+        let instances: TaskInstance[] = [];
         if ( this.isTaskFile( file ) ) {
-            const idxTask = await this.readTaskFile( file );
-            state = taskInstancesFromTask( idxTask ).reduce( ( idx, inst ) => ({
-                ...idx,
-                [ taskLocationStrFromInstance( inst ) ]: inst
-            }), {} );
+            const idxTask = this.readTaskFile( file, cache, data );
+            instances = taskInstancesFromTask( idxTask );
         }
         else {
-            state = await this.readMarkdownFile( file )
-            if ( cursorLine ) {
-                const cursorKey = instanceIndexKey( file.path, cursorLine );
-                if ( cursorKey in state && state[ cursorKey ].uid === 0 )
-                    delete state[ cursorKey ];
-            }
+            instances = this.getFileInstances( file, cache, data );
         }
-        const newHash = hashFileTaskState( state );
+        const newHash = hashInstanceList( instances );
         this.fileStates[ file.path ] = {
             ...(this.fileStates[ file.path ] || { status: CacheStatus.CLEAN, hash: null }),
             hash: newHash
         };
-        return state;
+        return instances;
     }
 
     public get tasksDirectory() {
@@ -280,24 +269,11 @@ export class TaskFileManager {
         }
     }
 
-    public isTaskFile( file: TFile ): boolean {
-        const pathParts = file.path.split( '/' );
-        if ( pathParts.length < 2 )
-            return false;
-        const parent = file.parent;
-        if ( parent !== this.tasksDirectory )
-            return false;
-        const { name, id } = parseTaskFilename( file );
-        if ( !(name && id) )
-            return false;
-        const cache = this.mdCache.getFileCache( file );
-        if ( cache ) {
-            return (
-                cache.frontmatter && cache.frontmatter.type &&
-                cache.frontmatter.type === TaskRecordType
-            );
-        }
-        return true;
+    public isTaskFile( file: TFile, cache?: CachedMetadata ): boolean {
+        return file.parent === this.tasksDirectory &&
+            cache?.frontmatter &&
+            cache.frontmatter.type &&
+            cache.frontmatter.type === TaskRecordType;
     }
 
     private static taskYamlFromFrontmatter( cfm: FrontMatterCache ): TaskYamlObject {
@@ -309,44 +285,37 @@ export class TaskFileManager {
         } as unknown as TaskYamlObject
     }
 
-    public async readTaskFile( file: TFile ): Promise<Task> {
-        const cache = this.mdCache.getFileCache( file );
+    public readTaskFile( file: TFile, cache: CachedMetadata, data: string ): Task {
         const taskYml: TaskYamlObject = TaskFileManager.taskYamlFromFrontmatter( cache.frontmatter )
         const task = getTaskFromYaml( taskYml );
         task.name = task.name ?? file.basename;
         const contentStart = cache.frontmatter.position.end.line + 1;
-        task.description = await this.vault.read( file )
-            .then( data => data.split( '\n' ).slice( contentStart ) )
-            .then( lines => lines.join( '\n' ) );
+        task.description = data.split( '\n' ).slice( contentStart ).join( '\n' );
         return task;
     }
 
-    public async readMarkdownFile( file: TFile ): Promise<TaskInstanceIndex> {
+    public async readMarkdownFile( file: TFile ): Promise<TaskInstance[]> {
         const cache = this.mdCache.getFileCache( file );
         const contents = await this.vault.read( file );
-        return this.getFileInstanceIndex( file, cache, contents );
+        return this.getFileInstances( file, cache, contents );
     }
 
-    public getFileInstanceIndex( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex {
+    public getFileInstances( file: TFile, cache: CachedMetadata, contents: string ): TaskInstance[] {
         const contentLines = contents.split( /\r?\n/ );
 
         return (cache.listItems || []).filter( li => li.task )
-            .reduce( ( instIdx, lic ) => {
+            .reduce( ( list, lic ) => {
                 const task = this.parser.parseLine( contentLines[ lic.position.start.line ] );
                 if ( !task )
-                    return instIdx;
-                const locStr = taskLocationStr( { filePath: file.path, position: lic.position, parent: lic.parent } );
-                return {
-                    ...instIdx,
-                    [ locStr ]: {
-                        ...task,
-                        primary: false,
-                        filePath: file.path,
-                        parent: lic.parent,
-                        position: { ...lic.position }
-                    }
-                }
-            }, {} as TaskInstanceIndex )
+                    return list;
+                return list.concat( {
+                    ...task,
+                    primary: false,
+                    filePath: file.path,
+                    parent: lic.parent,
+                    position: { ...lic.position }
+                } );
+            }, [] as TaskInstance[] )
     }
 
     public async getTaskFiles() {
@@ -389,12 +358,12 @@ export class TaskFileManager {
         taskIndex: TaskIndex
     ): Promise<string> {
         instanceIndex = filterIndexByPath( file.path, instanceIndex );
-        const lines = new Array(values(instanceIndex).length).fill('');
-        for (const inst of values(instanceIndex)) {
-            lines[inst.position.start.line] = this.renderTaskInstance(inst, taskIndex, instanceIndex, true);
+        const lines = new Array( values( instanceIndex ).length ).fill( '' );
+        for ( const inst of values( instanceIndex ) ) {
+            lines[ inst.position.start.line ] = this.renderTaskInstance( inst, taskIndex, instanceIndex, true );
         }
         await this.vault.modify( file, lines.join( '\n' ) );
-        return hashFileTaskState( instanceIndex );
+        return hashInstanceList( instanceIndex );
     }
 
     public async writeStateToFile( file: TFile, { instanceIndex, taskIndex }: TaskStoreState ) {
@@ -408,7 +377,7 @@ export class TaskFileManager {
             contentLines[ lineNumber ] = this.renderTaskInstance( lineTask, taskIndex, fileIndex );
         }
         await this.vault.modify( file, contentLines.filter( cl => cl !== null ).join( '\n' ) )
-        return hashFileTaskState( fileIndex )
+        return hashInstanceList( fileIndex )
     }
 
     public getTaskPath( task: Task ): string {

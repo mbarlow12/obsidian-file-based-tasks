@@ -1,4 +1,5 @@
-import { ParsedTask, TaskParser } from './TaskParser';
+import { ParsedTask } from '../Task';
+import { TaskParser } from './TaskParser';
 
 /**
  * TODO invalid cases and handle reformatting

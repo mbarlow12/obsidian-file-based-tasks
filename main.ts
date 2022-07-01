@@ -9,32 +9,41 @@ import {
     Plugin,
     PluginManifest,
     TAbstractFile,
-    TFile,
-    TFolder
+    TFile
 } from 'obsidian';
 import { TaskEvents } from "./src/Events/TaskEvents";
 import { ActionType, IndexUpdateAction } from './src/Events/types';
 import { TaskParser } from './src/Parser/TaskParser';
 import { DEFAULT_TASK_MANAGER_SETTINGS } from './src/Settings';
 import { taskInstancesFromTask, TaskStore } from "./src/Store/TaskStore";
-import { TaskInstanceIndex } from './src/Store/types';
-import { instanceIndexKey, TaskInstance, taskLocationStr } from "./src/Task";
+import { TaskIndex, TaskInstanceIndex } from './src/Store/types';
+import { TaskInstance, taskLocationStr } from "./src/Task";
 import { taskIdToUid } from './src/Task/Task';
-import { CacheStatus, filterIndexByPath, hashFileTaskState, TaskFileManager } from "./src/TaskFileManager";
+import { CacheStatus, filterIndexByPath, hashInstanceList, TaskFileManager } from "./src/TaskFileManager";
 import { TaskManagerSettings } from "./src/taskManagerSettings";
 import { TaskEditorSuggest } from './src/TaskSuggest';
+
+type TaskState = {
+    readonly taskIndex: TaskIndex;
+    readonly taskInstanceIndex: TaskInstanceIndex;
+}
 
 export default class ObsidianTaskManager extends Plugin {
     settings: TaskManagerSettings;
     taskStore: TaskStore;
     taskFileManager: TaskFileManager;
     taskSuggest: TaskEditorSuggest;
+    private instances: TaskInstance[];
+    private state: TaskState;
+    private fileStates: Map<string, boolean>;
+    private parser: TaskParser;
     private _activeFile: TFile;
     private vaultLoaded = false;
     private initialized = false;
     private taskEvents: TaskEvents;
     private changeDebouncers: Record<string, Debouncer<[ IndexUpdateAction ]>>;
     private eventRefs: Record<string, EventRef> = {};
+    private nextId = 100000;
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
@@ -49,10 +58,11 @@ export default class ObsidianTaskManager extends Plugin {
                 this.taskEvents = new TaskEvents( this.app.workspace );
                 this.taskStore = new TaskStore( this.taskEvents, this.settings );
                 this.taskFileManager = new TaskFileManager( this.app.vault, this.app.metadataCache, this.taskEvents )
+                this.parser = new TaskParser();
                 await this.loadSettings();
-                await this.registerEvents();
                 if ( !this.vaultLoaded )
                     await this.processVault();
+                await this.registerEvents();
                 // this.taskSuggest = new TaskEditorSuggest( app, this.taskEvents, this.taskStore.getState() );
                 // this.registerEditorSuggest(this.taskSuggest);
                 this.changeDebouncers = this.changeDebouncers || {};
@@ -69,15 +79,26 @@ export default class ObsidianTaskManager extends Plugin {
         return this._activeFile;
     }
 
+    private isFileReady( file: TFile ) {
+        if ( !this.fileStates.has( file.path ) )
+            this.fileStates.set( file.path, false );
+        return this.fileStates.get( file.path );
+    }
+
+    private setFileReady( file: TFile, ready: boolean ) {
+        this.fileStates.set( file.path, ready );
+    }
+
     onunload() {
         this.taskStore?.unload();
         this.taskSuggest?.unsubscribe();
 
-        const proms = this.app.vault.getMarkdownFiles().filter(f => !this.ignorePath(f.path)).map( file => {
+        const proms = this.app.vault.getMarkdownFiles().filter( f => !this.ignorePath( f.path ) ).map( file => {
             return this.app.vault.read( file )
                 .then( contents => {
                     const parser = new TaskParser( this.settings.parserSettings );
-                    const taskItems = this.app.metadataCache.getFileCache( file )?.listItems?.filter( li => li.task ) || [];
+                    const taskItems = this.app.metadataCache.getFileCache( file )?.listItems
+                        ?.filter( li => li.task ) || [];
                     const lines = contents.split( '\n' );
                     for ( const taskItem of taskItems ) {
                         let taskLine = lines[ taskItem.position.start.line ];
@@ -98,13 +119,14 @@ export default class ObsidianTaskManager extends Plugin {
                     console.log( `${file.path} successfully stripped.` );
                 } );
         } );
-        Promise.all(proms)
-            .then(() => this.unload() );
+        Promise.all( proms )
+            .then( () => this.unload() );
     }
 
     async loadSettings() {
         this.settings = Object.assign( {}, DEFAULT_TASK_MANAGER_SETTINGS, await this.loadData() );
         this.taskEvents.triggerSettingsUpdate( this.settings );
+        this.parser.updateSettings( this.settings.parserSettings );
     }
 
     async saveSettings() {
@@ -124,42 +146,43 @@ export default class ObsidianTaskManager extends Plugin {
                 this.app.metadataCache.offref( resolvedRef );
             }
         }, 500, true ) );
-        this.registerEvent( this.app.workspace.on( 'file-open', async ( file ) => {
-            if ( !file || this.ignorePath( file.path ) )
-                return;
-
-            this.activeFile = file;
-            const { instanceIndex, taskIndex } = this.taskStore.getState();
-            let storedIndex: TaskInstanceIndex;
-            if (this.taskFileManager.isTaskFile(file)) {
-                const storedTask = taskIndex[taskIdToUid(file.basename.split('_')[1])];
-                storedIndex = taskInstancesFromTask(storedTask).reduce((idx, i) => ({
-                    ...idx,
-                    [taskLocationStr(i)]: i
-                }), {});
-            }
-            else
-                storedIndex = filterIndexByPath( file.path, instanceIndex );
-            const fileIndex = await this.taskFileManager.getInstanceIndexFromFile( file );
-            const hash = hashFileTaskState( fileIndex );
-            const storedHash = hashFileTaskState( storedIndex );
-
-            if ( storedHash !== hash ) {
-                this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.DIRTY, hash: storedHash } );
-                if ( this.settings.indexFiles.has( file.path ) )
-                    await this.taskFileManager.writeIndexFile( file, instanceIndex, taskIndex );
-                else if ( this.taskFileManager.isTaskFile( file ) )
-                    await this.taskFileManager.storeTaskFile( taskIndex[values(storedIndex)[0].uid] )
-                else
-                    await this.taskFileManager.writeStateToFile( file, {instanceIndex: storedIndex, taskIndex } );
-            }
-            else
-                this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.CLEAN, hash: storedHash } );
-        } ) );
+        this.registerEvent( this.app.workspace.on( 'file-open', this.onOpenFile.bind( this ) ) );
     }
 
     private ignorePath( filePath: string ) {
         return this.settings.ignoredPaths.filter( ignored => filePath.includes( ignored ) ).length > 0;
+    }
+
+    private async onOpenFile( file: TFile ) {
+        if ( !file || this.ignorePath( file.path ) )
+            return;
+
+        const { instanceIndex, taskIndex } = this.taskStore.getState();
+        let storedIndex: TaskInstanceIndex;
+        if ( this.taskFileManager.isTaskFile( file ) ) {
+            const storedTask = taskIndex[ taskIdToUid( file.basename.split( '_' )[ 1 ] ) ];
+            storedIndex = taskInstancesFromTask( storedTask ).reduce( ( idx, i ) => ({
+                ...idx,
+                [ taskLocationStr( i ) ]: i
+            }), {} );
+        }
+        else
+            storedIndex = filterIndexByPath( file.path, instanceIndex );
+        const fileIndex = await this.taskFileManager.getInstanceIndexFromFile( file );
+        const hash = hashInstanceList( fileIndex );
+        const storedHash = hashInstanceList( storedIndex );
+
+        if ( storedHash !== hash ) {
+            this.setFileReady( file, false );
+            if ( this.settings.indexFiles.has( file.path ) )
+                await this.taskFileManager.writeIndexFile( file, instanceIndex, taskIndex );
+            else if ( this.taskFileManager.isTaskFile( file ) )
+                await this.taskFileManager.storeTaskFile( taskIndex[ values( storedIndex )[ 0 ].uid ] )
+            else
+                await this.taskFileManager.writeStateToFile( file, { instanceIndex: storedIndex, taskIndex } );
+        }
+        else
+            this.taskFileManager.setFileStateHash( file.path, { status: CacheStatus.CLEAN, hash: storedHash } );
     }
 
     private async handleCacheChanged( file: TFile, data: string, cache: CachedMetadata ) {
@@ -171,29 +194,28 @@ export default class ObsidianTaskManager extends Plugin {
             }
         }
 
-        if ( file !== this.activeFile || this.ignorePath( file.path ) )
+        if ( this.ignorePath( file.path ) )
             return
 
-        if ( !this.taskFileManager.testAndSetFileStatus( file.path, CacheStatus.CLEAN ) ) {
+        if ( !this.isFileReady( file ) ) {
+            this.setFileReady( file, true );
             return;
         }
 
         const { line } = this.app.workspace.getActiveViewOfType( MarkdownView ).editor.getCursor();
-        const fileInstanceIndex = await this.taskFileManager.getInstanceIndexFromFile( file );
-        const cursorLineKey = instanceIndexKey( file.path, line );
-        if ( cursorLineKey in fileInstanceIndex && !fileInstanceIndex[ cursorLineKey ].uid )
-            delete fileInstanceIndex[ instanceIndexKey( file.path, line ) ]
-        const existingFileInstanceIndex: TaskInstanceIndex = values( this.taskStore.getState().instanceIndex )
-            .filter( i => i.filePath === file.path )
-            .reduce( ( idx, i ) => ({ ...idx, [ taskLocationStr( i ) ]: i }), {} );
-        if ( hashFileTaskState( fileInstanceIndex ) !== hashFileTaskState( existingFileInstanceIndex ) ) {
+        const fileInstances = await this.taskFileManager.getInstanceIndexFromFile( file, cache, data );
+        const iCursor = fileInstances.findIndex( inst => inst.filePath === file.path && inst.position.start.line === line );
+        if ( iCursor !== -1 && !fileInstances[ iCursor ].uid )
+            fileInstances.splice( iCursor, 1 );
+        const existingFileInstances = this.instances.filter( inst => inst.filePath === file.path );
+        if ( hashInstanceList( fileInstances ) !== hashInstanceList( existingFileInstances ) ) {
             if ( !(file.path in this.changeDebouncers) )
                 this.changeDebouncers[ file.path ] = debounce(
                     this.taskEvents.triggerFileCacheUpdate.bind( this.taskEvents ),
                     250,
                     true
                 );
-            this.changeDebouncers[ file.path ]( { type: ActionType.MODIFY_FILE_TASKS, data: fileInstanceIndex } );
+            this.changeDebouncers[ file.path ]( { type: ActionType.MODIFY_FILE_TASKS, data: fileInstances } );
         }
     }
 
@@ -220,43 +242,31 @@ export default class ObsidianTaskManager extends Plugin {
         }
     }
 
-    /**
-     * Builds the index from the tasks directory.
-     * @private
-     */
-    private async processTasksDirectory() {
-        if ( !this.taskFileManager.tasksDirectory ) {
-            await this.app.vault.createFolder( this.settings.taskDirectoryName );
-            const tasksFolder = this.app.vault.getAbstractFileByPath( this.settings.taskDirectoryName );
-            this.taskFileManager.tasksDirectory = tasksFolder as TFolder;
+
+    private getStateFromInstances(): TaskState {
+        [].find()
+        this.instances.forEach(() => {});
+        return {
+            taskInstanceIndex: {},
+            taskIndex: {}
         }
-        const tasksFolder = this.taskFileManager.tasksDirectory;
-        const tasks = [];
-        for ( const tFile of tasksFolder.children ) {
-            tasks.push( this.taskFileManager.readTaskFile( tFile as TFile ) );
-        }
-        return Promise.all( tasks )
-            .then( allTasks =>
-                allTasks.reduce( (
-                    st,
-                    idxTask
-                ) => [ ...st, ...taskInstancesFromTask( idxTask ) ], [] as TaskInstance[] )
-            );
     }
 
     private async processVault() {
         if ( this.vaultLoaded ) return;
-        let fileTaskInstances: TaskInstance[] = [];
+        let taskInstances: TaskInstance[] = [];
         for ( const file of this.app.vault.getMarkdownFiles() ) {
             if ( file.path.includes( this.settings.taskDirectoryName ) || this.ignorePath( file.path ) )
                 continue;
-            const fileInstanceIdx = await this.taskFileManager.readMarkdownFile( file );
-            fileTaskInstances = [
-                ...fileTaskInstances,
-                ...values( fileInstanceIdx )
+            const contents = await this.app.vault.read( file );
+            const cache = this.app.metadataCache.getFileCache( file );
+            const fileTaskInstances = this.taskFileManager.getFileInstances( file, cache, contents );
+            taskInstances = [
+                ...taskInstances,
+                ...fileTaskInstances
             ];
         }
-        this.taskStore.initialize( fileTaskInstances )
+        this.taskStore.initialize( taskInstances )
         this.vaultLoaded = true;
     }
 }
