@@ -63,11 +63,19 @@ export const taskLocationStrFromInstance = ( {
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 
-export const taskLocFromPosStr = ( locationStr: string ): TaskLocation => {
-    const [ filePath, ...position ] = locationStr.split( LOC_DELIM );
+export const taskLocFromPosStr = ( locationStr: string ): TaskFileLocation & { filePath: string } => {
+    const [ filePath, parent, ...position ] = locationStr.split( LOC_DELIM );
     return {
         filePath,
-        line: pos( ...position.map( Number.parseInt ) ).start.line
+        parent: Number.parseInt(parent),
+        position: pos( ...position.map( Number.parseInt ) )
+    };
+}
+
+export const taskLocFromStr = ( str: string ): TaskLocation => {
+    const [filePath, line] = str.split(LOC_DELIM);
+    return {
+        filePath, line: Number.parseInt(line)
     };
 }
 

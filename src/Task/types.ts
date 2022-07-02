@@ -48,13 +48,12 @@ export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'raw
     parentUids: number[];
     created: Date;
     updated: Date;
-    instances: TaskInstance[];
+    locations: TaskLocation[];
     description: string;
 }
 
-export type TaskYamlObject = YamlObject<Task, 'description'|'instances'> & {
+export type TaskYamlObject = YamlObject<Task, 'description'> & {
     type: typeof TaskRecordType
-    instances: TaskInstanceYamlObject[]
 }
 
 export type TaskInstanceYamlObject = YamlObject<TaskInstance, 'tags'|'dueDate'|'recurrence'|'uid'|'id'|'name'>

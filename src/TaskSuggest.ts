@@ -1,4 +1,3 @@
-import { values } from 'lodash';
 import {
   App,
   Editor,
@@ -56,7 +55,7 @@ export class TaskEditorSuggest extends EditorSuggest<Task>{
 
   getSuggestions(context: EditorSuggestContext): Task[] | Promise<Task[]> {
     const searchText = context.query;
-    const tasks = values(this.taskState.taskIndex).filter(t => t.name.startsWith(searchText));
+    const tasks = [...this.taskState.taskIndex.values()].filter(t => t.name.startsWith(searchText));
 
     return [...tasks.slice(0, 5)]
   }

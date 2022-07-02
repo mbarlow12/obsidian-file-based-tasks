@@ -1,4 +1,4 @@
-import { entries, values } from 'lodash';
+import { entries } from 'lodash';
 import { Pos } from 'obsidian';
 import { RRule } from 'rrule';
 import { TaskInstanceIndex } from './Store/types';
@@ -8,6 +8,7 @@ import {
     PrimaryTaskInstance,
     Task,
     TaskInstance,
+    taskLocationFromInstance,
     taskLocationStrFromInstance,
     taskLocFromPosStr
 } from './Task';
@@ -108,7 +109,7 @@ export const createTestTask = (
     complete,
     parentUids,
     childUids,
-    instances,
+    locations: instances.map(taskLocationFromInstance),
     updated,
     created,
     description: '',
@@ -185,17 +186,14 @@ export const createTestInstanceIndex = (
 }
 
 export const addTestPrimaryTasksToIndex = ( idx: TaskInstanceIndex ): TaskInstanceIndex => {
-    const allUids = new Set(values(idx).map(i => i.uid));
-    const primaryUids = new Set(values(idx).filter(inst => isPrimaryInstance(inst)).map(i => i.uid));
+    const allUids = new Set([...idx.values()].map(i => i.uid));
+    const primaryUids = new Set([...idx.values()].filter(inst => isPrimaryInstance(inst)).map(i => i.uid));
     const missingUids = [...allUids].filter(uid => !primaryUids.has(uid));
     const pIdx: TaskInstanceIndex = missingUids.reduce((pidx, uid) => {
-        const inst = values(idx).find(i => i.uid === uid);
+        const inst = [...idx.values()].find(i => i.uid === uid);
         const pInst = createTestPrimaryTaskInstance(inst.uid, emptyPosition(0), -1);
-        return {
-            ...pidx,
-            [taskLocationStrFromInstance(pInst)]: pInst
-        };
-    }, {});
+        return pidx.set(taskLocationFromInstance(pInst), pInst);
+    }, new Map() as TaskInstanceIndex);
     return {
         ...pIdx,
         ...idx

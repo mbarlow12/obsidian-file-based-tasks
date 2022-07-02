@@ -1,9 +1,7 @@
-import { PrimaryTaskInstance, Task, TaskInstance, TaskLocation, TaskUID } from '../Task';
+import { Task, TaskInstance, TaskLocation, TaskUID } from '../Task';
 
-export type TaskInstanceIndex = Map<TaskLocation, TaskInstance|PrimaryTaskInstance>;
-export type MTaskInstanceIndex = Map<string, TaskInstanceIndex|PrimaryTaskInstance>;
+export type TaskInstanceIndex = Map<TaskLocation, TaskInstance>;
 export type TaskIndex = Map<TaskUID, Task>;
-export type MTaskIndex = Map<TaskUID, Task>;
 export type TaskStoreState = {
     instanceIndex: TaskInstanceIndex;
     taskIndex: TaskIndex;
@@ -22,4 +20,4 @@ export type TaskStoreState = {
  * updated,
  * description,
  */
-export type IndexTask = Omit<Task, 'instances'>
+export type IndexTask = Omit<Task, 'locations'>

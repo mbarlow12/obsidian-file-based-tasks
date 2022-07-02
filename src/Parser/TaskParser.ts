@@ -1,6 +1,7 @@
 import * as chrono from "chrono-node";
+import { ListItemCache } from 'obsidian';
 import { RRule } from "rrule";
-import { ParsedTask } from '../Task';
+import { ParsedTask, TaskInstance } from '../Task';
 import { taskIdToUid } from "../Task/Task";
 
 export const INVALID_NAME_CHARS = /[\\/|^#\][]/g;
@@ -50,6 +51,17 @@ export class TaskParser {
   updateSettings(settings: ParserSettings) {
     this.settings = settings;
   }
+
+  fullParseLine( line: string, filePath: string, {position, parent}: ListItemCache ): TaskInstance {
+    const pTask: ParsedTask = this.parseLine(line);
+    return {
+      ...pTask,
+      filePath,
+      position,
+      parent,
+      primary: false,
+    };
+}
 
   parseLine( line: string ): ParsedTask {
     const lineMatch = line.match(TaskParser.LINE_REGEX);
