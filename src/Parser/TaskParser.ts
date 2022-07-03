@@ -1,6 +1,7 @@
 import * as chrono from "chrono-node";
 import { ListItemCache } from 'obsidian';
 import { RRule } from "rrule";
+import { DEFAULT_PARSER_SETTINGS } from '../Settings';
 import { ParsedTask, TaskInstance } from '../Task';
 import { taskIdToUid } from "../Task/Task";
 
@@ -15,16 +16,6 @@ export interface ParserSettings {
   };
   prefix: string;
 }
-
-export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
-  tokens: {
-    tag: '#',
-    recurrence: '&',
-    dueDate: '@',
-    divider: '|*|'
-  },
-  prefix: ''
-};
 
 // const parseTags = (tags: string): string[] => [];
 const parseRecurrence = (recurrence: string): RRule | null => {
@@ -54,6 +45,8 @@ export class TaskParser {
 
   fullParseLine( line: string, filePath: string, {position, parent}: ListItemCache ): TaskInstance {
     const pTask: ParsedTask = this.parseLine(line);
+    if (!pTask)
+      return null;
     return {
       ...pTask,
       filePath,

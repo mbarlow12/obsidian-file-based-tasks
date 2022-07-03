@@ -1,7 +1,7 @@
 import { taskIndexFromInstances } from '../Store';
 import { TaskInstanceIndex } from '../Store/types';
 import { filePaths, taskIds, taskNames, taskUids } from '../TestHelpers';
-import { LOC_DELIM, taskLocation, taskLocFromStr } from './index';
+import { instanceIndexKey, LOC_DELIM } from './index';
 import { emptyTaskInstance } from './Task';
 import { TaskInstance } from './types';
 
@@ -11,7 +11,7 @@ describe( 'task utilities', () => {
     test( 'Create task from good instances', () => {
         const instances: TaskInstanceIndex = filePaths.slice( 0, 3 )
             .reduce( ( idx, fp ) =>
-                idx.set( taskLocFromStr( `${fp}${LOC_DELIM}0` ), {
+                idx.set(  `${fp}${LOC_DELIM}0`, {
                     ...emptyTaskInstance(),
                     filePath: fp,
                     name: taskNames[ 0 ],
@@ -29,7 +29,7 @@ describe( 'task utilities', () => {
 
     test( 'Differing task instance ids throw error', () => {
         const instances = filePaths.slice( 0, 3 ).reduce( ( idx, fp, i ) =>
-            idx.set( taskLocation( fp, 0 ), {
+            idx.set( instanceIndexKey( fp, 0 ), {
                 ...emptyTaskInstance(),
                 filePath: fp,
                 name: taskNames[ 0 ],
@@ -42,7 +42,7 @@ describe( 'task utilities', () => {
 
     test( 'Differing task instance uids throw error', () => {
         const instances = filePaths.slice( 0, 3 ).reduce( ( idx, fp, i ) =>
-            idx.set( taskLocation( fp, 0 ), {
+            idx.set( instanceIndexKey( fp, 0 ), {
                 ...emptyTaskInstance(),
                 filePath: fp,
                 name: taskNames[ 0 ],
@@ -55,7 +55,7 @@ describe( 'task utilities', () => {
 
     test( 'Several instances several tasks', () => {
         const instances = filePaths.reduce( ( idx, fp, i ) =>
-            idx.set( taskLocation( fp, 0 ), {
+            idx.set( instanceIndexKey( fp, 0 ), {
                 ...emptyTaskInstance(),
                 filePath: fp,
                 name: taskNames[ i ],

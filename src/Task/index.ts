@@ -1,4 +1,5 @@
 import { Loc, Pos } from "obsidian";
+import { isTaskInstance } from './Task';
 import { TaskFileLocation, TaskInstance, TaskLocation } from "./types";
 
 export {
@@ -50,8 +51,6 @@ export const taskFileLocationToStr = (
     posStr( position )
 ].join( LOC_DELIM );
 
-export const instanceIndexKey = ( filePath: string, line: number ) => [ filePath, line.toString() ].join( LOC_DELIM );
-
 export const taskLocationStr = ( { filePath, line }: TaskLocation ): string => [
     filePath, `${line}`
 ].join( LOC_DELIM );
@@ -90,8 +89,30 @@ export const positionsEqual = ( p1: Pos, p2: Pos ) => {
 export const locsEqual = ( l1: Loc, l2: Loc ) => {
     return l1.line === l2.line && l1.col === l2.col && l1.offset === l2.offset;
 }
-export const taskLocationFromInstance = (
-    { filePath, position: { start: { line}} }: TaskInstance
-): TaskLocation => taskLocation(filePath, line)
+export const instanceIndexKey = (
+    first: TaskInstance|TaskLocation|string,
+    second?: number
+): string => {
+    let loc: TaskLocation;
+    if (typeof first === 'string')
+        loc = taskLocation(first, second);
+    else {
+        if (isTaskInstance(first))
+            loc = taskLocation(first.filePath, first.position.start.line);
+        else
+            loc = first;
+    }
+    return taskLocationStr(loc);
+}
 
-export const taskLocation = ( filePath: string, line: number ): TaskLocation => ({ filePath, line})
+export const taskLocation = (
+    first: TaskInstance|TaskLocation|string,
+    second?: number
+): TaskLocation => {
+    if ( typeof first === 'string' )
+        return {filePath: first, line: second};
+    if ( isTaskInstance( first ) )
+        return {filePath: first.filePath, line: first.position.start.line};
+    else
+        return first;
+}

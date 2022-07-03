@@ -4,11 +4,12 @@ import { RRule } from 'rrule';
 import { TaskInstanceIndex } from './Store/types';
 import {
     emptyPosition,
+    instanceIndexKey,
     pos,
     PrimaryTaskInstance,
     Task,
     TaskInstance,
-    taskLocationFromInstance,
+    taskLocation,
     taskLocationStrFromInstance,
     taskLocFromPosStr
 } from './Task';
@@ -109,7 +110,7 @@ export const createTestTask = (
     complete,
     parentUids,
     childUids,
-    locations: instances.map(taskLocationFromInstance),
+    locations: instances.map(taskLocation),
     updated,
     created,
     description: '',
@@ -192,7 +193,7 @@ export const addTestPrimaryTasksToIndex = ( idx: TaskInstanceIndex ): TaskInstan
     const pIdx: TaskInstanceIndex = missingUids.reduce((pidx, uid) => {
         const inst = [...idx.values()].find(i => i.uid === uid);
         const pInst = createTestPrimaryTaskInstance(inst.uid, emptyPosition(0), -1);
-        return pidx.set(taskLocationFromInstance(pInst), pInst);
+        return pidx.set(instanceIndexKey(pInst), pInst);
     }, new Map() as TaskInstanceIndex);
     return {
         ...pIdx,

@@ -3,15 +3,24 @@ import path from 'path';
 import { RRule } from "rrule";
 import { TaskEvents } from "../Events/TaskEvents";
 import {
+    emptyPosition,
+    instanceIndexKey,
+    locationsEqual,
     PrimaryTaskInstance,
     Task,
     TaskInstance,
-    TaskLocation,
     taskLocation,
-    taskLocationFromInstance,
+    TaskLocation,
     taskToFilename,
 } from "../Task";
-import { createTaskFromPrimary, isPrimaryInstance, isTask, taskInstanceFromTask, taskUidToId } from "../Task/Task";
+import {
+    createTaskFromInstance,
+    createTaskFromPrimary,
+    isPrimaryInstance,
+    isTask,
+    taskInstanceFromTask,
+    taskUidToId
+} from "../Task/Task";
 import { DEFAULT_TASKS_DIR } from '../TaskFileManager';
 import { isQueryBlock, TaskManagerSettings, TaskQuery } from '../taskManagerSettings';
 import { createIndexFileTaskInstances, handleCompletions, queryTask, taskInstancesAreSameTask } from './index';
@@ -21,12 +30,13 @@ export const hashTaskInstance = (
     { name, id, complete, parent, position: { start: { line } } }: TaskInstance
 ): string => [ line, id, name, complete ? 'x' : ' ', parent ].join( '||' );
 
-export const renderTags = ( tags?: string[] ): string => (tags || []).join(' ');
+export const renderTags = ( tags?: string[] ): string => (tags ?? []).join( ' ' );
 export const renderRecurrence = ( rrule?: RRule ): string => rrule ? '&' + rrule.toText() : '';
 export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
 export const taskInstanceToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
-    `- [${complete ? 'x' : ' '}]`, name, renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ),
+    `- [${complete ? 'x' : ' '}]`, name,
+    ...[ renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ) ].join( ' ' ).trim(),
     `^${id}`
 ].join( ' ' );
 
@@ -62,6 +72,8 @@ const createPrimaryInstance = (
     }
     return {
         ...instance,
+        parent: -1,
+        position: emptyPosition( 0 ),
         uid,
         id,
         filePath,
@@ -85,24 +97,24 @@ export const createTask = (
 export const taskInstanceIdxFromTask = ( task: Task, index?: TaskInstanceIndex ): TaskInstanceIndex => {
     const instIdx: TaskInstanceIndex = new Map();
     task.locations.forEach( loc => {
-        if (index && index.has(loc))
-            instIdx.set(loc, index.get(loc));
+        const key = instanceIndexKey( loc )
+        if ( index && index.has( key ) )
+            instIdx.set( key, index.get( key ) );
         else {
-            let inst =  taskInstanceFromTask( loc.filePath, loc.line, task );
+            let inst = taskInstanceFromTask( loc.filePath, loc.line, task );
             if ( loc.filePath.includes( task.name ) )
                 inst = createPrimaryInstance( task );
-            instIdx.set(taskLocationFromInstance(inst), inst);
+            instIdx.set( instanceIndexKey( inst ), inst );
         }
     } );
     const prime = createPrimaryInstance( task );
-    return instIdx.set(taskLocationFromInstance(prime), prime);
+    return instIdx.set( instanceIndexKey( prime ), prime );
 };
 
 export class TaskStore {
     private events: TaskEvents;
-    private state: TaskStoreState = { instanceIndex: new Map(), taskIndex: new Map() };
-    private taskIndex: TaskIndex;
-    private taskInstanceIndex: TaskInstanceIndex;
+    private taskIndex: TaskIndex = new Map();
+    private taskInstanceIndex: TaskInstanceIndex = new Map();
     private readonly settingsUpdateRef: EventRef;
     private settings: TaskManagerSettings;
     private nextId = MIN_UID;
@@ -120,58 +132,80 @@ export class TaskStore {
     }
 
     public getState(): Readonly<TaskStoreState> {
-        return { ...this.state };
+        return { taskIndex: this.taskIndex, instanceIndex: this.taskInstanceIndex };
     }
 
     replaceFileInstances( newIndex: TaskInstanceIndex ): TaskInstanceIndex {
-        const paths = new Set( [ ...newIndex.keys() ].map( i => i.filePath )
-            .concat( ...this.settings.indexFiles.keys() ) );
-        const existingIndex = new Map( this.taskInstanceIndex );
-        for ( const loc of existingIndex.keys() ) {
-            if ( paths.has( loc.filePath ) )
-                existingIndex.delete( loc )
-        }
-
-        // propagate new instance data
-        for ( const [ loc, inst ] of handleCompletions( newIndex ) ) {
+        // handle new uids and task completions for parents
+        const newTaskIndex: TaskIndex = new Map();
+        const paths = new Set<string>( [ ...this.settings.indexFiles.keys() ] );
+        for ( const [ locStr, inst ] of newIndex ) {
+            paths.add( inst.filePath );
             if ( inst.uid === 0 ) {
                 // new task
                 inst.uid = this.nextId++;
                 inst.id = taskUidToId( inst.uid );
                 const prime = createPrimaryInstance( inst );
-                newIndex.set( taskLocationFromInstance( prime ), prime )
-                newIndex.set( loc, inst );
-                continue;
+                newIndex.set( instanceIndexKey( prime ), prime )
+                newIndex.set( locStr, inst );
             }
-            const task = this.taskIndex.get( inst.uid );
-            const {
-                complete, tags, name, recurrence, dueDate, completedDate,
-            } = inst;
-            for ( const taskLoc of task.locations ) {
-                const taskInst = existingIndex.get( taskLoc );
-                existingIndex.set( taskLoc, {
-                    ...taskInst,
-                    complete,
-                    tags,
-                    name,
-                    recurrence,
-                    dueDate,
-                    completedDate
-                } );
+
+            let parentLine = inst.parent;
+            while ( parentLine > -1 ) {
+                const parent = newIndex.get( instanceIndexKey( inst.filePath, parentLine ) );
+                if ( !parent ) {
+                    parentLine = -1;
+                    continue;
+                }
+                if ( parent.complete )
+                    inst.complete = parent.complete;
+                parentLine = parent.parent;
+                newTaskIndex.set( parent.uid, createTaskFromInstance( parent ) );
             }
-            newIndex.set( loc, inst );
+            newIndex.set( locStr, { ...inst } );
+            newTaskIndex.set( inst.uid, createTaskFromInstance( inst ) );
         }
 
-        return new Map( [ ...newIndex, ...existingIndex ] );
+        // propagate new instance data
+        const existingIndex = new Map( this.taskInstanceIndex );
+        for ( const [ exLoc, exInst ] of existingIndex ) {
+            if ( paths.has( exInst.filePath ) ) {
+                existingIndex.delete( instanceIndexKey( exInst ) )
+                continue
+            }
+            if ( newTaskIndex.has( exInst.uid ) ) {
+                const { dueDate, complete, name, completedDate, recurrence } = newTaskIndex.get( exInst.uid );
+                existingIndex.set( exLoc, {
+                    ...exInst,
+                    complete,
+                    name,
+                    dueDate,
+                    completedDate,
+                    recurrence
+                } )
+            }
+        }
+
+        return new Map( [ ...existingIndex, ...newIndex ] );
+    }
+
+    private stripUnwantedPaths( idx: TaskInstanceIndex ) {
+        for ( const [ key, { filePath } ] of idx ) {
+            if ( this.settings.indexFiles.has( filePath ) || this.settings.ignoredPaths.includes( filePath ) )
+                idx.delete( key );
+        }
+        return idx;
     }
 
     initialize( instances: TaskInstanceIndex ) {
         const nameMap: Map<string, TaskLocation[]> = new Map();
         this.nextId = MIN_UID;
         // calculate the next id and populate the name map
-        for ( const [ loc, inst ] of instances ) {
+        for ( const inst of instances.values() ) {
             this.nextId = Math.max( this.nextId, inst.uid );
-            nameMap.set( inst.name, [ ...nameMap.get( inst.name ), loc ] )
+            nameMap.set( inst.name, [
+                ...(nameMap.get( inst.name ) ?? []), taskLocation( inst.filePath, inst.position.start.line )
+            ] );
         }
 
         validateInstanceIndex( instances );
@@ -182,59 +216,80 @@ export class TaskStore {
         for ( const [ loc, inst ] of handleCompletions( instances ) ) {
             if ( inst.uid === 0 ) {
                 const match = nameMap.get( inst.name ).filter( ( candLoc ) => {
-                    const candidate = instances.get( candLoc );
+                    const candidate = instances.get( instanceIndexKey( candLoc ) );
                     return taskInstancesAreSameTask( inst, candidate, instances )
                 } );
 
                 if ( match.length > 0 )
-                    inst.uid = instances.get( match[ 0 ] )?.uid || 0;
+                    inst.uid = instances.get( instanceIndexKey( match[ 0 ] ) )?.uid ?? 0;
 
                 if ( inst.uid === 0 ) {
                     inst.uid = this.nextId++;
-                    match.map( m => instances.set( m, { ...instances.get( m ), uid: inst.uid } ) );
+                    match.map( m => instances.set(
+                        instanceIndexKey( m ),
+                        {
+                            ...instances.get( instanceIndexKey( m ) ),
+                            uid: inst.uid
+                        } ) );
                 }
             }
             inst.id = taskUidToId( inst.uid );
             instances.set( loc, inst );
         }
 
-        this.buildStateFromInstances( new Map( instances ) );
+        return new Map( instances );
     }
 
     buildStateFromInstances( instances: TaskInstanceIndex ): TaskStoreState {
+        instances = this.stripUnwantedPaths( instances );
         // instances should all have uids
         // ensure all tasks have a primary instance and add it to the instance index if no
         // add instances for index files
         // build task index
         const uidInstMap: Map<number, TaskInstance[]> = new Map();
         for ( const inst of instances.values() )
-            uidInstMap.set( inst.uid, [ ...uidInstMap.get( inst.uid ), inst ] )
+            uidInstMap.set( inst.uid, [ ...(uidInstMap.get( inst.uid ) ?? []), inst ] )
 
         const taskIndex: TaskIndex = new Map();
         for ( const [ uid, taskInsts ] of uidInstMap ) {
             let prime = taskInsts.filter( isPrimaryInstance ).pop();
             if ( !prime ) {
-                prime = createPrimaryInstance( taskInsts[ 0 ] );
-                instances.set( taskLocationFromInstance( prime ), prime )
+                const existingTask = this.taskIndex.get(uid);
+                prime = createPrimaryInstance( existingTask ?? taskInsts[ 0 ] );
+                instances.set( instanceIndexKey( prime ), prime )
             }
             let task = taskIndex.get( uid );
             if ( !task )
                 task = createTaskFromPrimary( prime );
             for ( const inst of taskInsts ) {
                 if ( inst.parent > -1 ) {
-                    const parent = instances.get( taskLocation( inst.filePath, inst.parent ) );
+                    const parent = instances.get( instanceIndexKey( inst.filePath, inst.parent ) );
                     const parentTask = taskIndex.get( parent.uid );
-                    parentTask.childUids.push( inst.uid );
-                    taskIndex.set( parent.uid, parentTask );
+                    taskIndex.set( parent.uid, {
+                        ...parentTask,
+                        childUids: filterUnique( [ ...parentTask.childUids, inst.uid ] )
+                    } );
                     task.parentUids.push( parentTask.uid );
                 }
+                task.locations.push( taskLocation( inst ) )
             }
-            taskIndex.set( uid, task );
+            taskIndex.set( uid, {
+                ...task,
+                parentUids: filterUnique( task.parentUids ),
+                locations: filterUnique( task.locations, locationsEqual )
+            } );
         }
+
         for ( const [ fileName, query ] of this.settings.indexFiles ) {
             const fileInsts = createIndexFileTaskInstances( fileName, taskIndex, getTaskQueryFilter( query ) )
-            for ( const [ loc, inst ] of fileInsts )
+            for ( const [ loc, inst ] of fileInsts ) {
                 instances.set( loc, inst );
+                const task = taskIndex.get( inst.uid );
+                taskIndex.set( task.uid, {
+                    ...task,
+                    locations: [ ...task.locations, taskLocation( inst ) ],
+                } )
+            }
         }
         this.taskIndex = taskIndex;
         this.taskInstanceIndex = instances;
@@ -246,15 +301,37 @@ export class TaskStore {
 
     deleteTasksFromFile( file: TFile ) {
         const uids = new Set<number>();
-        for (const loc of this.taskInstanceIndex.keys()) {
-            if (loc.filePath === file.path) {
-                uids.add(this.taskInstanceIndex.get(loc).uid)
-                this.taskInstanceIndex.delete(loc);
+        const deletedIdx = new Map( this.taskInstanceIndex );
+        for ( const inst of deletedIdx.values() ) {
+            if ( inst.filePath === file.path ) {
+                const key = instanceIndexKey( inst );
+                uids.add( deletedIdx.get( key ).uid )
+                deletedIdx.delete( key );
             }
         }
-        for (const uid of uids)
-            this.taskIndex.delete(uid);
+        return deletedIdx;
+    }
 
+    deleteTask( task: Task): TaskInstanceIndex {
+        const newInstIdx = new Map();
+        for ( const [ key, inst ] of this.taskInstanceIndex ) {
+            if ( inst.uid !== task.uid )
+                newInstIdx.set(key, inst);
+        }
+        return newInstIdx;
+    }
+
+    renameFilePath( oldPath: string, newPath: string ): TaskInstanceIndex {
+
+        const newIndex = new Map( this.taskInstanceIndex );
+        for ( const [ key, instance ] of newIndex ) {
+            if ( instance.filePath === oldPath ) {
+                newIndex.delete( key );
+                const newInst = { ...instance, filePath: newPath };
+                newIndex.set( instanceIndexKey( newInst ), newInst )
+            }
+        }
+        return newIndex;
     }
 }
 

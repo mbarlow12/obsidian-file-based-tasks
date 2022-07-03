@@ -1,7 +1,7 @@
 import { expect } from '@jest/globals';
 import { CachedMetadata, TFile } from "obsidian";
 import { TaskInstanceIndex } from '../Store/types';
-import { LOC_DELIM, taskLocFromStr } from '../Task';
+import { LOC_DELIM } from '../Task';
 import { getFileInstanceIndex } from "./index";
 import { getFileContents, testTaskLines } from './TestData';
 
@@ -81,7 +81,7 @@ test( 'Basic representation', () => {
     file.path = 'file/path'
     const obj = getFileInstanceIndex( file, cacheMetadata1, testContents1 );
     const expected: TaskInstanceIndex = new Map([
-        [ taskLocFromStr(`file/path${LOC_DELIM}0`) , {
+        [ `file/path${LOC_DELIM}0` , {
             id: '',
             uid: 0,
             name: 't1',
@@ -95,7 +95,7 @@ test( 'Basic representation', () => {
             filePath: 'file/path',
             primary: false,
         }],
-        [ taskLocFromStr(`file/path${LOC_DELIM}1`) , {
+        [ `file/path${LOC_DELIM}1` , {
             id: '',
             uid: 0,
             name: 't2',
@@ -109,7 +109,7 @@ test( 'Basic representation', () => {
             filePath: 'file/path',
             primary: false,
         }],
-        [ taskLocFromStr(`file/path${LOC_DELIM}2`) , {
+        [ `file/path${LOC_DELIM}2` , {
             id: '',
             uid: 0,
             name: 't3',
@@ -123,7 +123,7 @@ test( 'Basic representation', () => {
             filePath: 'file/path',
             primary: false,
         }],
-        [ taskLocFromStr(`file/path${LOC_DELIM}3`) , {
+        [ `file/path${LOC_DELIM}3` , {
             id: '',
             uid: 0,
             name: 't4',
@@ -146,7 +146,7 @@ test( 'Representation with ids', () => {
     file.path = 'file/path'
     const obj = getFileInstanceIndex( file, cacheMetadata2, testContents2 );
     const expected: TaskInstanceIndex = new Map([
-        [ taskLocFromStr(`file/path${LOC_DELIM}0`), {
+        [ `file/path${LOC_DELIM}0`, {
             id: '12345',
             uid: Number.parseInt( '12345', 16 ),
             name: 't1',
@@ -160,7 +160,7 @@ test( 'Representation with ids', () => {
             rawText: '- [ ] t1 ^12345',
             primary: false,
         }],
-        [ taskLocFromStr(`file/path${LOC_DELIM}1`), {
+        [ `file/path${LOC_DELIM}1`, {
             id: '23456',
             uid: Number.parseInt( '23456', 16 ),
             name: 't2',

@@ -1,7 +1,16 @@
-import { DEFAULT_PARSER_SETTINGS } from './Parser/TaskParser';
+import { ParserSettings } from './Parser/TaskParser';
 import { DEFAULT_FILE_MANAGER_SETTINGS } from './TaskFileManager';
 import { Operator, TaskManagerSettings } from './taskManagerSettings';
 
+export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
+    tokens: {
+        tag: '#',
+        recurrence: '&',
+        dueDate: '@',
+        divider: '|*|'
+    },
+    prefix: ''
+};
 export const DEFAULT_TASK_MANAGER_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
     backlogFileName: 'Backlog.md',

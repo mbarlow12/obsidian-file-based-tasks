@@ -10,16 +10,16 @@ import {
 } from "obsidian";
 import { TaskEvents } from "./Events/TaskEvents";
 import { EventType } from './Events/types';
-import { TaskParser } from './Parser/TaskParser';
+import { ParserSettings, TaskParser } from './Parser/TaskParser';
 import { DEFAULT_TASK_MANAGER_SETTINGS } from './Settings';
 import { filterIndexByPath } from './Store';
 import { hashTaskInstance, taskInstanceIdxFromTask, taskInstanceToChecklist } from "./Store/TaskStore";
-import { TaskIndex, TaskInstanceIndex } from './Store/types';
+import { TaskInstanceIndex } from './Store/types';
 import {
     getTaskFromYaml,
+    instanceIndexKey,
     Task,
     TaskInstance,
-    taskLocation,
     TaskRecordType,
     taskToFilename,
     taskToTaskFileContents,
@@ -56,6 +56,26 @@ export interface FileState {
     hash: string;
 }
 
+export interface RenderOpts {
+    id: boolean,
+    links: boolean,
+    tags: boolean,
+    recurrence: boolean,
+    dueDate: boolean,
+    completedDate: boolean,
+    strikeThroughOnComplete: boolean,
+}
+
+const DEFAULT_RENDER_OPTS: RenderOpts = {
+    id: true,
+    links: true,
+    tags: true,
+    recurrence: true,
+    dueDate: true,
+    completedDate: true,
+    strikeThroughOnComplete: false
+};
+
 export const getVaultConfig = ( v: Vault ) => {
     return (v as Vault & { config: Record<string, boolean | number> }).config;
 }
@@ -69,7 +89,7 @@ export class TaskFileManager {
     private mdCache: MetadataCache;
     private events: TaskEvents;
     private parser: TaskParser;
-    private eventRefs: Map<string, EventRef>;
+    private eventRefs: Map<string, EventRef> = new Map();
     private pluginSettings: TaskManagerSettings;
 
     constructor(
@@ -157,7 +177,7 @@ export class TaskFileManager {
 
     public async getInstanceIndexFromFile( file: TFile, cache: CachedMetadata, data: string ) {
         if ( this.isTaskFile( file ) ) {
-            const idxTask = this.readTaskFile( file, cache, data );
+            const idxTask = await this.readTaskFile( file, cache, data );
             return taskInstanceIdxFromTask( idxTask );
         }
         else
@@ -194,6 +214,7 @@ export class TaskFileManager {
     }
 
     public isTaskFile( file: TFile, cache?: CachedMetadata ): boolean {
+        cache = cache ?? this.mdCache.getFileCache(file);
         return file.parent === this.tasksDirectory &&
             cache?.frontmatter &&
             cache.frontmatter.type &&
@@ -202,14 +223,16 @@ export class TaskFileManager {
 
     private static taskYamlFromFrontmatter( cfm: FrontMatterCache ): TaskYamlObject {
         const {
-            type, id, uid, name, instances, complete, created, updated, parentUids, childUids, recurrence, dueDate
+            type, id, uid, name, locations, complete, created, updated, parentUids, childUids, recurrence, dueDate, completedDate
         } = cfm;
         return {
-            type, id, uid, name, instances, complete, created, updated, parentUids, childUids, recurrence, dueDate
+            type, id, uid, name, locations, complete, created, updated, parentUids, childUids, recurrence, dueDate, completedDate
         } as unknown as TaskYamlObject
     }
 
-    public readTaskFile( file: TFile, cache: CachedMetadata, data: string ): Task {
+    public async readTaskFile( file: TFile, cache?: CachedMetadata, data?: string ): Promise<Task> {
+        cache = cache ?? this.mdCache.getFileCache(file);
+        data = data ?? await this.vault.cachedRead(file);
         const taskYml: TaskYamlObject = TaskFileManager.taskYamlFromFrontmatter( cache.frontmatter )
         const task = getTaskFromYaml( taskYml );
         task.name = task.name ?? file.basename;
@@ -228,13 +251,13 @@ export class TaskFileManager {
         const contentLines = contents.split( /\r?\n/ );
 
         const fileIndex: TaskInstanceIndex = new Map();
-        const cacheTasks = cache.listItems.filter( li => li.task );
+        const cacheTasks = (cache?.listItems ?? []).filter( li => li.task );
         for ( let i = 0; i < (cacheTasks || []).length; i++ ) {
             const lic = cacheTasks[ i ];
             const taskInstance = this.parser.fullParseLine( contentLines[ lic.position.start.line ], file.path, lic );
             if ( !taskInstance )
                 continue;
-            fileIndex.set( taskLocation( file.path, lic.position.start.line ), taskInstance );
+            fileIndex.set( instanceIndexKey( file.path, lic.position.start.line ), taskInstance );
         }
         return fileIndex;
     }
@@ -246,49 +269,65 @@ export class TaskFileManager {
     public renderTaskInstance(
         instance: TaskInstance,
         pad = '',
-        links = false
+        renderOpts = DEFAULT_RENDER_OPTS
     ): string {
         const baseLine = taskInstanceToChecklist( instance ).replace( /\^[\w\d]+/, '' ).trim();
-        const taskLinks = instance.links.map( link => `[[${link}#^${instance.id}|${instance.filePath}]]` )
-        const instanceLine = [ baseLine, ...(links && taskLinks || []), `^${instance.id}` ].join( ' ' );
+        const taskLinks = (instance.links ?? []).map( link => `[[${link}#^${instance.id}|${instance.filePath}]]` )
+        const instanceLine = [
+            baseLine,
+            ...(renderOpts.links && taskLinks || []),
+            renderOpts.id && `^${instance.id}` || ''
+        ].join( ' ' );
         return pad + instanceLine;
     }
 
     public async writeIndexFile(
         file: TFile,
         instanceIndex: TaskInstanceIndex,
-        taskIndex: TaskIndex
     ): Promise<void> {
         instanceIndex = filterIndexByPath( file.path, instanceIndex );
         const lines = new Array( instanceIndex.size ).fill( '' );
-        for ( const [ loc, inst ] of instanceIndex )
-            lines[ loc.line ] = this.renderTaskInstance( inst, this.getIndent( inst, instanceIndex ), true );
+        for ( const inst of instanceIndex.values() )
+            lines[ inst.position.start.line ] =
+                this.renderTaskInstance( inst, this.getIndent( inst, instanceIndex ) );
         await this.vault.modify( file, lines.join( '\n' ) );
     }
 
     private getIndent( instance: TaskInstance, index: TaskInstanceIndex ) {
         let { useTab, tabSize } = getVaultConfig( this.vault );
         useTab ||= false;
-        tabSize = tabSize ?? useTab ? 1 : 4;
+        tabSize = tabSize as number || (useTab ? 1 : 4);
         let pad = '';
         let parent = instance.parent;
         while ( parent > -1 ) {
             pad = pad.padStart( pad.length + tabSize, useTab ? '\t' : ' ' );
-            const p = index.get( taskLocation( instance.filePath, parent ) );
+            const p = index.get( instanceIndexKey( instance.filePath, parent ) );
             parent = p.parent;
         }
         return pad;
     }
 
     public async writeStateToFile( file: TFile, instanceIndex: TaskInstanceIndex ): Promise<void> {
-        const fileIndex = filterIndexByPath( file.path, instanceIndex );
+        const filteredIndex = filterIndexByPath(file.path, instanceIndex);
+        const renderedIndex = await this.readMarkdownFile(file);
         const contents = (await this.vault.read( file ));
         const contentLines = contents.split( '\n' );
 
-        for ( const [ loc, instance ] of fileIndex ) {
-            contentLines[ loc.line ] = this.renderTaskInstance( instance, this.getIndent( instance, fileIndex ) );
+        for ( const [key, instance] of renderedIndex ) {
+            if ( !filteredIndex.has( key ) )
+                contentLines[ instance.position.start.line ] = '';
         }
-        await this.vault.modify( file, contentLines.filter( cl => cl !== null ).join( '\n' ) )
+        for ( const instance of filteredIndex.values() ) {
+            contentLines[ instance.position.start.line ] =
+                this.renderTaskInstance(
+                    instance,
+                    this.getIndent( instance, filteredIndex ),
+                    {
+                        ...DEFAULT_RENDER_OPTS,
+                        links: false
+                    } );
+        }
+        await this.vault.modify( file, contentLines.join( '\n' ) )
     }
 
     public getTaskPath( task: Task ): string {
@@ -301,6 +340,54 @@ export class TaskFileManager {
         if ( file instanceof TFile ) {
             if ( this.isTaskFile( file ) )
                 await this.vault.delete( file )
+            else {
+                await this.removeTaskMetadata( file );
+            }
         }
+    }
+
+    public async removeTaskMetadata(
+        file: TFile,
+        vault = this.vault,
+        mdCache = this.mdCache,
+        parserSettings = this.pluginSettings.parserSettings
+    ) {
+        return TaskFileManager.removeTaskMetadata( file, vault, mdCache, parserSettings );
+    }
+
+    public static async removeTaskMetadata(
+        file: TFile,
+        vault: Vault,
+        mdCache: MetadataCache,
+        parserSettings: ParserSettings
+    ) {
+        return vault.read( file )
+            .then( contents => {
+                const parser = new TaskParser( parserSettings );
+                const taskItems = mdCache.getFileCache( file )?.listItems
+                    ?.filter( li => li.task ) || [];
+                const lines = contents.split( '\n' );
+                for ( const taskItem of taskItems ) {
+                    let taskLine = lines[ taskItem.position.start.line ];
+                    const task = parser.parseLine( taskLine );
+                    if ( task ) {
+                        // return line to normal
+                        taskLine = taskLine.replace( TaskParser.ID_REGEX, '' )
+                            .replace( parser.recurrenceRegex, '' )
+                            .replace( parser.dueDateRegex, '' )
+                            .trimEnd();
+                        lines[ taskItem.position.start.line ] = taskLine;
+                    }
+                }
+                const stripped = lines.join( '\n' );
+                return vault.modify( file, stripped );
+            } )
+    }
+
+    async getFile( path: string ) {
+        let ret = this.vault.getAbstractFileByPath( path );
+        if ( !ret )
+            ret = await this.vault.create( path, '' );
+        return ret as TFile;
     }
 }

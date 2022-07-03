@@ -10,15 +10,15 @@ import {
     PrimaryTaskInstance,
     Task,
     TaskInstanceYamlObject,
+    taskLocation,
     TaskLocation,
-    taskLocationFromInstance,
     taskLocationStr,
     taskLocFromStr
 } from "./index";
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
 
-export const TASK_FILENAME_REGEX = /^(?<name>\w.*)(?=\((?<id>[\w\d]+)\))(?:\([\w\d]+\))\.(?:md)?/;
+export const TASK_BASENAME_REGEX = /^(?<name>\w.*)(?=\((?<id>[\w\d]+)\))(?:\([\w\d]+\))/;
 
 export const emptyTaskInstance = (): TaskInstance => {
     return {
@@ -52,6 +52,14 @@ export const emptyTask = (): Task => {
 export const isPrimaryInstance = ( inst: TaskInstance | PrimaryTaskInstance ): inst is PrimaryTaskInstance => {
     return inst.primary
 }
+
+export const isTaskInstance = ( obj: unknown ): obj is TaskInstance => {
+    for ( const prop of [ 'name', 'parent', 'uid', 'id', 'complete', 'rawText', 'filePath' ] ) {
+        if ( !obj.hasOwnProperty( prop ) )
+            return false;
+    }
+    return true;
+};
 
 export const taskInstanceFromTask = (
     filePath: string,
@@ -97,7 +105,7 @@ export const createTaskFromPrimary = ( primary: PrimaryTaskInstance ): Task => {
         complete,
         updated,
         created,
-        locations: [ taskLocationFromInstance( primary ) ],
+        locations: [ taskLocation( primary ) ],
         completedDate,
         dueDate,
         recurrence,
@@ -114,7 +122,7 @@ export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
         ...({ uid: inst.uid || taskIdToUid( inst.id ) || 0 }),
         ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated' )),
-        locations: [ taskLocationFromInstance( inst ) ]
+        locations: [ taskLocation( inst ) ]
     };
 }
 
@@ -172,7 +180,7 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         complete: complete === 'true',
         created: new Date( created ),
         updated: new Date( updated ),
-        locations: locations.map( taskLocFromStr ),
+        locations: (locations || []).map( taskLocFromStr ),
         childUids: childUids.map( Number.parseInt ),
         parentUids: parentUids.map( Number.parseInt ),
         ...(tags && tags.length && { tags }),
@@ -261,7 +269,7 @@ export const taskToBasename = ( task: TaskInstance | Task ) => `${task.name} (${
 export const taskToFilename = ( task: TaskInstance | Task ) => `${taskToBasename( task )}.md`;
 
 export const isFilenameValid = ( f: TFile ): boolean => {
-    const match = f.basename.match( TASK_FILENAME_REGEX );
+    const match = f.basename.match( TASK_BASENAME_REGEX );
     if ( !match )
         return false
 
@@ -274,7 +282,7 @@ export const isFilenameValid = ( f: TFile ): boolean => {
 }
 
 export const parseTaskFilename = ( f: TFile ) => {
-    const match = f.basename.match( TASK_FILENAME_REGEX );
+    const match = f.basename.match( TASK_BASENAME_REGEX );
     const { name, id } = match.groups;
     return { name, id };
 };

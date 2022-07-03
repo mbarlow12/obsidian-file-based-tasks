@@ -1,6 +1,6 @@
-import { Task, TaskInstance, TaskLocation, TaskUID } from '../Task';
+import { Task, TaskInstance, TaskUID } from '../Task';
 
-export type TaskInstanceIndex = Map<TaskLocation, TaskInstance>;
+export type TaskInstanceIndex = Map<string, TaskInstance>;
 export type TaskIndex = Map<TaskUID, Task>;
 export type TaskStoreState = {
     instanceIndex: TaskInstanceIndex;

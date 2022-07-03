@@ -2,14 +2,7 @@ import { expect, jest } from '@jest/globals';
 import { EventRef, Events } from 'obsidian';
 import { TaskEvents } from '../Events/TaskEvents';
 import { DEFAULT_TASK_MANAGER_SETTINGS } from '../Settings';
-import {
-    emptyPosition,
-    LOC_DELIM,
-    PrimaryTaskInstance,
-    TaskInstance,
-    taskLocationFromInstance,
-    taskLocFromStr
-} from '../Task';
+import { emptyPosition, instanceIndexKey, LOC_DELIM, PrimaryTaskInstance, TaskInstance } from '../Task';
 import { emptyTaskInstance } from '../Task/Task';
 import {
     createPositionAtLine,
@@ -105,8 +98,8 @@ describe( 'task deletion', () => {
                 [ 44, createTestTask( 44 ) ]
             ] ),
             instanceIndex: new Map( [
-                [ taskLocFromStr( `file/path1.md${LOC_DELIM}1` ), createTestTaskInstance( 44, emptyPosition( 1 ) ) ],
-                [ taskLocFromStr( `file/path2.md${LOC_DELIM}10` ), createTestTaskInstance( 44, emptyPosition( 10 ) ) ]
+                [  `file/path1.md${LOC_DELIM}1` , createTestTaskInstance( 44, emptyPosition( 1 ) ) ],
+                [  `file/path2.md${LOC_DELIM}10` , createTestTaskInstance( 44, emptyPosition( 10 ) ) ]
             ] )
         };
         const newInstances = deleteTaskUids( [ 44 ], initialState.instanceIndex );
@@ -120,16 +113,16 @@ describe( 'task deletion', () => {
             createTestPrimaryTaskInstance( 44, emptyPosition( 0 ) ),
             createTestTaskInstance( 44, emptyPosition( 1 ), -1, `file/path1.md` ),
             createTestTaskInstance( 44, emptyPosition( 10 ), -1, `file/path1.md` )
-        ].reduce((m, i) => m.set(taskLocationFromInstance(i), i), new Map());
+        ].reduce((m, i) => m.set(instanceIndexKey(i), i), new Map());
         const instances = [...index.values()];
         const initialState: TaskStoreState = {
                 taskIndex: new Map([
                     [44, { ...createTestTask( 44 ), instances }]
                 ]),
                 instanceIndex: new Map([
-                    [ taskLocFromStr(`tasks/test task with uid 44_2c.md${LOC_DELIM}0`), instances[ 0 ] ],
-                    [ taskLocFromStr(`file/path1.md${LOC_DELIM}1`), instances[ 1 ] ],
-                    [ taskLocFromStr(`file/path1.md${LOC_DELIM}10`), instances[ 2 ] ]
+                    [ `tasks/test task with uid 44_2c.md${LOC_DELIM}0`, instances[ 0 ] ],
+                    [ `file/path1.md${LOC_DELIM}1`, instances[ 1 ] ],
+                    [ `file/path1.md${LOC_DELIM}10`, instances[ 2 ] ]
                 ])
             };
         const newInstances = deleteTaskUids( [ 43 ], index );
@@ -153,17 +146,17 @@ describe( 'file modify tasks', () => {
 
     test( 'Single task instance, empty index, empty state', () => {
         const filePath = 'path/to/test file.md';
-        const loc = taskLocFromStr(`${filePath}${LOC_DELIM}1`);
+        const locStr = instanceIndexKey(filePath, 1);
         const fileInstIndex: TaskInstanceIndex = new Map([
-            [ loc, createTestTaskInstance( 1, createPositionAtLine( 1 ), -1, filePath )],
+            [ instanceIndexKey(locStr), createTestTaskInstance( 1, createPositionAtLine( 1 ), -1, filePath )],
         ]);
         const newInstances = store.replaceFileInstances( fileInstIndex );
         const newState = store.buildStateFromInstances( newInstances );
         expect( 1 in newState.taskIndex ).toBeTruthy();
-        expect( newState.instanceIndex.has(loc) ).toBeTruthy();
-        expect( newState.instanceIndex.get(loc).uid ).toEqual( 1 );
-        expect( newState.taskIndex.get(1).name ).toEqual( newState.instanceIndex.get(loc).name );
-        expect( newState.taskIndex.get(1).id ).toEqual( newState.instanceIndex.get(loc).id );
+        expect( newState.instanceIndex.has(locStr) ).toBeTruthy();
+        expect( newState.instanceIndex.get(locStr).uid ).toEqual( 1 );
+        expect( newState.taskIndex.get(1).name ).toEqual( newState.instanceIndex.get(locStr).name );
+        expect( newState.taskIndex.get(1).id ).toEqual( newState.instanceIndex.get(locStr).id );
         expect( 'Backlog.md||0' in newState.instanceIndex ).toBeTruthy();
     } );
 
@@ -348,12 +341,12 @@ describe( 'find uinque uids', () => {
     // } );
 } );
 
-const testUids = [ 100001, 100002, 100003, 100004, 100005, 100006, 110011 ];
-const testTasks = testUids.map( ( uid, i ) => {
-    const t = createTestTask( uid );
-    t.created.setSeconds( t.created.getSeconds() + i )
-    return t;
-} );
+// const testUids = [ 100001, 100002, 100003, 100004, 100005, 100006, 110011 ];
+// const testTasks = testUids.map( ( uid, i ) => {
+//     const t = createTestTask( uid );
+//     t.created.setSeconds( t.created.getSeconds() + i )
+//     return t;
+// } );
 
 // describe( 'Index file instances', () => {
 //

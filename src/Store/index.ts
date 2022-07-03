@@ -1,12 +1,12 @@
 import { isEqual } from 'lodash';
 import {
     emptyPosition,
+    instanceIndexKey,
     locationsEqual,
     PrimaryTaskInstance,
     Task,
     TaskInstance,
-    taskLocation,
-    taskLocationFromInstance
+    taskLocation
 } from '../Task';
 import { createTaskFromPrimary, taskInstanceFromTask } from '../Task/Task';
 import { DEFAULT_TASKS_DIR } from '../TaskFileManager';
@@ -19,9 +19,9 @@ export const handleCompletions = ( instances: TaskInstanceIndex ) => {
     for ( const [ loc, inst ] of instances ) {
         let parentLine = inst.parent;
         while ( parentLine > -1 ) {
-            const parent = instances.get( taskLocation( inst.filePath, parentLine ) );
+            const parent = instances.get( instanceIndexKey( inst.filePath, parentLine ) );
             if ( !parent ) {
-                inst.parent = -1;
+                parentLine = -1;
                 continue;
             }
             if ( parent.complete )
@@ -48,8 +48,8 @@ export const taskInstancesAreSameTask = (
         )
             return false;
 
-        const parentA = instIdx.get( taskLocation( instA.filePath, instA.parent ) );
-        const parentB = instIdx.get( taskLocation( instB.filePath, instB.parent ) );
+        const parentA = instIdx.get( instanceIndexKey( instA.filePath, instA.parent ) );
+        const parentB = instIdx.get( instanceIndexKey( instB.filePath, instB.parent ) );
         if ( (parentA && parentB) && taskInstancesAreSameTask( parentA, parentB, instIdx ) )
             return false;
 
@@ -74,22 +74,22 @@ export const taskInstancesAreSameTask = (
     return true;
 }
 
-export const getPrimaryInstance = (instance: TaskInstance, index: TaskInstanceIndex, taskDir = DEFAULT_TASKS_DIR) => {
-    const filename = primaryTaskFilename(instance, taskDir);
-    return index.get(taskLocation(filename, 0)) as PrimaryTaskInstance;
+export const getPrimaryInstance = ( instance: TaskInstance, index: TaskInstanceIndex, taskDir = DEFAULT_TASKS_DIR ) => {
+    const filename = primaryTaskFilename( instance, taskDir );
+    return index.get( instanceIndexKey( filename, 0 ) ) as PrimaryTaskInstance;
 }
 export const taskIndexFromInstances = ( instances: TaskInstanceIndex, taskDir = DEFAULT_TASKS_DIR ): TaskIndex => {
     validateInstanceIndex( instances );
     const idx: TaskIndex = new Map();
-    for ( const [ loc, instance ] of instances ) {
+    for ( const instance of instances.values() ) {
         const task = idx.get( instance.uid ) || createTaskFromPrimary( getPrimaryInstance( instance, instances, taskDir ) );
-        task.locations.push( loc );
-        const parentLoc = taskLocation( instance.filePath, instance.parent );
+        task.locations.push( taskLocation( instance ) );
+        const parentLoc = instanceIndexKey( instance.filePath, instance.parent );
         const parentInst = instances.get( parentLoc );
         if ( parentInst ) {
             const parentTask = idx.get( parentInst.uid ) || createTaskFromPrimary( getPrimaryInstance( parentInst, instances, taskDir ) );
             parentTask.childUids.push( instance.uid );
-            parentTask.locations.push( parentLoc );
+            parentTask.locations.push( taskLocation( parentInst ) );
             idx.set( parentInst.uid, {
                 ...parentTask,
                 childUids: filterUnique( parentTask.childUids ),
@@ -132,19 +132,38 @@ export const createIndexFileTaskInstances = (
     filter: ( t: Task ) => boolean = ( t: Task ) => true,
     comparator: Comparator<Task> = ( a, b ) => a.created.getTime() - b.created.getTime()
 ): TaskInstanceIndex => {
-    const filteredIndex: TaskIndex = new Map();
     const instances: TaskInstance[][] = [];
-    for ( const [ uid, task ] of taskIndex ) {
+    let currInstanceLine = 0;
+    const orderedTasks = [ ...taskIndex.entries() ].sort( ( [ , tA ], [ , tB ] ) => comparator( tA, tB ) );
+    const seenUids: Set<number> = new Set();
+    for ( const [ uid, task ] of orderedTasks ) {
         if ( filter( task ) ) {
-            if ( filteredIndex.has( uid ) )
+            if ( seenUids.has( uid ) )
                 continue;
-            const taskInsts = [ taskInstanceFromTask( filePath, 0, task ) ];
+            const taskInsts: TaskInstance[] = [ {
+                ...taskInstanceFromTask( filePath, 0, task ),
+                links: task.locations.map(l => l.filePath)
+            } ]
             const childUids = task.childUids.filter( cuid => filter( taskIndex.get( cuid ) ) );
-            for ( const child of childUids ) {
-                taskInsts.push( taskInstanceFromTask( filePath, 0, taskIndex.get( child ) ) );
-                filteredIndex.set( child, taskIndex.get( child ) )
+            const childUidsAndParents = childUids.map( cuid => [ currInstanceLine, cuid ] );
+            while ( childUidsAndParents.length > 0 ) {
+                const [ pLine, cuid ] = childUidsAndParents.shift();
+                const currChild = taskIndex.get( cuid );
+                if ( currChild.childUids.length > 0 ) {
+                    childUidsAndParents.unshift(
+                        ...currChild.childUids.filter( cuid => filter( taskIndex.get( cuid ) ) )
+                            .map( cuid => [ pLine + 1, cuid ] )
+                    );
+                }
+                taskInsts.push( {
+                    ...taskInstanceFromTask( filePath, 0, taskIndex.get( cuid ) ),
+                    parent: pLine,
+                    links: task.locations.map( l => l.filePath )
+                } );
+                seenUids.add( cuid )
             }
-            filteredIndex.set( uid, { ...task, childUids } );
+            currInstanceLine += taskInsts.length;
+            seenUids.add( uid );
             instances.push( taskInsts );
         }
     }
@@ -154,21 +173,32 @@ export const createIndexFileTaskInstances = (
     ) => comparator( taskIndex.get( a[ 0 ].uid ), taskIndex.get( b[ 0 ].uid ) ) )
         .flat()
         .map( ( inst, i ) => ({ ...inst, position: emptyPosition( i ) }) );
-    return new Map( allInstances.map( i => [ taskLocationFromInstance( i ), i ] ) );
+    return new Map( allInstances.map( i => [ instanceIndexKey( i ), i ] ) );
 }
+
+export const getFileIndexes = ( index: TaskInstanceIndex ) => {
+    const fileIndexes: Map<string, TaskInstanceIndex> = new Map();
+    for ( const [ locStr, inst ] of index ) {
+        if ( !fileIndexes.has( inst.filePath ) )
+            fileIndexes.set( inst.filePath, new Map() );
+        fileIndexes.get( inst.filePath ).set( locStr, { ...inst } );
+    }
+    return fileIndexes;
+}
+
 export const filterIndexByPath = ( filePath: string, index: TaskInstanceIndex ): TaskInstanceIndex => {
     const filtered: TaskInstanceIndex = new Map();
     for ( const [ loc, instance ] of index ) {
-        if ( loc.filePath === filePath )
+        if ( instance.filePath === filePath )
             filtered.set( loc, instance );
     }
     return filtered;
 }
 
-export const deleteTaskUids = (uids: number[], index: TaskInstanceIndex) => {
-    for ( const [loc, inst] of index.entries() ) {
-        if (uids.includes(inst.uid))
-            index.delete(loc)
+export const deleteTaskUids = ( uids: number[], index: TaskInstanceIndex ) => {
+    for ( const [ loc, inst ] of index.entries() ) {
+        if ( uids.includes( inst.uid ) )
+            index.delete( loc )
     }
     return index;
 }
