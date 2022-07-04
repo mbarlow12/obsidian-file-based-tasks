@@ -8,6 +8,7 @@ import {
     TFolder,
     Vault
 } from "obsidian";
+import path from 'path';
 import { TaskEvents } from "./Events/TaskEvents";
 import { EventType } from './Events/types';
 import { ParserSettings, TaskParser } from './Parser/TaskParser';
@@ -214,7 +215,7 @@ export class TaskFileManager {
     }
 
     public isTaskFile( file: TFile, cache?: CachedMetadata ): boolean {
-        cache = cache ?? this.mdCache.getFileCache(file);
+        cache = cache ?? this.mdCache.getFileCache( file );
         return file.parent === this.tasksDirectory &&
             cache?.frontmatter &&
             cache.frontmatter.type &&
@@ -223,16 +224,40 @@ export class TaskFileManager {
 
     private static taskYamlFromFrontmatter( cfm: FrontMatterCache ): TaskYamlObject {
         const {
-            type, id, uid, name, locations, complete, created, updated, parentUids, childUids, recurrence, dueDate, completedDate
+            type,
+            id,
+            uid,
+            name,
+            locations,
+            complete,
+            created,
+            updated,
+            parentUids,
+            childUids,
+            recurrence,
+            dueDate,
+            completedDate
         } = cfm;
         return {
-            type, id, uid, name, locations, complete, created, updated, parentUids, childUids, recurrence, dueDate, completedDate
+            type,
+            id,
+            uid,
+            name,
+            locations,
+            complete,
+            created,
+            updated,
+            parentUids,
+            childUids,
+            recurrence,
+            dueDate,
+            completedDate
         } as unknown as TaskYamlObject
     }
 
     public async readTaskFile( file: TFile, cache?: CachedMetadata, data?: string ): Promise<Task> {
-        cache = cache ?? this.mdCache.getFileCache(file);
-        data = data ?? await this.vault.cachedRead(file);
+        cache = cache ?? this.mdCache.getFileCache( file );
+        data = data ?? await this.vault.cachedRead( file );
         const taskYml: TaskYamlObject = TaskFileManager.taskYamlFromFrontmatter( cache.frontmatter )
         const task = getTaskFromYaml( taskYml );
         task.name = task.name ?? file.basename;
@@ -248,6 +273,10 @@ export class TaskFileManager {
     }
 
     public getFileInstances( file: TFile, cache: CachedMetadata, contents: string ): TaskInstanceIndex {
+        // todo - is there a way to handle non task parents?
+        //  - option: just set parent to -1 and deal with the rerender
+        //  - option: make the parent list item a task
+        //  - option: create a special non-task instance that can be indexed
         const contentLines = contents.split( /\r?\n/ );
 
         const fileIndex: TaskInstanceIndex = new Map();
@@ -272,7 +301,7 @@ export class TaskFileManager {
         renderOpts = DEFAULT_RENDER_OPTS
     ): string {
         const baseLine = taskInstanceToChecklist( instance ).replace( /\^[\w\d]+/, '' ).trim();
-        const taskLinks = (instance.links ?? []).map( link => `[[${link}#^${instance.id}|${instance.filePath}]]` )
+        const taskLinks = (instance.links ?? []).map( link => `[[${link}#^${instance.id}|${path.parse( link ).name}]]` )
         const instanceLine = [
             baseLine,
             ...(renderOpts.links && taskLinks || []),
@@ -308,13 +337,13 @@ export class TaskFileManager {
     }
 
     public async writeStateToFile( file: TFile, instanceIndex: TaskInstanceIndex ): Promise<void> {
-        const filteredIndex = filterIndexByPath(file.path, instanceIndex);
-        const renderedIndex = await this.readMarkdownFile(file);
+        const filteredIndex = filterIndexByPath( file.path, instanceIndex );
+        const renderedIndex = await this.readMarkdownFile( file );
         const contents = (await this.vault.read( file ));
         const contentLines = contents.split( '\n' );
 
-        for ( const [key, instance] of renderedIndex ) {
-            if ( !filteredIndex.has( key ) )
+        for ( const [ key, instance ] of renderedIndex ) {
+            if ( !filteredIndex.has( key ) && instance.uid !== 0 )
                 contentLines[ instance.position.start.line ] = '';
         }
         for ( const instance of filteredIndex.values() ) {

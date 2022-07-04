@@ -138,6 +138,7 @@ export class TaskStore {
     replaceFileInstances( newIndex: TaskInstanceIndex ): TaskInstanceIndex {
         // handle new uids and task completions for parents
         const newTaskIndex: TaskIndex = new Map();
+        const retInstIndex: TaskInstanceIndex = new Map();
         const paths = new Set<string>( [ ...this.settings.indexFiles.keys() ] );
         for ( const [ locStr, inst ] of newIndex ) {
             paths.add( inst.filePath );
@@ -146,8 +147,8 @@ export class TaskStore {
                 inst.uid = this.nextId++;
                 inst.id = taskUidToId( inst.uid );
                 const prime = createPrimaryInstance( inst );
-                newIndex.set( instanceIndexKey( prime ), prime )
-                newIndex.set( locStr, inst );
+                retInstIndex.set( instanceIndexKey( prime ), prime )
+                retInstIndex.set( locStr, inst );
             }
 
             let parentLine = inst.parent;
@@ -162,7 +163,7 @@ export class TaskStore {
                 parentLine = parent.parent;
                 newTaskIndex.set( parent.uid, createTaskFromInstance( parent ) );
             }
-            newIndex.set( locStr, { ...inst } );
+            retInstIndex.set( locStr, { ...inst } );
             newTaskIndex.set( inst.uid, createTaskFromInstance( inst ) );
         }
 
@@ -186,7 +187,7 @@ export class TaskStore {
             }
         }
 
-        return new Map( [ ...existingIndex, ...newIndex ] );
+        return new Map( [ ...existingIndex, ...retInstIndex ] );
     }
 
     private stripUnwantedPaths( idx: TaskInstanceIndex ) {
@@ -254,17 +255,21 @@ export class TaskStore {
         for ( const [ uid, taskInsts ] of uidInstMap ) {
             let prime = taskInsts.filter( isPrimaryInstance ).pop();
             if ( !prime ) {
-                const existingTask = this.taskIndex.get(uid);
+                const existingTask = this.taskIndex.get( uid );
                 prime = createPrimaryInstance( existingTask ?? taskInsts[ 0 ] );
                 instances.set( instanceIndexKey( prime ), prime )
             }
             let task = taskIndex.get( uid );
             if ( !task )
                 task = createTaskFromPrimary( prime );
+            else
+                task = { ...task, created: prime.created, updated: prime.updated }
             for ( const inst of taskInsts ) {
                 if ( inst.parent > -1 ) {
                     const parent = instances.get( instanceIndexKey( inst.filePath, inst.parent ) );
-                    const parentTask = taskIndex.get( parent.uid );
+                    let parentTask = taskIndex.get( parent.uid );
+                    if ( !parentTask )
+                        parentTask = createTaskFromInstance(parent);
                     taskIndex.set( parent.uid, {
                         ...parentTask,
                         childUids: filterUnique( [ ...parentTask.childUids, inst.uid ] )
@@ -312,11 +317,11 @@ export class TaskStore {
         return deletedIdx;
     }
 
-    deleteTask( task: Task): TaskInstanceIndex {
+    deleteTask( task: Task ): TaskInstanceIndex {
         const newInstIdx = new Map();
         for ( const [ key, inst ] of this.taskInstanceIndex ) {
             if ( inst.uid !== task.uid )
-                newInstIdx.set(key, inst);
+                newInstIdx.set( key, inst );
         }
         return newInstIdx;
     }

@@ -143,6 +143,10 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.workspace.on( 'file-open', async file => {
             await this.onOpenFile( file );
         } ) );
+        this.registerEvent( this.app.workspace.on( 'active-leaf-change', (leaf) => {
+            console.log('leaf change');
+            console.log(leaf);
+        }));
     }
 
     private ignorePath( filePath: string ) {
@@ -243,11 +247,13 @@ export default class ObsidianTaskManager extends Plugin {
             return;
         }
 
+        // TODO: how to handle task file description editing?
+        //   - is task file, seems like I may not want to refresh the cache at all in that case
         const { line } = this.app.workspace.getActiveViewOfType( MarkdownView ).editor.getCursor();
         const fileInstances = await this.taskFileManager.getInstanceIndexFromFile( file, cache, data );
         const cursorInst = fileInstances.get( instanceIndexKey( file.path, line ) );
         if ( cursorInst && cursorInst.uid === 0 )
-            fileInstances.delete( instanceIndexKey( file.path, line ) );
+            return;
         const existingFileInstances = filterIndexByPath( file.path, this.taskStore.getState().instanceIndex );
         if ( hashInstanceIndex( fileInstances ) !== hashInstanceIndex( existingFileInstances ) ) {
             const insts = this.taskStore.replaceFileInstances( fileInstances )
