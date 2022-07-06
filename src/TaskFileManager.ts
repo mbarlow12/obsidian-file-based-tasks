@@ -204,6 +204,9 @@ export class TaskFileManager {
     }
 
     public async storeTaskFile( task: Task ) {
+        /*
+        TODO: consider adding a completed folder to declutter the tasks directory
+         */
         const fullPath = this.getTaskPath( task );
         const file = this.vault.getAbstractFileByPath( fullPath );
         if ( !file ) {
@@ -277,6 +280,9 @@ export class TaskFileManager {
         //  - option: just set parent to -1 and deal with the rerender
         //  - option: make the parent list item a task
         //  - option: create a special non-task instance that can be indexed
+        //  - option: ignore them as invalid tasks or make a special task prefix
+        //  - can i handle links as the task name...or rerender them as such and link them to the main file (or
+        //    backlog/complete?)
         const contentLines = contents.split( /\r?\n/ );
 
         const fileIndex: TaskInstanceIndex = new Map();
@@ -287,6 +293,19 @@ export class TaskFileManager {
             if ( !taskInstance )
                 continue;
             fileIndex.set( instanceIndexKey( file.path, lic.position.start.line ), taskInstance );
+            if (taskInstance.parent > -1 && !this.parser.parseLine(contentLines[taskInstance.parent])) {
+                let parentLine = taskInstance.parent;
+                while ( parentLine > -1 ) {
+                    const parentListItem = cache.listItems.find(pLic => pLic.position.start.line === parentLine);
+                    if (parentListItem && !parentListItem.task) {
+                        fileIndex.set(
+                            instanceIndexKey(file.path, parentListItem.position.start.line),
+                            this.parser.parseListItemLine(contentLines[ parentLine ], file.path, parentListItem )
+                        )
+                    }
+                    parentLine = parentListItem ? parentListItem.parent : -1;
+                }
+            }
         }
         return fileIndex;
     }

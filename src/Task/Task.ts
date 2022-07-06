@@ -1,6 +1,7 @@
 import { pick } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
+import { TASK_BASENAME_REGEX, TaskParser } from '../Parser/TaskParser';
 import { taskInstanceToChecklist } from '../Store/TaskStore';
 import { hash } from "../util/hash";
 import {
@@ -17,8 +18,6 @@ import {
 } from "./index";
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
-
-export const TASK_BASENAME_REGEX = /^(?<name>\w.*)(?=\((?<id>[\w\d]+)\))(?:\([\w\d]+\))/;
 
 export const emptyTaskInstance = (): TaskInstance => {
     return {
@@ -265,7 +264,7 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
     } as TaskInstance;
 }
 
-export const taskToBasename = ( task: TaskInstance | Task ) => `${task.name} (${task.id})`;
+export const taskToBasename = ( task: TaskInstance | Task ) => `${TaskParser.normalizeName(task.name)} (${task.id})`;
 export const taskToFilename = ( task: TaskInstance | Task ) => `${taskToBasename( task )}.md`;
 
 export const isFilenameValid = ( f: TFile ): boolean => {
