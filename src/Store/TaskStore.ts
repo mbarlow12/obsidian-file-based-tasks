@@ -140,6 +140,7 @@ export class TaskStore {
         const retInstIndex: TaskInstanceIndex = new Map();
         const paths = new Set<string>( [ ...this.settings.indexFiles.keys() ] );
         for ( const [ locStr, inst ] of newIndex ) {
+            let updated = false;
             paths.add( inst.filePath );
             if ( inst.uid === 0 ) {
                 // new task
@@ -162,8 +163,16 @@ export class TaskStore {
                 parentLine = parent.parent;
                 newTaskIndex.set( parent.uid, createTaskFromInstance( parent ) );
             }
+            if (this.taskIndex.has(inst.uid) && !this.taskIndex.get(inst.uid).complete) {
+                inst.completedDate = new Date();
+                updated = true;
+            }
+
             retInstIndex.set( locStr, { ...inst } );
-            newTaskIndex.set( inst.uid, createTaskFromInstance( inst ) );
+            newTaskIndex.set( inst.uid, {
+                ...createTaskFromInstance( inst ),
+                ...(updated && { updated: new Date() } )
+            } );
         }
 
         // propagate new instance data
