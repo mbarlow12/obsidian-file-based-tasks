@@ -61,7 +61,7 @@ const createPrimaryInstance = (
     updated = new Date(),
 ): PrimaryTaskInstance => {
     const { uid } = instance;
-    const id = uid === 0 ? '' : taskUidToId( uid );
+    const id = !uid ? '' : taskUidToId( uid );
     instance.id = id;
     const filePath = primaryTaskFilename( instance, tasksDir );
     if ( isTask( instance ) ) {
@@ -250,14 +250,26 @@ export class TaskStore {
     }
 
     buildStateFromInstances( instances: TaskInstanceIndex ): TaskStoreState {
+        // todo - get the diff within the new instances and add appropriate metadata
+        //      - if something is changed, set updated to today
+        //      - if completed/un-completed add/remove completion date
         instances = this.stripUnwantedPaths( instances );
         // instances should all have uids
         // ensure all tasks have a primary instance and add it to the instance index if no
         // add instances for index files
         // build task index
         const uidInstMap: Map<number, TaskInstance[]> = new Map();
-        for ( const inst of instances.values() )
+        for ( const inst of instances.values() ) {
             uidInstMap.set( inst.uid, [ ...(uidInstMap.get( inst.uid ) ?? []), inst ] )
+            if (!inst.uid) {
+                const {filePath, name} = inst;
+                const err = new Error();
+                err.message = `---
+                No UID for ${name} from ${filePath}
+                ---`;
+                throw err;
+            }
+        }
 
         const taskIndex: TaskIndex = new Map();
         for ( const [ uid, taskInsts ] of uidInstMap ) {
