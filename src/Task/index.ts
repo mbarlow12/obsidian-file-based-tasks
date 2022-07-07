@@ -1,5 +1,6 @@
 import { Loc, Pos } from "obsidian";
-import { MinTaskLocation, TaskFileLocation, TaskInstance, TaskLocation } from "./types";
+import { isTaskInstance } from './Task';
+import { TaskFileLocation, TaskInstance, TaskLocation } from "./types";
 
 export {
     getTaskFromYaml,
@@ -22,7 +23,7 @@ export const LOC_DELIM = '||';
 
 export const loc = ( line: number, col: number, offset: number ): Loc => ({ line, col, offset });
 
-export const posFromStr = ( position: string ): Pos => pos( ...position.split( LOC_DELIM ).map( Number.parseInt ) )
+export const parsePosStr = ( position: string ): Pos => pos( ...position.split( LOC_DELIM ).map( Number.parseInt ) )
 
 export const pos = ( ...locData: number[] ): Pos => {
     if ( locData.length != 6 ) {
@@ -50,52 +51,35 @@ export const taskFileLocationToStr = (
     posStr( position )
 ].join( LOC_DELIM );
 
-export const taskFileLocationFromStr = ( str: string ): { filePath: string, location: TaskFileLocation } => {
-    const [ filePath, sLine, sCol, sOffset, eLine, eCol, eOffset, parent ] = str.split( LOC_DELIM )
-    const [ sl, sc, so ] = [ sLine, sCol, sOffset ].map( Number.parseInt )
-    const [ el, ec, eo ] = [ eLine, eCol, eOffset ].map( Number.parseInt )
-    return {
-        filePath,
-        location: {
-            parent: Number.parseInt( parent ),
-            position: {
-                start: { line: sl, col: sc, offset: so },
-                end: { line: el, col: ec, offset: eo }
-            }
-        }
-    }
-}
-
-export const instanceIndexKey = ( filePath: string, line: number ) => [ filePath, line.toString() ].join( LOC_DELIM );
-
-export const taskLocationStr = ( { filePath, position }: TaskLocation ): string => [
-    filePath, `${position.start.line}`
+export const taskLocationStr = ( { filePath, line }: TaskLocation ): string => [
+    filePath, `${line}`
 ].join( LOC_DELIM );
 
 export const taskLocationStrFromInstance = ( {
     filePath,
-    position,
-    parent
-}: TaskInstance ) => taskLocationStr( { filePath, position, parent } );
+    position: { start: { line } },
+}: TaskInstance ) => taskLocationStr( { filePath, line } );
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 
-export const taskLocFromStr = ( locationStr: string ): TaskLocation => {
+export const taskLocFromPosStr = ( locationStr: string ): TaskFileLocation & { filePath: string } => {
     const [ filePath, parent, ...position ] = locationStr.split( LOC_DELIM );
     return {
         filePath,
-        parent: Number.parseInt( parent ),
+        parent: Number.parseInt(parent),
         position: pos( ...position.map( Number.parseInt ) )
     };
 }
 
-export const taskLocFromMinStr = ( locStr: string ): MinTaskLocation => {
-    const [ filePath, lineNumber ] = locStr.split( LOC_DELIM );
-    return { filePath, line: Number.parseInt( lineNumber ) }
+export const taskLocFromStr = ( str: string ): TaskLocation => {
+    const [filePath, line] = str.split(LOC_DELIM);
+    return {
+        filePath, line: Number.parseInt(line)
+    };
 }
 
 export const locationsEqual = ( locA: TaskLocation, locB: TaskLocation ) => {
-    return locA.filePath === locB.filePath && locA.position.start.line === locB.position.start.line;
+    return locA.filePath === locB.filePath && locA.line === locB.line;
 };
 
 export const positionsEqual = ( p1: Pos, p2: Pos ) => {
@@ -105,8 +89,30 @@ export const positionsEqual = ( p1: Pos, p2: Pos ) => {
 export const locsEqual = ( l1: Loc, l2: Loc ) => {
     return l1.line === l2.line && l1.col === l2.col && l1.offset === l2.offset;
 }
-export const taskLocationFromInstance = (
-    { filePath, parent, position }: TaskInstance
-): TaskLocation => ({
-    filePath, parent, position
-});
+export const instanceIndexKey = (
+    first: TaskInstance|TaskLocation|string,
+    second?: number
+): string => {
+    let loc: TaskLocation;
+    if (typeof first === 'string')
+        loc = taskLocation(first, second);
+    else {
+        if (isTaskInstance(first))
+            loc = taskLocation(first.filePath, first.position.start.line);
+        else
+            loc = first;
+    }
+    return taskLocationStr(loc);
+}
+
+export const taskLocation = (
+    first: TaskInstance|TaskLocation|string,
+    second?: number
+): TaskLocation => {
+    if ( typeof first === 'string' )
+        return {filePath: first, line: second};
+    if ( isTaskInstance( first ) )
+        return {filePath: first.filePath, line: first.position.start.line};
+    else
+        return first;
+}

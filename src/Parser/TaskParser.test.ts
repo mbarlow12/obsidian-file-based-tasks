@@ -1,4 +1,6 @@
-import { ParsedTask, TaskParser } from './TaskParser';
+import { emptyPosition, ParsedTask } from '../Task';
+import { taskIdToUid } from '../Task/Task';
+import { TaskParser } from './TaskParser';
 
 /**
  * TODO invalid cases and handle reformatting
@@ -52,6 +54,23 @@ describe( 'Task parsing', () => {
         }
     } );
 
+    test( 'Parse tasks with link names', () => {
+        let line = '- [ ] [[task name]] #tag1 [[a link for this]]';
+        let task = parser.parseLine( line );
+        expect( task.name ).toEqual( '[[task name]] #tag1 [[a link for this]]' );
+        expect( task.tags ).toBeTruthy();
+        expect( task.tags[ 0 ] ).toEqual( 'tag1' );
+        expect( task.links ).toBeTruthy();
+        expect( task.links ).toHaveLength( 2 );
+        expect(task.links[0]).toEqual('task name');
+        expect(task.links[1]).toEqual('a link for this');
+
+        line = '- [ ] [[task name with #illegal [[chars]]]]';
+        task = parser.parseLine( line );
+        expect(task.name).toEqual('task name with #illegal [[chars]]')
+
+    } );
+
     test( 'Parser a series of invalid todos', () => {
         const items = [
             [ '- [  ]', '- [', '[ ]', '-[]', '-[ ]', '- ]' ].map( x => x.concat( ' ', 'incomplete task' ) ),
@@ -76,14 +95,14 @@ describe( 'Task parsing', () => {
         expect( pTask.tags ).toBeTruthy();
         expect( pTask.tags ).toHaveLength( 1 );
         expect( pTask.tags[ 0 ] ).toEqual( 'tag' );
-        expect( pTask.name ).toEqual( 'task name' );
+        expect( pTask.name ).toEqual( 'task name #tag' );
 
         line = '- [ ] task name #firsttag #secondtag';
         pTask = parser.parseLine( line );
         expect( pTask.tags ).toBeTruthy();
         expect( pTask.tags ).toHaveLength( 2 );
         expect( pTask.tags ).toStrictEqual( [ 'firsttag', 'secondtag' ] );
-        expect( pTask.name ).toEqual( 'task name' );
+        expect( pTask.name ).toEqual( 'task name #firsttag #secondtag' );
     } );
 
     test( 'Parse due dates', () => {
@@ -105,6 +124,16 @@ describe( 'Task parsing', () => {
     } );
 
     test( 'Parse recurrences', () => {
+        let line = '- [x] task with recurrence &every monday';
+        const parser = new TaskParser();
+        let pTask = parser.parseLine( line );
+        expect( pTask.recurrence ).toBeTruthy();
+        expect(pTask.recurrence.toText().toLowerCase()).toEqual('every week on monday')
+        expect(pTask.name).toEqual('task with recurrence &every monday')
+
+        line = '- &every tuesday task 4';
+        pTask = parser.parseLine(line);
+        expect(pTask).toBeNull();
     } );
 
     test( 'Parse links', () => {
@@ -112,17 +141,136 @@ describe( 'Task parsing', () => {
         const parser = new TaskParser();
         let pTask = parser.parseLine( line );
         expect( pTask.links ).toBeTruthy();
+        expect(pTask.links).toEqual(['my first task with this stuff_186a1#^186a1|my first task with this stuff', 'some other file#^186a1|my first task with this stuff'])
+        expect(pTask.name).toEqual('my first task with this stuff [[my first task with this stuff_186a1#^186a1|my first task with this stuff]] [[some other file#^186a1|my first task with this stuff]]')
+
+        line = '- [ ] [[link 1]] some text [[link 2|link 2 display]] #cool #work &every monday for 3 times';
+        pTask = parser.parseLine(line);
+        expect(pTask.tags).toEqual(['cool', 'work']);
+        expect(pTask.recurrence.toText().toLowerCase()).toEqual('every week on monday for 3 times')
+        expect(pTask.links).toEqual(['link 1', 'link 2|link 2 display'])
     } );
 
     test( 'Parse ids', () => {
         let line = '- [ ] test task ^abc1';
-        let task = parser.parseLine(line);
-        expect(task.id).toEqual('abc1');
+        let task = parser.parseLine( line );
+        expect( task.id ).toEqual( 'abc1' );
 
         line = '- [ ] test task ^nope4 some more @Fri May 1 ^abc123'
-        task = parser.parseLine(line);
-        expect(task.id).toEqual('abc123');
-        expect(task.name).toEqual('test task ^nope4 some more');
+        task = parser.parseLine( line );
+        expect( task.id ).toEqual( 'abc123' );
+        expect( task.name ).toEqual( 'test task ^nope4 some more @Fri May 1' );
     } );
+
+    test( 'parse data within links', () => {
+        let line = '- [ ] [[a simple link task]]';
+        let task = parser.parseLine(line);
+        expect(task.name).toEqual('a simple link task');
+        expect(task.id).toEqual('');
+        expect(task.uid).toEqual(0);
+        expect(task.links).toHaveLength(1);
+        expect(task.links).toStrictEqual(['a simple link task']);
+
+        line = '- [ ] [[a link task with id (idnum1)]]';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task with id');
+        expect(task.id).toEqual('idnum1');
+        expect(task.uid).toEqual(taskIdToUid('idnum1'));
+
+        line = '- [ ] [[a link task with id (idnum1)]] ^idnum1';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task with id');
+        expect(task.id).toEqual('idnum1');
+        expect(task.uid).toEqual(taskIdToUid('idnum1'));
+
+        line = '- [ ] [[task/dir/a link task with id (idnum1)]] ^idnum1';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task with id');
+        expect(task.id).toEqual('idnum1');
+        expect(task.uid).toEqual(taskIdToUid('idnum1'));
+        expect(task.links).toEqual(['task/dir/a link task with id (idnum1)']);
+
+        line = '- [ ] [[task/dir/a link task with id (idnum1)#heading|a heading]] ^idnum1';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task with id');
+        expect(task.id).toEqual('idnum1');
+        expect(task.uid).toEqual(taskIdToUid('idnum1'));
+
+
+        line = '- [ ] [[task/dir/a link task#heading|a heading]] ^idnum1';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task#heading|a heading');
+        expect(task.id).toEqual('idnum1');
+        expect(task.uid).toEqual(taskIdToUid('idnum1'));
+
+        line = '- [ ] [[a link task with id (idnum1)]] ^idnum2';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('a link task with id');
+        expect(task.id).toEqual('idnum2');
+        expect(task.uid).toEqual(taskIdToUid('idnum2'));
+
+        line = '- [ ] [[a link task with id (idnum1)]] some additional text';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('[[a link task with id (idnum1)]] some additional text');
+        expect(task.id).toEqual('');
+        expect(task.uid).toEqual(0);
+        expect(task.links).toStrictEqual(['a link task with id (idnum1)'])
+
+        line = '- [ ] [[a link task with id]] some additional text';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('[[a link task with id]] some additional text');
+        expect(task.id).toEqual('');
+        expect(task.uid).toEqual(0);
+        expect(task.links).toStrictEqual(['a link task with id'])
+
+        line = '- [ ] #will match [[a link task with id]] some additional text';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('#will match [[a link task with id]] some additional text')
+        expect(task.tags).toEqual(['will'])
+        expect(task.links).toEqual(['a link task with id'])
+
+        line = '- [ ] #will match [[a link task with id (id44)]] some additional text ^idstuff';
+        task = parser.parseLine(line);
+        expect(task.name).toEqual('#will match [[a link task with id (id44)]] some additional text')
+        expect(task.tags).toEqual(['will'])
+        expect(task.links).toEqual(['a link task with id (id44)'])
+        expect(task.id).toEqual('idstuff')
+
+        line = '- #will match [[a link task with id (id44)]] some additional text ^idstuff';
+        task = parser.parseListItemLine(line, 'path.md', {id: '', parent: -1, position: emptyPosition(0)});
+        expect(task.name).toEqual('#will match [[a link task with id (id44)]] some additional text')
+        expect(task.tags).toEqual(['will'])
+        expect(task.links).toEqual(['a link task with id (id44)'])
+        expect(task.id).toEqual('idstuff')
+    });
+
+    test( 'normalize task file name', () => {
+        let normalized = TaskParser.normalizeName('simple task name');
+        expect(normalized).toEqual('simple task name');
+
+        normalized = TaskParser.normalizeName('task name with [[link]]')
+        expect(normalized).toEqual('task name with link')
+
+        normalized = TaskParser.normalizeName('#tagged task name');
+        expect(normalized).toEqual('tagged task name');
+
+        normalized = TaskParser.normalizeName('[[task name inside | piped link]]');
+        expect(normalized).toEqual('task name inside piped link');
+
+        normalized = TaskParser.normalizeName('[[task name inside|piped link with^idblock]]');
+        expect(normalized).toEqual('task name inside piped link with idblock');
+
+        normalized = TaskParser.normalizeName('[[task name with#|^multiple|||||simultaneous[[]][chars]]');
+        expect(normalized).toEqual('task name with multiple simultaneous chars');
+
+        normalized = TaskParser.normalizeName('task name with#|^multiple|||||simultaneous[[]][chars &every tuesday');
+        expect(normalized).toEqual('task name with multiple simultaneous chars &every tuesday');
+
+        normalized = TaskParser.normalizeName('task name with#|^multiple|||||simultaneous[[]][chars &every tuesday @2pm');
+        expect(normalized).toEqual('task name with multiple simultaneous chars &every tuesday @2pm');
+
+        normalized = TaskParser.normalizeName('long/task/dir/task name with#|^multiple|||||simultaneous[[]][chars &every tuesday @2pm');
+        expect(normalized).toEqual('long task dir task name with multiple simultaneous chars &every tuesday @2pm');
+    })
 
 } )

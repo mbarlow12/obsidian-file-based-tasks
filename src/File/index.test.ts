@@ -80,8 +80,8 @@ test( 'Basic representation', () => {
     const file = new TFile();
     file.path = 'file/path'
     const obj = getFileInstanceIndex( file, cacheMetadata1, testContents1 );
-    const expected: TaskInstanceIndex = {
-        [ `file/path${LOC_DELIM}0` ]: {
+    const expected: TaskInstanceIndex = new Map([
+        [ `file/path${LOC_DELIM}0` , {
             id: '',
             uid: 0,
             name: 't1',
@@ -94,8 +94,8 @@ test( 'Basic representation', () => {
             rawText: '- [ ] t1',
             filePath: 'file/path',
             primary: false,
-        },
-        [ `file/path${LOC_DELIM}1` ]: {
+        }],
+        [ `file/path${LOC_DELIM}1` , {
             id: '',
             uid: 0,
             name: 't2',
@@ -108,8 +108,8 @@ test( 'Basic representation', () => {
             rawText: '- [ ] t2',
             filePath: 'file/path',
             primary: false,
-        },
-        [ `file/path${LOC_DELIM}2` ]: {
+        }],
+        [ `file/path${LOC_DELIM}2` , {
             id: '',
             uid: 0,
             name: 't3',
@@ -122,8 +122,8 @@ test( 'Basic representation', () => {
             rawText: '    - [ ] t3',
             filePath: 'file/path',
             primary: false,
-        },
-        [ `file/path${LOC_DELIM}3` ]: {
+        }],
+        [ `file/path${LOC_DELIM}3` , {
             id: '',
             uid: 0,
             name: 't4',
@@ -136,8 +136,8 @@ test( 'Basic representation', () => {
             filePath: 'file/path',
             rawText: '    - [ ] t4',
             primary: false,
-        }
-    }
+        }]
+    ])
     expect( obj ).toEqual( expected );
 } );
 
@@ -145,8 +145,8 @@ test( 'Representation with ids', () => {
     const file = new TFile();
     file.path = 'file/path'
     const obj = getFileInstanceIndex( file, cacheMetadata2, testContents2 );
-    const expected: TaskInstanceIndex = {
-        [ `file/path${LOC_DELIM}0` ]: {
+    const expected: TaskInstanceIndex = new Map([
+        [ `file/path${LOC_DELIM}0`, {
             id: '12345',
             uid: Number.parseInt( '12345', 16 ),
             name: 't1',
@@ -159,8 +159,8 @@ test( 'Representation with ids', () => {
             filePath: 'file/path',
             rawText: '- [ ] t1 ^12345',
             primary: false,
-        },
-        [ `file/path${LOC_DELIM}1` ]: {
+        }],
+        [ `file/path${LOC_DELIM}1`, {
             id: '23456',
             uid: Number.parseInt( '23456', 16 ),
             name: 't2',
@@ -173,8 +173,8 @@ test( 'Representation with ids', () => {
             filePath: 'file/path',
             rawText: '    - [x] t2 ^23456',
             primary: false,
-        }
-    };
+        }]
+    ]);
     expect( obj ).toEqual( expected );
 } );
 

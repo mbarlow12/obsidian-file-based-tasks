@@ -11,8 +11,6 @@ export type Char =
 
 export type NonEmptyString = `${Char}${string}`
 
-type ExListItemCache = ListItemCache & {primary: boolean}
-
 interface TaskInstanceBase extends ListItemCache {
     uid?: number;
     name: string;
@@ -39,7 +37,10 @@ export interface PrimaryTaskInstance extends TaskInstanceBase {
 
 export type TaskInstance = ITaskInstance | PrimaryTaskInstance;
 
-export type TaskLocation = Pick<TaskInstance, 'filePath'|'position'|'parent'>
+export type TaskLocation = {
+    filePath: string;
+    line: number;
+}
 
 export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'rawText'|'primary'> & {
     uid: TaskUID;
@@ -47,13 +48,12 @@ export type Task = Omit<TaskInstance, 'position'|'parent'|'task'|'filePath'|'raw
     parentUids: number[];
     created: Date;
     updated: Date;
-    instances: TaskInstance[];
+    locations: TaskLocation[];
     description: string;
 }
 
-export type TaskYamlObject = YamlObject<Task, 'description'|'instances'> & {
+export type TaskYamlObject = YamlObject<Task, 'description'> & {
     type: typeof TaskRecordType
-    instances: TaskInstanceYamlObject[]
 }
 
 export type TaskInstanceYamlObject = YamlObject<TaskInstance, 'tags'|'dueDate'|'recurrence'|'uid'|'id'|'name'>
@@ -79,3 +79,4 @@ export type TaskFileLocationRecord = Record<string, TaskFileLocation>;
 export type TaskFileLocation = Omit<ListItemCache, 'task'|'id'>;
 
 export type MinTaskLocation = Pick<TaskLocation, 'filePath'> & { line: number };
+export type ParsedTask = Omit<TaskInstance, 'task'|'parent'|'position'|'filePath'>

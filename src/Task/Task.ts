@@ -1,21 +1,23 @@
-import { isEqual, keys, pick, values } from 'lodash';
+import { pick } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
+import { TASK_BASENAME_REGEX, TaskParser } from '../Parser/TaskParser';
 import { taskInstanceToChecklist } from '../Store/TaskStore';
 import { hash } from "../util/hash";
 import {
     emptyPosition,
-    posFromStr,
+    parsePosStr,
     posStr,
     PrimaryTaskInstance,
     Task,
     TaskInstanceYamlObject,
-    TaskLocation
+    taskLocation,
+    TaskLocation,
+    taskLocationStr,
+    taskLocFromStr
 } from "./index";
 import { NonEmptyString, TaskInstance, TaskRecordType, TaskYamlObject } from "./types";
 
-
-const taskFileNameRegex = /^(?<name>\w.*)(?=_[\w\d]+)(?<id>[\w\d]+)(?:.md)?/;
 
 export const emptyTaskInstance = (): TaskInstance => {
     return {
@@ -41,7 +43,7 @@ export const emptyTask = (): Task => {
         created: new Date( 0 ),
         parentUids: [],
         updated: new Date( 0 ),
-        instances: [],
+        locations: [],
         description: ''
     }
 }
@@ -49,6 +51,14 @@ export const emptyTask = (): Task => {
 export const isPrimaryInstance = ( inst: TaskInstance | PrimaryTaskInstance ): inst is PrimaryTaskInstance => {
     return inst.primary
 }
+
+export const isTaskInstance = ( obj: unknown ): obj is TaskInstance => {
+    for ( const prop of [ 'name', 'parent', 'uid', 'id', 'complete', 'rawText', 'filePath' ] ) {
+        if ( !obj.hasOwnProperty( prop ) )
+            return false;
+    }
+    return true;
+};
 
 export const taskInstanceFromTask = (
     filePath: string,
@@ -71,7 +81,7 @@ export const taskInstanceFromTask = (
         rawText: '',
         primary: false
     };
-    inst.rawText = taskInstanceToChecklist(inst);
+    inst.rawText = taskInstanceToChecklist( inst );
     return inst;
 };
 
@@ -83,13 +93,35 @@ export const isTask = ( t: TaskInstance | Task ): t is Task => (
     'childUids' in t
 );
 
+export const createTaskFromPrimary = ( primary: PrimaryTaskInstance ): Task => {
+    const {
+        name, uid, completedDate, updated, created, complete, dueDate, recurrence, tags
+    } = primary;
+    return {
+        name,
+        uid,
+        id: taskUidToId( uid ),
+        complete,
+        updated,
+        created,
+        locations: [ taskLocation( primary ) ],
+        completedDate,
+        dueDate,
+        recurrence,
+        tags,
+        childUids: [],
+        parentUids: [],
+        description: ''
+    }
+};
+
 export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
     return {
         ...emptyTask(),
         ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
         ...({ uid: inst.uid || taskIdToUid( inst.id ) || 0 }),
         ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated' )),
-        instances: [ inst ]
+        locations: [ taskLocation( inst ) ]
     };
 }
 
@@ -100,16 +132,14 @@ export const taskInstancesEqual = (
     return a.name === b.name &&
         a.filePath === b.filePath &&
         a.position.start.line === b.position.start.line &&
-        a.complete === b.complete &&
-        ([ a.id, b.id ].includes( '' ) || (a.id === b.id)) &&
         ([ a.uid, b.uid ].includes( 0 ) || (a.uid === b.uid)) &&
-        isEqual( (a.tags || []).sort(), (b.tags || []).sort() ) &&
-        (!(a.recurrence || b.recurrence) || isEqual( a.recurrence, b.recurrence )) &&
+        (a.tags || []).sort().join( ' ' ) === (b.tags || []).sort().join( ' ' ) &&
+        (a.recurrence === b.recurrence || a.recurrence.toString() === b.recurrence.toString()) &&
         a.dueDate === b.dueDate &&
         a.completedDate === b.completedDate;
 }
 
-export const instancesLocationsEqual = (
+export const instanceLocationsEqual = (
     instA: TaskInstance,
     instB: TaskInstance
 ): boolean => (
@@ -118,21 +148,12 @@ export const instancesLocationsEqual = (
 );
 
 
-export const flattenInstanceIndex = (
-    idx: Record<string, Record<number, TaskInstance>>
-): TaskInstance[] => keys( idx )
-    .reduce( ( flattened, path ) => [
-        ...flattened,
-        ...values( idx[ path ] )
-    ], [] as TaskInstance[] )
-    .filter( ( inst, i, arr ) => arr.findIndex( check => instancesLocationsEqual( inst, check ) ) === i )
-
 export const taskUidToId = ( uid: number ) => uid.toString( 16 );
 
 export const taskIdToUid = ( id: string ) => isNaN( Number.parseInt( id, 16 ) ) ? 0 : Number.parseInt( id, 16 );
 
 export const baseTasksSame = ( tA: TaskInstance, tB: TaskInstance ): boolean => {
-    return tA.id === tB.id && tA.name == tB.name && tA.complete === tB.complete;
+    return tA.uid === tB.uid && tA.name == tB.name && tA.complete === tB.complete;
 }
 
 export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
@@ -144,11 +165,12 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         updated,
         childUids,
         parentUids,
-        instances,
+        locations,
         uid,
         recurrence,
         tags,
-        dueDate
+        dueDate,
+        completedDate,
     } = yaml;
     return {
         uid: Number.parseInt( uid ),
@@ -157,12 +179,13 @@ export const getTaskFromYaml = ( yaml: TaskYamlObject ): Task => {
         complete: complete === 'true',
         created: new Date( created ),
         updated: new Date( updated ),
-        instances: instances.map( taskInstanceFromYaml( yaml ) ),
+        locations: (locations || []).map( taskLocFromStr ),
         childUids: childUids.map( Number.parseInt ),
         parentUids: parentUids.map( Number.parseInt ),
         ...(tags && tags.length && { tags }),
         ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
         ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
+        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
         description: ''
     };
 }
@@ -173,7 +196,7 @@ export const taskToYamlObject = ( task: Task ): TaskYamlObject => {
         uid,
         name,
         complete,
-        instances,
+        locations,
         created,
         updated,
         childUids,
@@ -195,7 +218,7 @@ export const taskToYamlObject = ( task: Task ): TaskYamlObject => {
         ...(tags && { tags }),
         ...(dueDate && { dueDate: dueDate.toISOString() }),
         ...(recurrence && { recurrence: recurrence.toString() }),
-        instances: instances.map( taskInstanceToYamlObject )
+        locations: locations.map( taskLocationStr )
     };
 }
 
@@ -208,8 +231,8 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
         parent,
         primary
     } = inst;
-    if (isNaN(position.start.col))
-        throw new Error(`instance: ${inst.name} in ${inst.filePath} at ${position.start.line} has NaN column`);
+    if ( isNaN( position.start.col ) )
+        throw new Error( `instance: ${inst.name} in ${inst.filePath} at ${position.start.line} has NaN column` );
     return {
         rawText,
         filePath,
@@ -221,8 +244,8 @@ export const taskInstanceToYamlObject = ( inst: TaskInstance ): TaskInstanceYaml
 }
 
 export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskInstanceYamlObject ): TaskInstance => {
-    const { id, name, complete, dueDate, recurrence, tags } = tYaml
-    const { rawText, filePath, position, parent, primary } = yaml;
+    const { id, name, complete, dueDate, recurrence, tags, completedDate } = tYaml
+    const { rawText, filePath, position, parent, primary, links } = yaml;
     return {
         id,
         name,
@@ -230,20 +253,22 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
         filePath,
         uid: taskIdToUid( id ),
         complete: complete === 'true',
-        position: posFromStr( position ),
+        position: parsePosStr( position ),
         parent: Number.parseInt( parent ),
         primary: primary === 'true',
         ...(tags && tags.length && { tags }),
         ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
         ...(recurrence && recurrence.length && { recurrence: rrulestr( recurrence ) }),
+        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
+        ...(links && links.length && { links })
     } as TaskInstance;
 }
 
-export const taskToBasename = ( task: TaskInstance | Task ) => `${task.name}_${task.id}`;
+export const taskToBasename = ( task: TaskInstance | Task ) => `${TaskParser.normalizeName( task.name )} (${task.id})`;
 export const taskToFilename = ( task: TaskInstance | Task ) => `${taskToBasename( task )}.md`;
 
 export const isFilenameValid = ( f: TFile ): boolean => {
-    const match = f.basename.match( taskFileNameRegex );
+    const match = f.basename.match( TASK_BASENAME_REGEX );
     if ( !match )
         return false
 
@@ -256,33 +281,36 @@ export const isFilenameValid = ( f: TFile ): boolean => {
 }
 
 export const parseTaskFilename = ( f: TFile ) => {
-    const match = f.basename.match( taskFileNameRegex );
-    const { name, id } = match.groups;
-    return { name, id };
+    const match = f.basename.match( /\(([\w\d]+)\)$/ );
+    if (!match)
+        return null;
+    return { id: match[ 1 ] }
+};
+
+export const renderTaskInstanceLinks = ( task: Task ) => {
+    return task.locations.map( loc => `[[${loc.filePath}#^${task.id}]]` ).join( ' ' );
 };
 
 export const taskToTaskFileContents = ( task: Task ): string => {
     const yamlObject = taskToYamlObject( task );
     const data = `---\n${stringifyYaml( yamlObject )}---\n${task.description || ''}`;
-    return data;
+    return `${data}\n\n\n---\n${renderTaskInstanceLinks( task )}`;
 }
 
 export const taskToJsonString = ( task: Task ): string => {
     const {
-        name, complete, instances, description, created
+        name, complete, locations, description, created
     } = task;
     const ret: Record<string, string | boolean | Array<TaskLocation> | string[]> = {
         name, complete, created: `${created}`
     };
-    ret.locations = instances
-        .map( ( { filePath, position, parent } ) => ({ filePath, position, parent }) )
-        .sort( ( a, b ) => {
-            const comp = a.filePath.localeCompare( b.filePath );
-            if ( comp === 0 ) {
-                return a.position.start.line - b.position.start.line;
-            }
-            return comp;
-        } );
+    ret.locations = locations.sort( ( a, b ) => {
+        const comp = a.filePath.localeCompare( b.filePath );
+        if ( comp === 0 ) {
+            return a.line - b.line;
+        }
+        return comp;
+    } );
     if ( description )
         ret.description = description.trim();
     return JSON.stringify( ret );

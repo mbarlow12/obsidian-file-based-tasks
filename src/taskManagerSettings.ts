@@ -1,6 +1,6 @@
+import { FileManagerSettings } from './File/TaskFileManager';
 import { ParserSettings } from './Parser/TaskParser';
 import { Task } from './Task';
-import { FileManagerSettings } from './TaskFileManager';
 
 export interface TaskManagerSettings {
     taskDirectoryName: string;
@@ -28,7 +28,7 @@ export enum Operator {
 export interface TaskQueryBlock {
     field: keyof Task;
     op: Operator,
-    value: Omit<Task, 'instances'>[keyof Omit<Task,'instances'>];
+    value: Omit<Task, 'locations'>[keyof Omit<Task,'locations'>];
 }
 
 
