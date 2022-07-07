@@ -264,7 +264,7 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
     } as TaskInstance;
 }
 
-export const taskToBasename = ( task: TaskInstance | Task ) => `${TaskParser.normalizeName(task.name)} (${task.id})`;
+export const taskToBasename = ( task: TaskInstance | Task ) => `${TaskParser.normalizeName( task.name )} (${task.id})`;
 export const taskToFilename = ( task: TaskInstance | Task ) => `${taskToBasename( task )}.md`;
 
 export const isFilenameValid = ( f: TFile ): boolean => {
@@ -281,15 +281,20 @@ export const isFilenameValid = ( f: TFile ): boolean => {
 }
 
 export const parseTaskFilename = ( f: TFile ) => {
-    const match = f.basename.match( TASK_BASENAME_REGEX );
-    const { name, id } = match.groups;
-    return { name, id };
+    const match = f.basename.match( /\(([\w\d]+)\)$/ );
+    if (!match)
+        return null;
+    return { id: match[ 1 ] }
+};
+
+export const renderTaskInstanceLinks = ( task: Task ) => {
+    return task.locations.map( loc => `[[${loc.filePath}#^${task.id}]]` ).join( ' ' );
 };
 
 export const taskToTaskFileContents = ( task: Task ): string => {
     const yamlObject = taskToYamlObject( task );
     const data = `---\n${stringifyYaml( yamlObject )}---\n${task.description || ''}`;
-    return data;
+    return `${data}\n\n\n---\n${renderTaskInstanceLinks( task )}`;
 }
 
 export const taskToJsonString = ( task: Task ): string => {

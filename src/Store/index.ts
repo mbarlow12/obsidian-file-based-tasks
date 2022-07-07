@@ -1,4 +1,5 @@
 import { isEqual } from 'lodash';
+import { DEFAULT_TASKS_DIR } from '../File/TaskFileManager';
 import {
     emptyPosition,
     instanceIndexKey,
@@ -9,7 +10,6 @@ import {
     taskLocation
 } from '../Task';
 import { createTaskFromPrimary, taskInstanceFromTask } from '../Task/Task';
-import { DEFAULT_TASKS_DIR } from '../TaskFileManager';
 import { Operator, TaskQueryBlock } from '../taskManagerSettings';
 import { Comparator } from '../util/SortedArray';
 import { filterUnique, primaryTaskFilename, validateInstanceIndex } from './TaskStore';

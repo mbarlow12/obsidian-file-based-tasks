@@ -11,6 +11,7 @@ import {
     TFile
 } from 'obsidian';
 import { TaskEvents } from "./src/Events/TaskEvents";
+import { hashInstanceIndex, TaskFileManager } from "./src/File/TaskFileManager";
 import { TaskParser } from './src/Parser/TaskParser';
 import { DEFAULT_TASK_MANAGER_SETTINGS } from './src/Settings';
 import { filterIndexByPath, getFileIndexes } from './src/Store';
@@ -18,7 +19,6 @@ import { taskInstanceIdxFromTask, TaskStore } from "./src/Store/TaskStore";
 import { TaskInstanceIndex, TaskStoreState } from './src/Store/types';
 import { hashTask, instanceIndexKey, parseTaskFilename } from "./src/Task";
 import { taskIdToUid } from './src/Task/Task';
-import { hashInstanceIndex, TaskFileManager } from "./src/TaskFileManager";
 import { TaskManagerSettings } from "./src/taskManagerSettings";
 import { TaskEditorSuggest } from './src/TaskSuggest';
 
@@ -53,11 +53,11 @@ export default class ObsidianTaskManager extends Plugin {
                 this.taskFileManager = new TaskFileManager( this.app.vault, this.app.metadataCache, this.taskEvents )
                 this.parser = new TaskParser();
                 await this.loadSettings();
+                this.taskSuggest = new TaskEditorSuggest( app, this, this.taskEvents, this.taskStore.getState() );
+                this.registerEditorSuggest(this.taskSuggest);
                 if ( !this.vaultLoaded )
                     await this.processVault();
                 await this.registerEvents();
-                // this.taskSuggest = new TaskEditorSuggest( app, this.taskEvents, this.taskStore.getState() );
-                // this.registerEditorSuggest(this.taskSuggest);
                 this.initialized = true;
             }
         } );
@@ -195,6 +195,7 @@ export default class ObsidianTaskManager extends Plugin {
             this.fileStates.delete( path );
             await this.taskFileManager.deleteFile( this.app.vault.getAbstractFileByPath( path ) )
         }
+        this.updateComponents();
     }
 
     private async onOpenFile( file: TFile ) {
@@ -303,5 +304,9 @@ export default class ObsidianTaskManager extends Plugin {
         const instIdx =this.taskStore.initialize( new Map( indexList.map( idx => [ ...idx ] ).flat() ) );
         this.vaultLoaded = true;
         await this.updateState( instIdx);
+    }
+
+    private updateComponents() {
+        this.taskSuggest.updateState(this.state);
     }
 }

@@ -2,6 +2,7 @@ import { EventRef, TFile } from "obsidian";
 import path from 'path';
 import { RRule } from "rrule";
 import { TaskEvents } from "../Events/TaskEvents";
+import { DEFAULT_TASKS_DIR } from '../File/TaskFileManager';
 import {
     emptyPosition,
     instanceIndexKey,
@@ -21,7 +22,6 @@ import {
     taskInstanceFromTask,
     taskUidToId
 } from "../Task/Task";
-import { DEFAULT_TASKS_DIR } from '../TaskFileManager';
 import { isQueryBlock, TaskManagerSettings, TaskQuery } from '../taskManagerSettings';
 import { createIndexFileTaskInstances, handleCompletions, queryTask, taskInstancesAreSameTask } from './index';
 import { TaskIndex, TaskInstanceIndex, TaskStoreState } from './types';
@@ -34,9 +34,8 @@ export const renderTags = ( tags?: string[] ): string => (tags ?? []).join( ' ' 
 export const renderRecurrence = ( rrule?: RRule ): string => rrule ? '&' + rrule.toText() : '';
 export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
-export const taskInstanceToChecklist = ( { complete, name, id, tags, recurrence, dueDate }: TaskInstance ): string => [
+export const taskInstanceToChecklist = ( { complete, name, id }: TaskInstance ): string => [
     `- [${complete ? 'x' : ' '}]`, name,
-    ...[ renderTags( tags ), renderDueDate( dueDate ), renderRecurrence( recurrence ) ].join( ' ' ).trim(),
     `^${id}`
 ].join( ' ' );
 
@@ -269,7 +268,7 @@ export class TaskStore {
                     const parent = instances.get( instanceIndexKey( inst.filePath, inst.parent ) );
                     let parentTask = taskIndex.get( parent.uid );
                     if ( !parentTask )
-                        parentTask = createTaskFromInstance(parent);
+                        parentTask = createTaskFromInstance( parent );
                     taskIndex.set( parent.uid, {
                         ...parentTask,
                         childUids: filterUnique( [ ...parentTask.childUids, inst.uid ] )

@@ -1,6 +1,6 @@
+import { FileManagerSettings } from './File/TaskFileManager';
 import { ParserSettings } from './Parser/TaskParser';
 import { Task } from './Task';
-import { FileManagerSettings } from './TaskFileManager';
 
 export interface TaskManagerSettings {
     taskDirectoryName: string;

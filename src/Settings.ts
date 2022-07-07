@@ -1,5 +1,5 @@
+import { FileManagerSettings, RenderOpts } from './File/TaskFileManager';
 import { ParserSettings } from './Parser/TaskParser';
-import { DEFAULT_FILE_MANAGER_SETTINGS } from './TaskFileManager';
 import { Operator, TaskManagerSettings } from './taskManagerSettings';
 
 export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
@@ -11,6 +11,11 @@ export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
     },
     prefix: ''
 };
+export const DEFAULT_FILE_MANAGER_SETTINGS: FileManagerSettings = {
+    taskDirectoryName: 'tasks',
+    backlogFileName: 'Backlog.md',
+    completedFileName: 'Complete.md'
+}
 export const DEFAULT_TASK_MANAGER_SETTINGS: TaskManagerSettings = {
     taskDirectoryName: 'tasks',
     backlogFileName: 'Backlog.md',
@@ -38,3 +43,12 @@ export const DEFAULT_TASK_MANAGER_SETTINGS: TaskManagerSettings = {
         ]
     ] )
 }
+export const DEFAULT_RENDER_OPTS: RenderOpts = {
+    id: true,
+    links: false,
+    tags: true,
+    recurrence: true,
+    dueDate: true,
+    completedDate: true,
+    strikeThroughOnComplete: false
+};
