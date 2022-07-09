@@ -151,6 +151,7 @@ export class TaskStore {
                 retInstIndex.set( locStr, inst );
             }
 
+            // handle parent completions
             let parentLine = inst.parent;
             while ( parentLine > -1 ) {
                 const parent = newIndex.get( instanceIndexKey( inst.filePath, parentLine ) );
@@ -163,7 +164,7 @@ export class TaskStore {
                 parentLine = parent.parent;
                 newTaskIndex.set( parent.uid, createTaskFromInstance( parent ) );
             }
-            if (this.taskIndex.has(inst.uid) && !this.taskIndex.get(inst.uid).complete) {
+            if ( this.taskIndex.has( inst.uid ) && !this.taskIndex.get( inst.uid ).complete ) {
                 inst.completedDate = new Date();
                 updated = true;
             }
@@ -171,7 +172,7 @@ export class TaskStore {
             retInstIndex.set( locStr, { ...inst } );
             newTaskIndex.set( inst.uid, {
                 ...createTaskFromInstance( inst ),
-                ...(updated && { updated: new Date() } )
+                ...(updated && { updated: new Date() })
             } );
         }
 
@@ -261,12 +262,12 @@ export class TaskStore {
         const uidInstMap: Map<number, TaskInstance[]> = new Map();
         for ( const inst of instances.values() ) {
             uidInstMap.set( inst.uid, [ ...(uidInstMap.get( inst.uid ) ?? []), inst ] )
-            if (!inst.uid) {
-                const {filePath, name} = inst;
+            if ( !inst.uid ) {
+                const { filePath, name } = inst;
                 const err = new Error();
                 err.message = `---
                 No UID for ${name} from ${filePath}
-                ---`;
+                ---\n`;
                 throw err;
             }
         }
