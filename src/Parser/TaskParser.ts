@@ -6,7 +6,7 @@ import { DEFAULT_PARSER_SETTINGS } from '../Settings';
 import { ParsedTask, TaskInstance } from '../Task';
 import { taskIdToUid } from "../Task/Task";
 
-export const INVALID_NAME_CHARS = /[\\/|^#\]\[;:]/g;
+export const INVALID_NAME_CHARS = /[\\/|^#\]\[;:?]/g;
 export const TASK_BASENAME_REGEX = /^(?<name>.+)(?=\((?<id>[\w\d]+)\))(?:\([\w\d]+\))/;
 
 export interface ParserSettings {

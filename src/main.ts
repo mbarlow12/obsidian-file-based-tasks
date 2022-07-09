@@ -54,7 +54,7 @@ export default class ObsidianTaskManager extends Plugin {
                 this.parser = new TaskParser();
                 await this.loadSettings();
                 this.taskSuggest = new TaskEditorSuggest( app, this, this.taskEvents, this.taskStore.getState() );
-                this.registerEditorSuggest(this.taskSuggest);
+                this.registerEditorSuggest( this.taskSuggest );
                 if ( !this.vaultLoaded )
                     await this.processVault();
                 await this.registerEvents();
@@ -143,10 +143,6 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.workspace.on( 'file-open', async file => {
             await this.onOpenFile( file );
         } ) );
-        this.registerEvent( this.app.workspace.on( 'active-leaf-change', (leaf) => {
-            console.log('leaf change');
-            console.log(leaf);
-        }));
     }
 
     private ignorePath( filePath: string ) {
@@ -266,15 +262,18 @@ export default class ObsidianTaskManager extends Plugin {
         if ( abstractFile instanceof TFile ) {
             let instIdx: TaskInstanceIndex;
             try {
-                const {id} = parseTaskFilename(abstractFile);
-                const task = this.state.taskIndex.get(taskIdToUid( id ));
-                instIdx = this.taskStore.deleteTask( task );
+                const { name, id } = parseTaskFilename( abstractFile );
+                const task = this.state.taskIndex.get( taskIdToUid( id ) );
+                if ( task && TaskParser.normalizeName( task.name ).trim() === name.trim() )
+                    instIdx = this.taskStore.deleteTask( task );
+                else // the task was updated and thus the old task file deleted, just return
+                    return;
             }
             catch ( err: unknown ) {
                 // not task file
                 instIdx = this.taskStore.deleteTasksFromFile( abstractFile );
             }
-            await this.updateState( instIdx);
+            await this.updateState( instIdx );
         }
     }
 
@@ -286,7 +285,7 @@ export default class ObsidianTaskManager extends Plugin {
      * @private
      */
     private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
-        const instIdx = this.taskStore.renameFilePath(oldPath, abstractFile.path);
+        const instIdx = this.taskStore.renameFilePath( oldPath, abstractFile.path );
         await this.updateState( instIdx );
     }
 
@@ -301,12 +300,12 @@ export default class ObsidianTaskManager extends Plugin {
             const fileTaskInstances = this.taskFileManager.getFileInstances( file, cache, contents );
             indexList.push( fileTaskInstances );
         }
-        const instIdx =this.taskStore.initialize( new Map( indexList.map( idx => [ ...idx ] ).flat() ) );
+        const instIdx = this.taskStore.initialize( new Map( indexList.map( idx => [ ...idx ] ).flat() ) );
         this.vaultLoaded = true;
-        await this.updateState( instIdx);
+        await this.updateState( instIdx );
     }
 
     private updateComponents() {
-        this.taskSuggest.updateState(this.state);
+        this.taskSuggest.updateState( this.state );
     }
 }

@@ -281,10 +281,11 @@ export const isFilenameValid = ( f: TFile ): boolean => {
 }
 
 export const parseTaskFilename = ( f: TFile ) => {
-    const match = f.basename.match( /\(([\w\d]+)\)$/ );
+    const match = f.basename.match( TASK_BASENAME_REGEX );
     if (!match)
         return null;
-    return { id: match[ 1 ] }
+    const { name, id } = match.groups;
+    return { name, id };
 };
 
 export const renderTaskInstanceLinks = ( task: Task ) => {

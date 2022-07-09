@@ -317,6 +317,12 @@ export class TaskStore {
     }
 
     deleteTask( task: Task ): TaskInstanceIndex {
+        /**
+         * if we update the task name somewhere, then the path associated with it
+         * becomes task/new name.... our current file status path, however, is tasks/old name....
+         * since we don't process tasks/old name.... it doesn't get removed from the 'trackedFiles' array
+         * in updateState and thus gets deleted. We then grab the task by its uid and just delete it.
+         */
         const newInstIdx = new Map();
         for ( const [ key, inst ] of this.taskInstanceIndex ) {
             if ( inst.uid !== task.uid )
