@@ -8,8 +8,8 @@ import {
     EventRef,
     TFile
 } from "obsidian";
-import ObsidianTaskManager from '../main';
 import { TaskEvents } from './Events/TaskEvents';
+import ObsidianTaskManager from './main';
 import { TaskParser } from './Parser/TaskParser';
 import { DEFAULT_RENDER_OPTS } from './Settings';
 import { TaskStoreState } from './Store/types';

@@ -1,4 +1,3 @@
-import { entries } from 'lodash';
 import { Pos } from 'obsidian';
 import { RRule } from 'rrule';
 import { TaskInstanceIndex } from './Store/types';
@@ -157,8 +156,8 @@ export const createTestPrimaryTaskInstance = (
 });
 export const createPositionAtLine = ( line: number ) => pos( line, 0, 0, line, 0, 0 );
 export const createTestTaskInstances = (
-    data: Record<string, { line: number, uid: number, parent?: number }[]>
-): TaskInstance[] => entries( data ).reduce( ( tis, [ fp, lines ] ) => {
+    data: Map<string, { line: number, uid: number, parent?: number }[]>
+): TaskInstance[] => [...data.entries()].reduce( ( tis, [ fp, lines ] ) => {
     const instances = lines.map( ( { line, uid, parent } ) => {
         return createTestTaskInstance( uid, createPositionAtLine( line ), parent || -1, fp )
     } );

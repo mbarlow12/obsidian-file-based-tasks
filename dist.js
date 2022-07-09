@@ -9,24 +9,25 @@ const config = require('./local.config');
 const pwd = process.env.PWD;
 const files = ['styles.css', 'manifest.json'];
 
-const args = process.argv;
 const { distDir } = process.argv.length > 2 && process.argv[2] === '--prod' ? config.prod : config.dev;
+const srcDir = 'dist';
+
 files.forEach(f => {
     const fp = path.resolve(pwd, f);
-    fs.copyFile(fp, path.resolve(pwd, 'dist', f), err => {
+    fs.copyFile(fp, path.resolve(pwd, srcDir, f), err => {
         if (err) {
             console.error(`Failed to copy ${fp} into dist`);
         }
     });
 });
 
-fs.readdir(path.resolve(pwd, 'dist'), (err, files) => {
+fs.readdir(path.resolve(pwd, srcDir), (err, files) => {
     if (err) {
-        console.error(`Failed to read dist`);
+        console.error(`Failed to read ${srcDir}`);
         process.exit(1);
     }
     for (const file of files) {
-        const distPath = path.resolve(pwd, 'dist', file);
+        const distPath = path.resolve(pwd, srcDir, file);
         const pluginPath = path.resolve(distDir, file);
         fs.copyFile(distPath, pluginPath, err => {
             if (err) {

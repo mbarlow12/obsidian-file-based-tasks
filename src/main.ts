@@ -10,17 +10,17 @@ import {
     TAbstractFile,
     TFile
 } from 'obsidian';
-import { TaskEvents } from "./src/Events/TaskEvents";
-import { hashInstanceIndex, TaskFileManager } from "./src/File/TaskFileManager";
-import { TaskParser } from './src/Parser/TaskParser';
-import { DEFAULT_TASK_MANAGER_SETTINGS } from './src/Settings';
-import { filterIndexByPath, getFileIndexes } from './src/Store';
-import { taskInstanceIdxFromTask, TaskStore } from "./src/Store/TaskStore";
-import { TaskInstanceIndex, TaskStoreState } from './src/Store/types';
-import { hashTask, instanceIndexKey, parseTaskFilename } from "./src/Task";
-import { taskIdToUid } from './src/Task/Task';
-import { TaskManagerSettings } from "./src/taskManagerSettings";
-import { TaskEditorSuggest } from './src/TaskSuggest';
+import { TaskEvents } from "./Events/TaskEvents";
+import { hashInstanceIndex, TaskFileManager } from "./File/TaskFileManager";
+import { TaskParser } from './Parser/TaskParser';
+import { DEFAULT_TASK_MANAGER_SETTINGS } from './Settings';
+import { filterIndexByPath, getFileIndexes } from './Store';
+import { taskInstanceIdxFromTask, TaskStore } from "./Store/TaskStore";
+import { TaskInstanceIndex, TaskStoreState } from './Store/types';
+import { hashTask, instanceIndexKey, parseTaskFilename } from "./Task";
+import { taskIdToUid } from './Task/Task';
+import { TaskManagerSettings } from "./taskManagerSettings";
+import { TaskEditorSuggest } from './TaskSuggest';
 
 export default class ObsidianTaskManager extends Plugin {
     settings: TaskManagerSettings;
