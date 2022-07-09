@@ -58,23 +58,23 @@ export class TaskEditorSuggest extends EditorSuggest<Task> {
         // const searchText = context.query;
         // const tasks = [...this.taskState.taskIndex.values()].filter(t => t.name.startsWith(searchText));
         if ( !context?.query || context.query.trim() === '' )
-            return [ ...this.taskState.taskIndex.values() ].filter(t => !t.complete).sort()
+            return [ ...this.taskState.taskIndex.values() ].filter( t => !t.complete ).sort()
 
         return [ ...this.taskState.taskIndex.values() ]
             .filter( t => t.name.includes( context.query ) && !t.complete )
-            .sort((a, b) => {
-                if (a.name < b.name)
+            .sort( ( a, b ) => {
+                if ( a.name < b.name )
                     return -1;
-                if (b.name < a.name)
+                if ( b.name < a.name )
                     return 1;
-                if (a.name === b.name) {
+                if ( a.name === b.name ) {
                     return a.created.getTime() - b.created.getTime();
                 }
-            });
+            } );
     }
 
     onTrigger( cursor: EditorPosition, editor: Editor, file: TFile ): EditorSuggestTriggerInfo | null {
-        if ( editor.getLine(cursor.line).match( TaskParser.ID_REGEX ) )
+        if ( editor.getLine( cursor.line ).match( TaskParser.ID_REGEX ) )
             return null
         const line = editor.getLine( cursor.line ).substring( 0, cursor.ch );
         const match = line.match( /\s*[-*] \[.]\s+([\w\d]+)$/ );
