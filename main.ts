@@ -268,6 +268,7 @@ export default class ObsidianTaskManager extends Plugin {
             try {
                 const {id} = parseTaskFilename(abstractFile);
                 const task = this.state.taskIndex.get(taskIdToUid( id ));
+                // todo: this unintentionally deletes tasks that have been renamed
                 instIdx = this.taskStore.deleteTask( task );
             }
             catch ( err: unknown ) {
