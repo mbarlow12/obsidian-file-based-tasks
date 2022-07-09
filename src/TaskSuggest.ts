@@ -94,8 +94,9 @@ export class TaskEditorSuggest extends EditorSuggest<Task> {
 
     renderSuggestion( value: Task, el: HTMLElement ): void {
         const base = createDiv();
+        const text = `${value.id} - ${value.name}`;
         base.createDiv( {
-            text: value.name,
+            text,
             cls: 'my-cool-class'
         } );
         el.appendChild( base );
