@@ -1,4 +1,3 @@
-import { isEqual } from 'lodash';
 import { DEFAULT_TASKS_DIR } from '../File/TaskFileManager';
 import {
     emptyPosition,
@@ -11,6 +10,7 @@ import {
 } from '../Task';
 import { createTaskFromPrimary, taskInstanceFromTask } from '../Task/Task';
 import { Operator, TaskQueryBlock } from '../taskManagerSettings';
+import { arraysEqual } from '../util/arrrays';
 import { Comparator } from '../util/SortedArray';
 import { filterUnique, primaryTaskFilename, validateInstanceIndex } from './TaskStore';
 import { TaskIndex, TaskInstanceIndex } from './types';
@@ -41,7 +41,7 @@ export const taskInstancesAreSameTask = (
     if ( instA.uid === 0 || instB.uid === 0 ) {
         if (
             instA.name !== instB.name ||
-            !isEqual( instA.tags?.sort(), instB.tags?.sort() ) ||
+            !arraysEqual( instA.tags?.sort(), instB.tags?.sort() ) ||
             instA.recurrence !== instB.recurrence ||
             instA.dueDate !== instB.dueDate ||
             (-1 in [ instA.parent, instB.parent ] && instA.parent !== instB.parent)

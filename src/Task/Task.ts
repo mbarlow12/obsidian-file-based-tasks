@@ -1,4 +1,3 @@
-import { pick } from 'lodash';
 import { stringifyYaml, TFile } from "obsidian";
 import { rrulestr } from "rrule";
 import { TASK_BASENAME_REGEX, TaskParser } from '../Parser/TaskParser';
@@ -116,11 +115,12 @@ export const createTaskFromPrimary = ( primary: PrimaryTaskInstance ): Task => {
 };
 
 export const createTaskFromInstance = ( inst: TaskInstance ): Task => {
+    const { name, id,  complete, dueDate, recurrence, tags, completedDate} = inst;
     return {
         ...emptyTask(),
-        ...pick( inst, 'name', 'id', 'complete', 'dueDate', 'recurrence', 'tags' ),
-        ...({ uid: inst.uid || taskIdToUid( inst.id ) || 0 }),
-        ...(isPrimaryInstance( inst ) && pick( inst, 'created', 'updated' )),
+        name, id, complete, dueDate, recurrence, tags, completedDate,
+        ...({ uid: inst.uid || taskIdToUid( inst.id ) }),
+        ...(isPrimaryInstance( inst ) && {created: inst.created, updated: inst.updated}),
         locations: [ taskLocation( inst ) ]
     };
 }

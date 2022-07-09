@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "outDir": "./dist/",
-    "esModuleInterop": true,
+    "baseUrl": "src",
+    "outDir": "dist",
+    "inlineSourceMap": true,
     "inlineSources": true,
     "allowSyntheticDefaultImports": true,
     "module": "ESNext",
-    "sourceMap": true,
     "target": "ES6",
     "allowJs": true,
     "noImplicitAny": true,
@@ -16,10 +15,11 @@
       "DOM",
       "ES6",
       "ES5",
-      "ES7"
+      "ES7",
+      "ES2019"
     ]
   },
   "include": [
-    "**/*.ts"
+    "src/**/*.ts"
   ],
 }

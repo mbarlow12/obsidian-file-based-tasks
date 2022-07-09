@@ -10,12 +10,23 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === 'production');
+const test = (process.argv[2] === 'test' || process.argv[3] === 'test');
+
+let entryPoint, outDir;
+if (!test) {
+	entryPoint = 'src/main.ts';
+	outDir = 'ebdist';
+}
+else {
+	entryPoint = 'test/main.test.ts';
+	outDir = 'ebdist-test'
+}
 
 esbuild.build({
 	banner: {
 		js: banner,
 	},
-	entryPoints: ['main.ts'],
+	entryPoints: [ entryPoint ],
 	bundle: true,
 	external: [
 		'obsidian',
@@ -48,5 +59,5 @@ esbuild.build({
 	logLevel: "info",
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
-	outfile: 'main.js',
+	outdir: 'dist',
 }).catch(() => process.exit(1));
