@@ -157,7 +157,7 @@ export class TaskFileManager {
             const lines = contents.split( '\n' );
             const descStart = cache && cache.frontmatter?.position.end.line + 1;
             const descEnd = cache && cache.sections?.find( s => s.type === 'heading' )?.position.start.line;
-            const description = lines.slice( descStart, descEnd || lines.length - 1 ).join( '\n' )
+            const description = lines.slice( descStart, descEnd || lines.length - 1 ).join( '\n' ).trim();
             const newContents = [
                 '---',
                 stringifyYaml( yaml ) + '---',
