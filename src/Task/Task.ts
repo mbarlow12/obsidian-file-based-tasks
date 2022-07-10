@@ -289,7 +289,9 @@ export const parseTaskFilename = ( f: TFile ) => {
 };
 
 export const renderTaskInstanceLinks = ( task: Task ) => {
-    return task.locations.map( loc => `[[${loc.filePath}#^${task.id}]]` ).join( ' ' );
+    return task.locations
+        .filter(loc => !loc.filePath.includes(taskToBasename( task ) ) )
+        .map( loc => `[[${loc.filePath}]]` ).join( ' ' );
 };
 
 export const taskToTaskFileContents = ( task: Task ): string => {

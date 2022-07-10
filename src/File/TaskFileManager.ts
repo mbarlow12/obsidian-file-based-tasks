@@ -3,6 +3,7 @@ import {
     EventRef,
     FrontMatterCache,
     MetadataCache,
+    stringifyYaml,
     TAbstractFile,
     TFile,
     TFolder,
@@ -18,15 +19,16 @@ import { hashTaskInstance, taskInstanceIdxFromTask, taskInstanceToChecklist } fr
 import { TaskInstanceIndex } from '../Store/types';
 import {
     getTaskFromYaml,
+    hashTask,
     instanceIndexKey,
     Task,
     TaskInstance,
     TaskRecordType,
     taskToFilename,
-    taskToTaskFileContents,
+    taskToYamlObject,
     TaskYamlObject
 } from "../Task";
-import { emptyTaskInstance } from '../Task/Task';
+import { emptyTaskInstance, renderTaskInstanceLinks } from '../Task/Task';
 import { TaskManagerSettings } from '../taskManagerSettings';
 
 export interface FileManagerSettings {
@@ -111,7 +113,8 @@ export class TaskFileManager {
     public async getInstanceIndexFromFile( file: TFile, cache: CachedMetadata, data: string ) {
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file, cache, data );
-            return taskInstanceIdxFromTask( idxTask );
+            const inst = taskInstanceIdxFromTask( idxTask ).get(instanceIndexKey(file.path, 0));
+            return new Map([[instanceIndexKey(file.path, 0), inst]]);
         }
         else
             return this.getFileInstances( file, cache, data );
@@ -121,17 +124,49 @@ export class TaskFileManager {
         return this._tasksDirectory;
     }
 
+    public async getFileHash(file: TFile, cache: CachedMetadata, contents: string) {
+        if (this.isTaskFile(file)) {
+            const task = await this.readTaskFile( file, cache, contents );
+            return hashTask( task );
+        }
+        const idx = await this.getFileInstances( file, cache, contents );
+        return hashInstanceIndex( idx );
+    }
+
     public async storeTaskFile( task: Task ) {
         /*
          TODO: consider adding a completed folder to declutter the tasks directory
          */
         const fullPath = this.getTaskPath( task );
         const file = this.vault.getAbstractFileByPath( fullPath );
+        const yaml = taskToYamlObject( task );
+        const links = renderTaskInstanceLinks( task );
         if ( !file ) {
-            return this.vault.create( fullPath, taskToTaskFileContents( task ) );
+            return this.vault.create( fullPath, [
+                '---',
+                stringifyYaml( yaml ) + '---',
+                '\n',
+                'Links',
+                '---',
+                links
+            ].join('\n') );
         }
         else {
-            return this.vault.modify( file as TFile, taskToTaskFileContents( task ) )
+            const cache = this.mdCache.getFileCache( file as TFile );
+            const contents = await this.vault.cachedRead( file as TFile );
+            const lines = contents.split( '\n' );
+            const descStart = cache && cache.frontmatter?.position.end.line + 1;
+            const descEnd = cache && cache.sections?.find( s => s.type === 'heading' )?.position.start.line;
+            const description = lines.slice( descStart, descEnd || lines.length - 1 ).join( '\n' )
+            const newContents = [
+                '---',
+                stringifyYaml( yaml ) + '---',
+                description,
+                'Links',
+                '---',
+                links
+            ].join('\n');
+            return this.vault.modify( file as TFile, newContents )
         }
     }
 
@@ -339,9 +374,12 @@ export class TaskFileManager {
                     if ( task ) {
                         // return line to normal
                         taskLine = taskLine.replace( TaskParser.ID_REGEX, '' )
+                            .replace(TaskParser.FILE_LINK_REGEX, '')
                             .replace( parser.recurrenceRegex, '' )
                             .replace( parser.dueDateRegex, '' )
+                            .replace(/\s+(?<!^\s+)/, ' ')
                             .trimEnd();
+
                         lines[ taskItem.position.start.line ] = taskLine;
                     }
                 }

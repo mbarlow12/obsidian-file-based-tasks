@@ -37,6 +37,7 @@ export class TaskParser {
     public static LINE_REGEX = /^\s*[-*] (\[(?<complete>\s|x)?])?\s+(?<taskLine>[^&@].*)$/;
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>[^&@].*)$/;
     public static ID_REGEX = /\s\^[\w\d]+$/;
+    public static FILE_LINK_REGEX = /\[\[((.+)(\([\w\d]+\)))(\.md)?\]\]/g;
 
     constructor( settings = DEFAULT_PARSER_SETTINGS ) {
         this.settings = settings;
