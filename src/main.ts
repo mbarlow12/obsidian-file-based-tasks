@@ -59,6 +59,30 @@ export default class ObsidianTaskManager extends Plugin {
                     await this.processVault();
                 await this.registerEvents();
                 this.initialized = true;
+                this.addCommand( {
+                    id: 'toggle-task-complete',
+                    name: 'My toggle checklist',
+                    hotkeys: [{
+                        key: 'Enter',
+                        modifiers: ['Mod']
+                    }],
+                    editorCallback: ( editor, view ) => {
+                        const { line, ch } = editor.getCursor();
+                        const raw = editor.getLine( line );
+                        const start = raw.indexOf('[')+1;
+                        const end = raw.indexOf(']');
+                        const taskInstance = this.parser.parseLine( raw );
+                        console.log(`${taskInstance.name} ${taskInstance.complete ? 'completed' : 'not completed'}`)
+                        console.log(`line ${line} ch ${ch}`);
+                        const char = taskInstance.complete ? 'x' : ' ';
+                        editor.replaceRange(char, {line, ch: start}, {line, ch: end});
+                        // to dispatch, first make sure we won't register the change
+                        // and let the system update the text
+                        // const file = view.file;
+                        // this.setFileIsReady(file, false);
+                        // this.store.dispatch(toggleTaskComplete(id))
+                    }
+                } );
             }
         } );
     }
@@ -96,6 +120,8 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     onunload() {
+        console.log( 'task store' );
+        console.log( this.taskStore );
         this.taskStore?.unload();
         this.taskSuggest?.unsubscribe();
 
@@ -133,6 +159,7 @@ export default class ObsidianTaskManager extends Plugin {
             this.changeDebouncers.get( file.path )( file, data, cache );
         } ) );
         const resolvedRef = this.app.metadataCache.on( 'resolve', async () => {
+
             console.log( 'cache resolved' );
             if ( !this.vaultLoaded ) {
                 await this.processVault();
