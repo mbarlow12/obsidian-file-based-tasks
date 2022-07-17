@@ -1,13 +1,13 @@
 import * as chrono from "chrono-node";
 import { ListItemCache } from 'obsidian';
-import path from "path";
-import { RRule } from "rrule";
-import { DEFAULT_PARSER_SETTINGS } from '../Settings';
-import { ParsedTask, TaskInstance } from '../Task';
-import { taskIdToUid } from "../Task/Task";
+import * as path from 'path';
+import { taskIdToUid } from '../redux';
+import { ITaskInstance } from '../redux/orm';
+import { DEFAULT_PARSER_SETTINGS } from '../redux/settings';
+import { ParsedTask } from './types';
 
-export const INVALID_NAME_CHARS = /[\\/|^#\]\[;:?]/g;
-export const TASK_BASENAME_REGEX = /^(?<name>.+)(?=\((?<id>[\w\d]+)\))(?:\([\w\d]+\))/;
+export const INVALID_NAME_CHARS = /[\\/|^#\][;:?]/g;
+export const TASK_BASENAME_REGEX = /^(?<name>.+)(?=\((?<id>[\w\d]+)\))\([\w\d]+\)/;
 
 export interface ParserSettings {
     tokens: {
@@ -19,25 +19,22 @@ export interface ParserSettings {
     prefix: string;
 }
 
-// const parseTags = (tags: string): string[] => [];
-const parseRecurrence = ( recurrence: string ): RRule | null => {
-    try {
-        return RRule.fromText( recurrence );
-    }
-    catch ( e ) {
-        console.log( e );
-        return null
-    }
-}
 const parseDueDate = ( dueDate: string ): Date | null => chrono.parseDate( dueDate );
 
-export class TaskParser {
+/**
+ * we only need to strip the id and tailing links if they're task file links
+ * rendered tasks are of the form ...task name and tags, links, etc... [[same normalized name (id).md...]] ^id
+ */
+
+export class Parser {
     private settings: ParserSettings;
     public static LINK_REGEX = /\[\[[^\][]+\]\]/g;
-    public static LINE_REGEX = /^\s*[-*] (\[(?<complete>\s|x)?])?\s+(?<taskLine>[^&@].*)$/;
-    public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>[^&@].*)$/;
+    public static LINE_REGEX = /^\s*[-*] (\[(?<complete>\s|x)?])\s+(?<taskLine>.*)$/;
+    public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
     public static ID_REGEX = /\s\^[\w\d]+$/;
-    public static FILE_LINK_REGEX = /\[\[((.+)(\([\w\d]+\)))(\.md)?\]\]/g;
+    public static FILE_LINK_REGEX = /\[\[(?<name>.+)\((?<id>[\w\d]+)\)(\.md)?\]\]/g;
+    public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[\sxX])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkName>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
+
 
     constructor( settings = DEFAULT_PARSER_SETTINGS ) {
         this.settings = settings;
@@ -50,15 +47,15 @@ export class TaskParser {
     /*
      todo: handle strikethrough parsing, start/end with double tildes and adding removing completed dates
      */
-    fullParseLine( line: string, filePath: string, { position, parent }: ListItemCache ): TaskInstance {
-        if ( line.match( TaskParser.ID_REGEX ) ) {
+    fullParseLine( line: string, filePath: string, { position, parent }: ListItemCache ): ITaskInstance {
+        if ( line.match( Parser.RENDERED_TASK_REGEX ) ) {
             // parse as task
             return {
                 ...this.parseRenderedTask( line ),
                 filePath,
-                position,
-                parent,
-                primary: false,
+                parentLine: parent,
+                line: position.start.line,
+                childLines: []
             };
         }
 
@@ -68,14 +65,14 @@ export class TaskParser {
         return {
             ...pTask,
             filePath,
-            position,
-            parent,
-            primary: false,
+            line: position.start.line,
+            parentLine: parent,
+            childLines: []
         };
     }
 
     parseLine( line: string ): ParsedTask {
-        const lineMatch = line.match( TaskParser.LINE_REGEX );
+        const lineMatch = line.match( Parser.LINE_REGEX );
         if ( lineMatch ) {
             const { taskLine, complete } = lineMatch.groups;
             if ( !taskLine.match( /.*[\w\d].*/ ) )
@@ -89,8 +86,8 @@ export class TaskParser {
         return null;
     }
 
-    parseListItemLine( line: string, filePath: string, { parent, position }: ListItemCache ): TaskInstance {
-        const match = line.match( TaskParser.NO_TASK_REGEX );
+    parseListItemLine( line: string, filePath: string, { parent, position }: ListItemCache ): ITaskInstance {
+        const match = line.match( Parser.NO_TASK_REGEX );
         if ( match ) {
             const { taskLine } = match.groups;
             const pTask = this.parseMatchedContent( taskLine, line );
@@ -99,30 +96,30 @@ export class TaskParser {
             return {
                 ...pTask,
                 filePath,
-                parent,
-                position: { ...position },
+                parentLine: parent,
+                line: position.start.line,
                 complete: false,
-                primary: false,
+                childLines: [],
             };
         }
         return null;
     }
 
-    private parseMatchedContent( taskLine: string, rawText: string ) {
-        const idMatch = taskLine.match( TaskParser.ID_REGEX );
-        const id = (idMatch && idMatch.length && this.stripIdToken( idMatch[ 0 ] ).trim()) || '';
+    private parseMatchedContent( taskLine: string, rawText: string ): ParsedTask {
+        const idMatch = taskLine.match( Parser.ID_REGEX );
+        const id = taskIdToUid((idMatch && idMatch.length && this.stripIdToken( idMatch[ 0 ] ).trim()) ?? '');
         const pTask: ParsedTask = {
             id,
-            uid: taskIdToUid( id ),
             complete: false,
             name: '',
             rawText,
-            primary: false,
+            links: [],
+            tags: []
         }
-        const linkMatches = taskLine.match( TaskParser.LINK_REGEX );
+        const linkMatches = taskLine.match( Parser.LINK_REGEX );
         if ( linkMatches && linkMatches.length ) {
             const links = linkMatches.map( l => this.stripLinkToken( l ) );
-            const noId = taskLine.replace( TaskParser.ID_REGEX, '' );
+            const noId = taskLine.replace( Parser.ID_REGEX, '' );
             if (
                 linkMatches.length === 1 &&
                 noId.match( /^\[\[.+]]$/ )
@@ -135,7 +132,6 @@ export class TaskParser {
                     return {
                         ...pTask,
                         ...taskData,
-                        uid: taskIdToUid( taskData.id ),
                         links
                     };
                 }
@@ -143,18 +139,16 @@ export class TaskParser {
             pTask.links = links;
         }
         const {
-            tags, recurrence, dueDate
+            tags, dueDate
         } = this.parseLineMetadata( taskLine );
-        const name = taskLine.replace( TaskParser.ID_REGEX, '' ).trim();
+        const name = taskLine.replace( Parser.ID_REGEX, '' ).trim();
         if ( !name )
             return null;
         return {
             ...pTask,
             id,
-            uid: taskIdToUid( id ),
             name,
             tags,
-            recurrence,
             dueDate
         };
     }
@@ -163,13 +157,15 @@ export class TaskParser {
      TODO: consider render opts on each task instance to control what/how it displays
      - render as link
      - parse instance link
+     - use a template
      */
 
     /**
-     * - [ ] [[some link here]]  -->  - [ ] some link here [[some link here]] ^id33 <<< this is the winner
+     * - [ ] [[some link here]]  -->  - [ ] some link here [[some link here (id33)]] ^id33 <<< this is the winner
      *      - [ ] [[some link here (id33)]] ^id33 // no, that changes the existing/intended link
      *      - task name is "some link here"
-     * - [ ] [[some link]] #tag @July 1, 2022  -->  unchanged except for the id
+     * - [ ] [[some link]] #tag @July 1, 2022  --> - [ ] [[some link]] #tag @July 1, 2022 [[some link tag July 1, 2022
+     * (1id)]] ^1id
      *      - should the task name be stripped? or just the filename?
      *      - 1: "some link tag July 1, 2022"
      *      - 2: [[some link]] #tag @July 1, 2022 --> need to handle filename change
@@ -177,7 +173,7 @@ export class TaskParser {
      * @param linkText
      * @private
      */
-    private parseTaskFromLinkText( linkText: string ): { id: string, name: string } {
+    private parseTaskFromLinkText( linkText: string ): { id: number, name: string } {
         const pathParts = path.parse( linkText );
         const names = pathParts.name.split( '#^' )
             .filter( s => s );
@@ -186,11 +182,11 @@ export class TaskParser {
         const matchedNames = names.filter( n => n.match( TASK_BASENAME_REGEX ) );
         if ( matchedNames.length > 0 ) {
             const { name, id } = matchedNames[ 0 ].match( TASK_BASENAME_REGEX ).groups;
-            return { name: name.trim(), id };
+            return { name: name.trim(), id: taskIdToUid( id ) };
         }
         return {
             name: names[ 0 ].trim(),
-            id: ''
+            id: 0
         };
     }
 
@@ -198,7 +194,7 @@ export class TaskParser {
         return name.replace( INVALID_NAME_CHARS, '_' )
             .replace( /(\s+_+|_+\s+|\s+_+\s+|_+)/g, ' ' ).trim()
             .split( /\s/ ).filter( s => s ).join( ' ' )
-            .substring(0, 100);
+            .substring( 0, 100 );
 
     }
 
@@ -269,8 +265,8 @@ export class TaskParser {
 
     stripLinks( s: string ) {
         let ret = s + '';
-        while ( ret.match( TaskParser.LINK_REGEX ) )
-            ret = ret.replace( TaskParser.LINK_REGEX, '' );
+        while ( ret.match( Parser.LINK_REGEX ) )
+            ret = ret.replace( Parser.LINK_REGEX, '' );
         return ret;
     }
 
@@ -285,43 +281,32 @@ export class TaskParser {
     private parseLineMetadata( taskLine: string ) {
         const tagMatches = taskLine.match( this.tagRegex ) || [];
         const tags = tagMatches.map( t => this.stripTagToken( t ) )
-        const recurrenceMatches = taskLine.match( this.recurrenceRegex ) || [];
-        const recurrence = recurrenceMatches.length && parseRecurrence( this.stripRecurrenceToken( recurrenceMatches[ 0 ] ) );
         const dueDateMatches = taskLine.match( this.dueDateRegex ) || [];
         const dueDate = dueDateMatches.length && parseDueDate( this.stripDueDateToken( dueDateMatches[ 0 ] ) );
-        const linkMatches = taskLine.match( TaskParser.LINK_REGEX ) || [];
+        const linkMatches = taskLine.match( Parser.LINK_REGEX ) || [];
         const links = linkMatches.map( l => this.stripLinkToken( l ) );
         return {
-            tags, recurrence, dueDate, links
+            tags, dueDate, links
         }
     }
 
     private parseRenderedTask( line: string ): ParsedTask {
-        const match = line.match( TaskParser.LINE_REGEX );
+        const match = line.match( Parser.RENDERED_TASK_REGEX );
         if ( match ) {
-            const { taskLine, complete } = match.groups;
-            if ( !taskLine.match( /.*[\w\d].*/ ) )
-                return null;
-            const id = this.stripIdToken( line.match( TaskParser.ID_REGEX )[ 0 ] ).trim();
-            const { tags, links, recurrence, dueDate } = this.parseLineMetadata( line );
-            const name = taskLine.replace( this.tagRegex, '' )
-                .replace( TaskParser.ID_REGEX, '' )
-                .replace( this.recurrenceRegex, '' )
-                .replace( this.dueDateRegex, '' )
-                .replace( TaskParser.LINK_REGEX, '' )
+            const { complete, name, linkName, id, linkId } = match.groups;
+            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
+                throw Error( `Tasks with ids cannot be rendered with a different task's link at the end of the link.` );
+            const { tags, links, dueDate } = this.parseLineMetadata( line );
             if ( !name )
                 return null;
             return {
-                id,
-                uid: taskIdToUid( id ),
+                id: taskIdToUid( id ),
                 name,
                 tags,
-                recurrence,
                 dueDate,
                 links,
                 complete: complete === 'x',
                 rawText: line,
-                primary: false
             };
         }
         return null;

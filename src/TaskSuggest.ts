@@ -5,19 +5,15 @@ import {
     EditorSuggest,
     EditorSuggestContext,
     EditorSuggestTriggerInfo,
-    EventRef,
     TFile
 } from "obsidian";
-import { TaskEvents } from './Events/TaskEvents';
 import ObsidianTaskManager from './main';
-import { TaskParser } from './Parser/TaskParser';
-import { DEFAULT_RENDER_OPTS } from './Settings';
-import { TaskStoreState } from './Store/types';
-import { Task } from "./Task";
-import { taskInstanceFromTask } from './Task/Task';
+import { Parser } from './parse/Parser';
+import { emptyTaskInstance, ITask, TasksORMState } from './redux/orm';
+import { DEFAULT_RENDER_OPTS } from './redux/settings';
 
 
-export class TaskEditorSuggest extends EditorSuggest<Task> {
+export class TaskEditorSuggest extends EditorSuggest<ITask> {
     static pat = /^\s*[-*] \[(?<complete>\s|x)?]\s+/;
     static taskLinePattern = /^[ \t]*[-*] \[[ x]?]/
     static textPattern = /^[ \t]*[-*] \[[ x]?][ \t]+(?<taskName>(?:\d|\w).*)(?!\^[\w\d]+$)/;
@@ -25,56 +21,51 @@ export class TaskEditorSuggest extends EditorSuggest<Task> {
     context: EditorSuggestContext | null;
     limit: number;
     app: App;
-    taskState: TaskStoreState;
+    taskState: TasksORMState;
 
-    private events: TaskEvents;
-    private indexUpdateEventRef: EventRef;
-    private parser: TaskParser;
+    private parser: Parser;
     private plugin: ObsidianTaskManager;
 
-    constructor( app: App, plugin: ObsidianTaskManager, events: TaskEvents, taskState: TaskStoreState ) {
+    constructor( app: App, plugin: ObsidianTaskManager ) {
         super( app );
         this.app = app;
         this.plugin = plugin;
-        this.events = events;
-        this.taskState = taskState;
-        this.parser = new TaskParser();
+        this.parser = new Parser();
         // this.subscribe();
     }
 
     subscribe() {
-        this.indexUpdateEventRef = this.events.registerIndexUpdatedHandler( this.updateState.bind( this ) );
     }
 
     unsubscribe() {
-        this.events.off( this.indexUpdateEventRef );
     }
 
-    updateState( state: TaskStoreState ) {
+    updateState( state: TasksORMState ) {
         this.taskState = state;
     }
 
-    getSuggestions( context: EditorSuggestContext ): Task[] | Promise<Task[]> {
+    getSuggestions( context: EditorSuggestContext ): ITask[] | Promise<ITask[]> {
+        return [];
         // const searchText = context.query;
         // const tasks = [...this.taskState.taskIndex.values()].filter(t => t.name.startsWith(searchText));
-        if ( !context?.query || context.query.trim() === '' )
-            return [ ...this.taskState.taskIndex.values() ].filter( t => !t.complete ).sort()
-
-        return [ ...this.taskState.taskIndex.values() ]
-            .filter( t => t.name.includes( context.query ) && !t.complete )
-            .sort( ( a, b ) => {
-                if ( a.name < b.name )
-                    return -1;
-                if ( b.name < a.name )
-                    return 1;
-                if ( a.name === b.name ) {
-                    return a.created.getTime() - b.created.getTime();
-                }
-            } );
+        // if ( !context?.query || context.query.trim() === '' )
+        //     return [ ...this.taskState.taskIndex.values() ].filter( t => !t.complete ).sort()
+        //
+        // return [ ...this.taskState.taskIndex.values() ]
+        //     .filter( t => t.name.includes( context.query ) && !t.complete )
+        //     .sort( ( a, b ) => {
+        //         if ( a.name < b.name )
+        //             return -1;
+        //         if ( b.name < a.name )
+        //             return 1;
+        //         if ( a.name === b.name ) {
+        //             return a.created.getTime() - b.created.getTime();
+        //         }
+        //     } );
     }
 
     onTrigger( cursor: EditorPosition, editor: Editor, file: TFile ): EditorSuggestTriggerInfo | null {
-        if ( editor.getLine( cursor.line ).match( TaskParser.ID_REGEX ) )
+        if ( editor.getLine( cursor.line ).match( Parser.ID_REGEX ) )
             return null
         const line = editor.getLine( cursor.line ).substring( 0, cursor.ch );
         const match = line.match( /\s*[-*] \[.]\s+([\w\d]+)$/ );
@@ -92,7 +83,7 @@ export class TaskEditorSuggest extends EditorSuggest<Task> {
         return null;
     }
 
-    renderSuggestion( value: Task, el: HTMLElement ): void {
+    renderSuggestion( value: ITask, el: HTMLElement ): void {
         const base = createDiv();
         const text = `${value.id} - ${value.name}`;
         base.createDiv( {
@@ -102,14 +93,14 @@ export class TaskEditorSuggest extends EditorSuggest<Task> {
         el.appendChild( base );
     }
 
-    selectSuggestion( value: Task, evt: MouseEvent | KeyboardEvent ): void {
+    selectSuggestion( task: ITask, evt: MouseEvent | KeyboardEvent ): void {
         if ( this.context ) {
             const {
                 editor, query, start, end
             } = this.context;
             const range = editor.getRange( start, end );
             const rStart = editor.posToOffset( editor.getCursor() ) - query.length;
-            const inst = taskInstanceFromTask( this.context.file.path, this.context.start.line, value );
+            const inst = emptyTaskInstance()
             const line = this.plugin.taskFileManager.renderTaskInstance( inst, '', {
                 ...DEFAULT_RENDER_OPTS,
                 links: false

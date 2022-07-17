@@ -1,35 +1,17 @@
-import {
-    CachedMetadata,
-    EventRef,
-    FrontMatterCache,
-    MetadataCache,
-    stringifyYaml,
-    TAbstractFile,
-    TFile,
-    TFolder,
-    Vault
-} from "obsidian";
+import { CachedMetadata, FrontMatterCache, MetadataCache, stringifyYaml, TAbstractFile, TFile, Vault } from "obsidian";
 import path from 'path';
-import { TaskEvents } from "../Events/TaskEvents";
-import { EventType } from '../Events/types';
-import { ParserSettings, TaskParser } from '../Parser/TaskParser';
-import { DEFAULT_RENDER_OPTS, DEFAULT_TASK_MANAGER_SETTINGS } from '../Settings';
+import { Parser, ParserSettings } from '../parse/Parser';
+import { PluginSettings } from '../pluginSettings';
+import { hashTaskInstance } from '../redux';
+import { emptyTaskInstance } from '../redux/orm';
+import { DEFAULT_RENDER_OPTS, PluginSettings } from '../redux/settings';
 import { filterIndexByPath } from '../Store';
-import { hashTaskInstance, taskInstanceIdxFromTask, taskInstanceToChecklist } from "../Store/TaskStore";
+import { taskInstanceIdxFromTask, taskInstanceToChecklist } from "../Store/TaskStore";
 import { TaskInstanceIndex } from '../Store/types';
-import {
-    getTaskFromYaml,
-    hashTask,
-    instanceIndexKey,
-    Task,
-    TaskInstance,
-    TaskRecordType,
-    taskToFilename,
-    taskToYamlObject,
-    TaskYamlObject
-} from "../Task";
-import { emptyTaskInstance, renderTaskInstanceLinks } from '../Task/Task';
-import { TaskManagerSettings } from '../taskManagerSettings';
+import { hashTask, instancesKey, readTaskYaml, Task, TaskInstance } from "../Task";
+import { taskToFilename } from './index';
+import { renderTaskInstanceLinks, taskToYamlObject } from './render';
+import { TaskRecordType, TaskYamlObject } from './types';
 
 export interface FileManagerSettings {
     taskDirectoryName: string,
@@ -71,50 +53,26 @@ export const getVaultConfig = ( v: Vault ) => {
 export const DEFAULT_TASKS_DIR = `tasks`;
 
 export class TaskFileManager {
-    private tasksDirString: string = DEFAULT_TASKS_DIR;
-    private _tasksDirectory: TFolder;
     private vault: Vault;
     private mdCache: MetadataCache;
-    private events: TaskEvents;
-    private parser: TaskParser;
-    private eventRefs: Map<string, EventRef> = new Map();
-    private pluginSettings: TaskManagerSettings;
+    private settings: PluginSettings;
 
     constructor(
         vault: Vault,
         cache: MetadataCache,
-        events: TaskEvents,
-        parser = new TaskParser(),
-        settings = DEFAULT_TASK_MANAGER_SETTINGS
     ) {
         this.vault = vault;
         this.mdCache = cache;
-        this.events = events;
-        this.parser = parser;
-        this.pluginSettings = settings;
-        this.eventRefs.set(
-            EventType.SETTINGS_UPDATE,
-            this.events.onSettingsUpdate( this.updateSettings.bind( this ) )
-        );
-        this.tasksDirString = settings.taskDirectoryName;
-        this._tasksDirectory = this.vault.getAbstractFileByPath( settings.taskDirectoryName ) as TFolder;
-        if ( !this._tasksDirectory ) {
-            this.vault.createFolder( settings.taskDirectoryName )
-                .then( () => {
-                    this._tasksDirectory = this.vault.getAbstractFileByPath( settings.taskDirectoryName ) as TFolder;
-                } );
-        }
     }
 
-    public async updateSettings( settings: TaskManagerSettings ) {
-        this.pluginSettings = settings;
+    public async updateSettings( settings: PluginSettings ) {
     }
 
     public async getInstanceIndexFromFile( file: TFile, cache: CachedMetadata, data: string ) {
         if ( this.isTaskFile( file ) ) {
             const idxTask = await this.readTaskFile( file, cache, data );
-            const inst = taskInstanceIdxFromTask( idxTask ).get(instanceIndexKey(file.path, 0));
-            return new Map([[instanceIndexKey(file.path, 0), inst]]);
+            const inst = taskInstanceIdxFromTask( idxTask ).get(instancesKey(file.path, 0));
+            return new Map([[instancesKey(file.path, 0), inst]]);
         }
         else
             return this.getFileInstances( file, cache, data );
@@ -214,7 +172,7 @@ export class TaskFileManager {
     public async readTaskFile( file: TFile, cache?: CachedMetadata, data?: string ): Promise<Task> {
         cache = cache ?? this.mdCache.getFileCache( file );
         const taskYml: TaskYamlObject = TaskFileManager.taskYamlFromFrontmatter( cache.frontmatter )
-        const task = getTaskFromYaml( taskYml );
+        const task = readTaskYaml( taskYml );
         task.name = task.name ?? file.basename;
         task.description = '';
         return task;
@@ -236,7 +194,7 @@ export class TaskFileManager {
             const taskInstance = this.parser.fullParseLine( contentLines[ lic.position.start.line ], file.path, lic );
             if ( !taskInstance )
                 continue;
-            fileIndex.set( instanceIndexKey( file.path, lic.position.start.line ), taskInstance );
+            fileIndex.set( instancesKey( file.path, lic.position.start.line ), taskInstance );
             if ( taskInstance.parent > -1 && !this.parser.parseLine( contentLines[ taskInstance.parent ] ) ) {
                 let parentLine = taskInstance.parent;
                 while ( parentLine > -1 ) {
@@ -252,7 +210,7 @@ export class TaskFileManager {
                                 parent: parentListItem.parent,
                             };
                         fileIndex.set(
-                            instanceIndexKey( file.path, parentListItem.position.start.line ),
+                            instancesKey( file.path, parentListItem.position.start.line ),
                             parentTaskInstnace
                         )
                     }
@@ -305,7 +263,7 @@ export class TaskFileManager {
         let parent = instance.parent;
         while ( parent > -1 ) {
             pad = pad.padStart( pad.length + tabSize, useTab ? '\t' : ' ' );
-            const p = index.get( instanceIndexKey( instance.filePath, parent ) );
+            const p = index.get( instancesKey( instance.filePath, parent ) );
             parent = p.parent;
         }
         return pad;
@@ -364,7 +322,7 @@ export class TaskFileManager {
     ) {
         return vault.read( file )
             .then( contents => {
-                const parser = new TaskParser( parserSettings );
+                const parser = new Parser( parserSettings );
                 const taskItems = mdCache.getFileCache( file )?.listItems
                     ?.filter( li => li.task ) || [];
                 const lines = contents.split( '\n' );
@@ -373,8 +331,8 @@ export class TaskFileManager {
                     const task = parser.parseLine( taskLine );
                     if ( task ) {
                         // return line to normal
-                        taskLine = taskLine.replace( TaskParser.ID_REGEX, '' )
-                            .replace(TaskParser.FILE_LINK_REGEX, '')
+                        taskLine = taskLine.replace( Parser.ID_REGEX, '' )
+                            .replace(Parser.FILE_LINK_REGEX, '')
                             .replace( parser.recurrenceRegex, '' )
                             .replace( parser.dueDateRegex, '' )
                             .replace(/\s+(?<!^\s+)/, ' ')

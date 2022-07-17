@@ -1,4 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { RenderOpts } from '../../file/TaskFileManager';
+import { ParserSettings } from '../../parse/Parser';
 import { PluginSettings, SettingsPayload } from './settings.types';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -49,3 +51,21 @@ export const { updated, reset } = settingsSlice.actions;
 export type SettingsAction = ReturnType<typeof updated> | ReturnType<typeof reset>
 
 export default settingsSlice.reducer;
+export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
+    tokens: {
+        tag: '#',
+        recurrence: '&',
+        dueDate: '@',
+        divider: '|*|'
+    },
+    prefix: ''
+};
+export const DEFAULT_RENDER_OPTS: RenderOpts = {
+    id: true,
+    links: false,
+    tags: true,
+    recurrence: true,
+    dueDate: true,
+    completedDate: true,
+    strikeThroughOnComplete: false
+};

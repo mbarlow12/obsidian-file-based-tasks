@@ -1,5 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { reducerCreator, TaskAction } from './orm';
+import { ITaskInstance, reducerCreator, TaskAction } from './orm';
 import { isTaskAction } from './orm/actions';
 import { fetchOrm } from './orm/schema';
 import settings, { SettingsAction } from './settings/settings.slice';
@@ -27,3 +27,10 @@ export default function (  ) {
         reducer
     } );
 }
+export const hashTaskInstance = (
+    { name, id, complete, parentLine, dueDate, childLines, tags, filePath, line }: ITaskInstance
+): string => [ line, id, name, complete ? 'x' : ' ', parentLine, dueDate.getTime(), filePath, ...tags.sort(), ...childLines.sort() ].join( '||' );
+
+export const taskUidToId = ( uid: number ) => uid.toString( 16 );
+
+export const taskIdToUid = ( id: string ) => isNaN( Number.parseInt( id, 16 ) ) ? 0 : Number.parseInt( id, 16 );

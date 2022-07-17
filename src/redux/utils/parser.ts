@@ -1,6 +1,6 @@
 import { FrontMatterCache, ListItemCache } from 'obsidian';
-import { IBaseTask, ITask, ITaskInstance } from '../store';
-import { DEFAULT_SETTINGS, ParseOptions } from '../store/settings';
+import { IBaseTask, ITask, ITaskInstance } from '../orm';
+import { DEFAULT_SETTINGS, ParseOptions } from '../settings';
 
 export const parseInstanceYaml = ( yaml: string ): ITaskInstance => ({
     id: 0,

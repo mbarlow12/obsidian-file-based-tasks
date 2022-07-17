@@ -1,6 +1,6 @@
-import { ITaskInstance } from './types';
+import { ITask, ITaskInstance } from './types';
 
-export const DEFAULT_KEY_DELIMITER = '||';
+export const INSTANCE_KEY_DELIM = '||';
 
 export const filterUnique = <T>(
     arr: T[],
@@ -12,7 +12,7 @@ export const filterUnique = <T>(
 export const instancesKey = (
     pathOrInst: string | ITaskInstance,
     line = 0,
-    delimiter = DEFAULT_KEY_DELIMITER
+    delimiter = INSTANCE_KEY_DELIM
 ) => {
     if ( typeof pathOrInst !== 'string' ) {
         line = pathOrInst.line;
@@ -69,3 +69,32 @@ export type {
 } from './types'
 export * from './selectors';
 export * from './transforms';
+export const emptyTaskInstance = (): ITaskInstance => {
+    return {
+        id: 0,
+        complete: false,
+        name: '',
+        parentLine: -1,
+        line: 0,
+        links: [],
+        tags: [],
+        rawText: '',
+        filePath: '',
+        childLines: [],
+    };
+};
+export const emptyTask = (): ITask => {
+    const { id, complete, name } = emptyTaskInstance();
+    return {
+        id,
+        name,
+        complete,
+        created: new Date(),
+        content: '',
+        instances: [],
+        childIds: [],
+        tags: [],
+        parentIds: [],
+        dueDate: new Date()
+    }
+}
