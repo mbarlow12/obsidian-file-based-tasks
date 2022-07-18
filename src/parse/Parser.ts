@@ -3,7 +3,7 @@ import { ListItemCache } from 'obsidian';
 import * as path from 'path';
 import { taskIdToUid } from '../redux';
 import { ITaskInstance } from '../redux/orm';
-import { DEFAULT_PARSER_SETTINGS } from '../redux/settings';
+import { DEFAULT_SETTINGS, ParseOptions } from '../redux/settings';
 import { ParsedTask } from './types';
 
 export const INVALID_NAME_CHARS = /[\\/|^#\][;:?]/g;
@@ -27,7 +27,7 @@ const parseDueDate = ( dueDate: string ): Date | null => chrono.parseDate( dueDa
  */
 
 export class Parser {
-    private settings: ParserSettings;
+    private settings: ParseOptions;
     public static LINK_REGEX = /\[\[[^\][]+\]\]/g;
     public static LINE_REGEX = /^\s*[-*] (\[(?<complete>\s|x)?])\s+(?<taskLine>.*)$/;
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
@@ -35,12 +35,12 @@ export class Parser {
     public static FILE_LINK_REGEX = /\[\[(?<name>.+)\((?<id>[\w\d]+)\)(\.md)?\]\]/g;
     public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[\sxX])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkName>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
 
-
-    constructor( settings = DEFAULT_PARSER_SETTINGS ) {
-        this.settings = settings;
+    static create( settings: ParseOptions ) {
+        return new Parser( settings );
     }
 
-    updateSettings( settings: ParserSettings ) {
+
+    constructor( settings = DEFAULT_SETTINGS.parseOptions ) {
         this.settings = settings;
     }
 

@@ -1,8 +1,10 @@
 import { stringifyYaml } from 'obsidian';
+import path from 'path';
 import { RRule } from 'rrule';
 import { ITask, ITaskInstance } from '../redux/orm';
-import { taskToBasename } from './index';
-import { TaskInstanceYamlObject, TaskRecordType, TaskYamlObject } from './types';
+import { DEFAULT_RENDER_OPTS } from '../redux/settings';
+import { taskToBasename, taskToFilename } from './index';
+import { ITaskInstanceYamlObject, ITaskYamlObject, TaskRecordType } from './types';
 
 export const renderTags = ( tags?: string[] ): string => (tags ?? []).join( ' ' );
 export const renderRecurrence = ( rrule?: RRule ): string => rrule ? '&' + rrule.toText() : '';
@@ -19,7 +21,7 @@ export const renderTaskInstanceLinks = ( task: ITask ) => {
         .filter( loc => !loc.filePath.includes( taskToBasename( task ) ) )
         .map( loc => `[[${loc.filePath}]]` ).join( ' ' );
 };
-export const taskToYamlObject = ( task: ITask ): TaskYamlObject => {
+export const taskToYamlObject = ( task: ITask ): ITaskYamlObject => {
     const {
         id,
         name,
@@ -43,7 +45,7 @@ export const taskToYamlObject = ( task: ITask ): TaskYamlObject => {
         parentIds: parentIds.map( id => `${id}` ),
         childIds: childIds.map( id => `${id}` ),
         instances: instances.map( taskInstanceToYamlObject ),
-        ...(completedDate && { completedDate: completedDate.toISOString() } )
+        ...(completedDate && { completedDate: completedDate.toISOString() })
     };
 }
 export const taskToTaskFileContents = ( task: ITask ): string => {
@@ -52,12 +54,12 @@ export const taskToTaskFileContents = ( task: ITask ): string => {
     return `${data}\n\n\n---\n${renderTaskInstanceLinks( task )}`;
 }
 export const taskAsChecklist = ( t: Pick<ITaskInstance, 'id' | 'name' | 'complete'> ) => `- [${t.complete
-                                                                                              ? 'x'
-                                                                                              : ' '}] ${t.name} ^${t.id}`;
+                                                                                               ? 'x'
+                                                                                               : ' '}] ${t.name} ^${t.id}`;
 export const taskFileLine = ( t: ITaskInstance, offset = 0 ) => new Array( offset ).fill( ' ' )
     .join( '' ) + taskAsChecklist( t );
 
-export const taskInstanceToYamlObject = ( inst: ITaskInstance ): TaskInstanceYamlObject => {
+export const taskInstanceToYamlObject = ( inst: ITaskInstance ): ITaskInstanceYamlObject => {
     const {
         complete,
         rawText,
@@ -73,7 +75,26 @@ export const taskInstanceToYamlObject = ( inst: ITaskInstance ): TaskInstanceYam
         line: `${line}`,
         parentLine: `${parentLine}`,
         complete: complete.toString(),
-        childLines: childLines.map(l => `${l}`),
+        childLines: childLines.map( l => `${l}` ),
         links
     }
+}
+
+export const renderTaskInstance = (
+    instance: ITaskInstance,
+    pad = '',
+    tasksDirPath = 'tasks',
+    renderOpts = DEFAULT_RENDER_OPTS
+): string => {
+    const baseLine = taskInstanceToChecklist( instance ).replace( /\^[\w\d]+/, '' ).trim();
+    const taskLinks = (instance.links ?? [])
+        .filter( l => !l.includes( instance.filePath ) && !instance.filePath.includes( l ) )
+        .map( link => `[[${link}#^${instance.id}|${path.parse( link ).name}]]` )
+    const instanceLine = [
+        baseLine,
+        ...(renderOpts.links && taskLinks || []),
+        `[[${path.join( tasksDirPath, taskToFilename( instance ) )}]]`,
+        renderOpts.id && `^${instance.id}` || ''
+    ].join( ' ' );
+    return pad + instanceLine;
 }

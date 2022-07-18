@@ -1,7 +1,8 @@
-import { TaskInstanceYamlObject, TaskYamlObject } from '../file';
+import { FrontMatterCache } from 'obsidian';
+import { ITaskInstanceYamlObject, ITaskYamlObject } from '../file';
 import { ITask, ITaskInstance } from '../redux/orm';
 
-export const readTaskYaml = ( yaml: TaskYamlObject ): ITask => {
+export const readTaskYaml = ( yaml: ITaskYamlObject ): ITask => {
     const {
         complete,
         id,
@@ -28,7 +29,7 @@ export const readTaskYaml = ( yaml: TaskYamlObject ): ITask => {
         content: ''
     };
 }
-export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskInstanceYamlObject ): ITaskInstance => {
+export const taskInstanceFromYaml = ( tYaml: ITaskYamlObject ) => ( yaml: ITaskInstanceYamlObject ): ITaskInstance => {
     const { id, name, dueDate, completedDate, tags } = tYaml
     const { rawText, filePath, complete, links, line, parentLine, childLines } = yaml;
     return {
@@ -45,4 +46,36 @@ export const taskInstanceFromYaml = ( tYaml: TaskYamlObject ) => ( yaml: TaskIns
         ...(links && links.length && { links }),
         childLines: childLines.map( (c: string) => Number.parseInt( c ) ),
     } as ITaskInstance;
+}
+export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObject => {
+    const {
+        type,
+        id,
+        uid,
+        name,
+        locations,
+        complete,
+        created,
+        updated,
+        parentUids,
+        childUids,
+        recurrence,
+        dueDate,
+        completedDate
+    } = cfm;
+    return {
+        type,
+        id,
+        uid,
+        name,
+        locations,
+        complete,
+        created,
+        updated,
+        parentUids,
+        childUids,
+        recurrence,
+        dueDate,
+        completedDate
+    } as unknown as ITaskYamlObject
 }

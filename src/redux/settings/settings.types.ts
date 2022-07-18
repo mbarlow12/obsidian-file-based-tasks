@@ -26,10 +26,21 @@ export type PluginSettings = {
     minTaskId: number,
     parseOptions: ParseOptions,
     renderOptions?: RenderOptions,
+    tasksDirectory: string;
 }
 export type SettingsPayload = Partial<PluginSettings>;
 
 export interface TaskQuery {
     filter: (t: Task) => boolean;
     sort: (a: Task, b: Task) => number;
+}
+
+export interface RenderOpts {
+    id: boolean,
+    links: boolean,
+    tags: boolean,
+    recurrence: boolean,
+    dueDate: boolean,
+    completedDate: boolean,
+    strikeThroughOnComplete: boolean,
 }

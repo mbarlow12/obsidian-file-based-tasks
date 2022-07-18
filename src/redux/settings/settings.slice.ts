@@ -1,7 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { RenderOpts } from '../../file/TaskFileManager';
 import { ParserSettings } from '../../parse/Parser';
-import { PluginSettings, SettingsPayload } from './settings.types';
+import { PluginSettings, RenderOpts, SettingsPayload } from './settings.types';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
     tabSize: 4,
