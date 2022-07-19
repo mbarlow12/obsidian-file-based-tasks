@@ -1,22 +1,53 @@
-import { ORM } from 'redux-orm';
+// noinspection ES6UnusedImports
+import { ORM, QuerySet } from 'redux-orm';
 import { OrmSession } from 'redux-orm/Session';
-import { PluginSettings, TaskQuery } from '../settings';
+import { PluginSettings } from '../settings';
 import { PluginState } from '../types';
 import {
     instancePropsFromITaskInstance,
+    instancePropsFromTask,
+    Task,
     TaskAction,
     TaskActionType,
     taskCreatePropsFromInstance,
     taskCreatePropsFromITask,
-    taskUpdatePropsFromITaskInstance
+    taskUpdatePropsFromITaskInstance,
+    ToggleTaskComplete
 } from './index';
 import { instancesKey } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
 import { filePathInstances, getNextTaskIdAboveMin } from './selectors';
 import { ITask, ITaskCreate, ITaskInstance, ITaskInstanceRecord } from './types';
+import LookupPredicate = QuerySet.LookupPredicate;
 
-const repopulateIndexFiles = ( session: OrmSession<TaskORMSchema>, indexFiles: Record<string, TaskQuery> ) => {
+const repopulateIndexFiles = (
+    session: OrmSession<TaskORMSchema>,
+    indexFiles: Record<string, LookupPredicate<Task>>
+) => {
 
+    for ( const filePath in indexFiles ) {
+        const query = indexFiles[ filePath ];
+        session.TaskInstance.filter( ti => ti.filePath === filePath ).delete();
+        const tasks = session.Task.filter( query ).orderBy( 'created' ).toModelArray();
+        const seenIds = new Set<number>();
+        let line = 0;
+        for ( let i = 0; i < tasks.length; i++ ) {
+            const task = tasks[ i ];
+            if ( seenIds.has( task.id ) )
+                continue;
+            seenIds.add( task.id );
+            const parentInstance = session.TaskInstance.create( instancePropsFromTask( task, filePath, line++ ) );
+
+            if ( task.subTasks.exists() ) {
+                const subTasks = task.subTasks.all().toModelArray();
+                subTasks.forEach( st => session.TaskInstance.create( {
+                    ...instancePropsFromTask( st, filePath, line++ ),
+                    parentInstance,
+                    parentLine: parentInstance.line
+                } ) );
+            }
+        }
+    }
 }
 
 export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMState ) => (
@@ -63,7 +94,7 @@ export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMS
             updateFileInstancesReducer( action.payload.path, action.payload.instances, session, settings );
             break;
         case TaskActionType.DELETE_TASK:
-            session.Task.withId( typeof action.payload === 'number' ? action.payload : action.payload.id )
+            session.Task.withId( typeof action.payload === 'number' ? action.payload : action.payload.id ).delete()
             break;
         case TaskActionType.UPDATE_TASK:
             break;
@@ -72,9 +103,8 @@ export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMS
             break;
         case TaskActionType.RENAME_FILE:
             break;
-        case TaskActionType.COMPLETE_TASK:
-            break;
-        case TaskActionType.UNCOMPLETE_TASK:
+        case TaskActionType.TOGGLE_COMPLETE:
+            toggleComplete( action.payload, session );
             break;
         case TaskActionType.ARCHIVE_TASKS:
             break;
@@ -181,5 +211,17 @@ const deleteFile = (
             data.forEach( i => session.TaskInstance.withId( instancesKey( i ) )?.delete() )
 
     }
+}
+
+const toggleComplete = ( payload: ToggleTaskComplete['payload'], session: TasksORMSession ) => {
+    if ( typeof payload !== 'number' )
+        payload = payload.id;
+    const task = session.Task.withId( payload );
+    if ( !task )
+        return;
+    const complete = !task.complete;
+    const completedDate = complete ? new Date() : undefined;
+    task.update( { complete, completedDate } );
+    task.subTasks.update( { complete, completedDate } );
 }
 

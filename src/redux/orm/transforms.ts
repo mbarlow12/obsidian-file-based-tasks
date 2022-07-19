@@ -27,6 +27,32 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
     }
 }
 
+export const instancePropsFromTask = (
+    task: SessionBoundModel<Task, {}>,
+    filePath: string,
+    line = 0,
+): CreateProps<TaskInstance> => {
+    const key = instancesKey( filePath, line );
+    const { parentTasks } = task;
+    const pInsts = parentTasks?.toModelArray().reduce( ( acc, p ) => {
+        const instMatch = p.instances.filter( i => i.filePath === filePath );
+        if ( instMatch.exists() )
+            acc.push( instMatch.first() );
+        return [ ...acc ];
+    }, [] as Array<SessionBoundModel<TaskInstance, {}>> )
+    const parentInstance = pInsts.shift();
+    return {
+        key,
+        filePath,
+        line,
+        parentLine: parentInstance?.line || -1,
+        parentInstance,
+        task: task.id,
+        rawText: task.name,
+        parent: parentInstance.task
+    };
+}
+
 export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): CreateProps<TaskInstance> => {
     const {
         id,
@@ -52,7 +78,7 @@ export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): Creat
     }
 }
 
-export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, InstanceFields>): ITaskInstance => {
+export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, InstanceFields> ): ITaskInstance => {
     const {
         line,
         parentLine,
@@ -67,19 +93,19 @@ export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, Instance
         id: task.id,
         name: task.name,
         parentLine,
-        ...(parentInstance && { parentInstance: iTaskInstance( parentInstance ) } ),
+        ...(parentInstance && { parentInstance: iTaskInstance( parentInstance ) }),
         filePath,
         line,
         links: [],
-        childLines: subTaskInstances.toRefArray().map(i => i.line),
+        childLines: subTaskInstances.toRefArray().map( i => i.line ),
         completedDate: task.completedDate,
         complete: task.complete,
-        tags: task.tags.toRefArray().map(t => t.name),
+        tags: task.tags.toRefArray().map( t => t.name ),
         rawText
     }
 }
 
-export const iTask = ( mTask: SessionBoundModel<Task, TaskFields>): ITask => {
+export const iTask = ( mTask: SessionBoundModel<Task, TaskFields> ): ITask => {
     const {
         id,
         name,
@@ -98,12 +124,12 @@ export const iTask = ( mTask: SessionBoundModel<Task, TaskFields>): ITask => {
         name,
         complete,
         completedDate,
-        childIds: mTask.subTasks.toRefArray().map(st => st.id),
-        parentIds: mTask.parentTasks.toRefArray().map(pt => pt.id),
-        tags: mTask.tags.toRefArray().map(t => t.name),
+        childIds: mTask.subTasks.toRefArray().map( st => st.id ),
+        parentIds: mTask.parentTasks.toRefArray().map( pt => pt.id ),
+        tags: mTask.tags.toRefArray().map( t => t.name ),
         dueDate,
         created,
-        instances: instances.toModelArray().map(iTaskInstance),
+        instances: instances.toModelArray().map( iTaskInstance ),
         content
     }
 }

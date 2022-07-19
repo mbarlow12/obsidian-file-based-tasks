@@ -64,7 +64,7 @@ export const tasksEqual = ( a: ITask, b: ITask ) => {
 export type {
     UpdateFileInstanesAction,
     CreateTaskAction,
-    CompleteTaskAction,
+    ToggleTaskComplete,
     DeleteFileAction,
     DeleteTaskAction,
     RehydrateAction,
@@ -73,10 +73,9 @@ export type {
     UnarchiveTasksAction,
     ArchiveTasksAction,
     TaskAction,
-    UncompleteTaskAction,
     UpdateTaskAction
 } from './actions';
-export { TaskActionType, addInstancesFromFile, createTask } from './actions';
+export { TaskActionType, updateFileInstances, createTask } from './actions';
 export { reducerCreator } from './reducer';
 export type {
     TasksORMSession,

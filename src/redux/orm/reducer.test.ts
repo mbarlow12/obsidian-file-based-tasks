@@ -1,5 +1,5 @@
 import { createTestSession } from '../../../test/fixtures';
-import { addInstancesFromFile, createTask } from './index';
+import { createTask, updateFileInstances } from './index';
 import { reducerCreator } from './reducer';
 import { getTask, taskInstances } from './selectors';
 
@@ -37,7 +37,7 @@ describe( 'Reducer', () => {
     } );
 
     it( 'should create a task given a new instance', () => {
-        const action = addInstancesFromFile( 'file', {
+        const action = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 0,
@@ -67,7 +67,7 @@ describe( 'Reducer', () => {
         } );
         let end = taskReducer( state, action );
         expect( end.Task.items ).toEqual( [ 10000 ] );
-        const instAction = addInstancesFromFile( 'file', {
+        const instAction = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 10000,
@@ -93,7 +93,7 @@ describe( 'Reducer', () => {
             id: 10005
         } );
         let taskDb = taskReducer( state, action );
-        let instAction = addInstancesFromFile( 'file', {
+        let instAction = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 10005,
@@ -108,7 +108,7 @@ describe( 'Reducer', () => {
             }
         } );
         taskDb = taskReducer( { ...state, taskDb }, instAction );
-        instAction = addInstancesFromFile( 'file', {
+        instAction = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 10005,
@@ -145,7 +145,7 @@ describe( 'Reducer', () => {
             id: 10005
         } );
         let taskDb = taskReducer( state, action );
-        let instAction = addInstancesFromFile( 'file', {
+        let instAction = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 10005,
@@ -160,7 +160,7 @@ describe( 'Reducer', () => {
             }
         } );
         taskDb = taskReducer( { ...state, taskDb }, instAction );
-        instAction = addInstancesFromFile( 'file', {
+        instAction = updateFileInstances( 'file', {
             [ 'file||2' ]: {
                 name: 'task',
                 id: 0,
@@ -182,7 +182,7 @@ describe( 'Reducer', () => {
     } );
 
     it( 'should handle parent completions', () => {
-        const instAction = addInstancesFromFile( 'file', {
+        const instAction = updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'task',
                 id: 10005,
@@ -225,7 +225,7 @@ describe( 'Reducer', () => {
             complete: true,
             completedDate: new Date( '01/01/2022' ),
         } ) );
-        state.taskDb = taskReducer( state, addInstancesFromFile( 'file', {
+        state.taskDb = taskReducer( state, updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'completed task',
                 filePath: 'file',
@@ -249,7 +249,7 @@ describe( 'Reducer', () => {
             complete: true,
             completedDate: new Date( '01/01/2022' ),
         } ) );
-        state.taskDb = taskReducer( state, addInstancesFromFile( 'file', {
+        state.taskDb = taskReducer( state, updateFileInstances( 'file', {
             [ 'file||1' ]: {
                 name: 'completed task',
                 filePath: 'file',

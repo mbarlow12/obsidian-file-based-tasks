@@ -10,7 +10,7 @@ export enum TaskActionType {
     UPDATE_FILE_INSTANCES = 'UPDATE_FILE_INSTANCES',
     DELETE_FILE = 'DELETE_FILE',
     RENAME_FILE = 'RENAME_FILE',
-    COMPLETE_TASK = 'COMPLETE_TASK',
+    TOGGLE_COMPLETE = 'TOGGLE_COMPLETE',
     UNCOMPLETE_TASK = 'UNCOMPLETE_TASK',
     ARCHIVE_TASKS = 'ARCHIVE_TASKS',
     UNARCHIVE_TASKS = 'UNARCHIVE_TASKS',
@@ -63,13 +63,8 @@ export interface RenameFileAction {
     }
 }
 
-export interface CompleteTaskAction {
-    type: TaskActionType.COMPLETE_TASK,
-    payload: number | ITask | ITaskInstance
-}
-
-export interface UncompleteTaskAction {
-    type: TaskActionType.UNCOMPLETE_TASK,
+export interface ToggleTaskComplete {
+    type: TaskActionType.TOGGLE_COMPLETE,
     payload: number | ITask | ITaskInstance
 }
 
@@ -99,14 +94,13 @@ export type TaskAction = CreateTaskAction
     | UpdateTaskAction
     | DeleteFileAction
     | RenameFileAction
-    | CompleteTaskAction
-    | UncompleteTaskAction
+    | ToggleTaskComplete
     | ArchiveTasksAction
     | UnarchiveTasksAction
     | RefreshRecurrencesAction
     | RehydrateAction;
 
-export const addInstancesFromFile = (
+export const updateFileInstances = (
     path: string,
     instances: ITaskInstanceRecord
 ): UpdateFileInstanesAction => ({
@@ -139,3 +133,4 @@ export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction 
 type Payload<T extends TaskAction> = T['payload'];
 export const deleteFile = createAction<Payload<DeleteFileAction>>(TaskActionType.DELETE_FILE);
 export const renameFileAction = createAction<Payload<RenameFileAction>>(TaskActionType.RENAME_FILE);
+export const toggleTaskStatus = createAction<Payload<ToggleTaskComplete>>(TaskActionType.TOGGLE_COMPLETE);
