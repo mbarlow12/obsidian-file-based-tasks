@@ -2,26 +2,29 @@ import { configureStore, EnhancedStore } from '@reduxjs/toolkit';
 import { reducerCreator, TaskAction } from './orm';
 import { isTaskAction } from './orm/actions';
 import { fetchOrm } from './orm/schema';
-import { SettingsAction } from './settings';
+import { DEFAULT_SETTINGS, SettingsAction } from './settings';
 import settings from './settings/settings.slice';
 import { PluginState } from './types';
 
-const { orm, state } = fetchOrm();
-const taskDb = reducerCreator( orm, state );
+const { orm, state: taskDb } = fetchOrm();
+const state: PluginState = { settings: DEFAULT_SETTINGS, taskDb };
+const taskReducer = reducerCreator( orm, taskDb );
 export {
     orm,
     state
 };
 
 const reducer = (
-    state: PluginState,
+    pluginState: PluginState,
     action: TaskAction
 ) => {
-    let taskState = state.taskDb;
+    if (!pluginState)
+        return state;
+    let taskState = pluginState.taskDb;
     if (isTaskAction(action))
-        taskState = taskDb(state, action);
+        taskState = taskReducer(pluginState, action);
     return {
-        settings: settings(state.settings, action),
+        settings: settings(pluginState.settings, action),
         taskDb: taskState
     };
 }
