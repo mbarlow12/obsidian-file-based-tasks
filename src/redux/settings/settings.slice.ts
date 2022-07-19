@@ -1,5 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { Ref } from 'redux-orm';
 import { ParserSettings } from '../../parse/Parser';
+import { Task } from '../orm';
 import { PluginSettings, RenderOpts, SettingsPayload } from './settings.types';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -8,18 +10,12 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     maxTasks: 500,
     minTaskId: 0,
     indexFiles: {
-        'Backlog.md': {
-            filter: t => !t.ref.complete,
-            sort: ( a, b ) => a.ref.created.getTime() - b.ref.created.getTime()
-        },
-        'Completed.md': {
-            filter: t => t.ref.complete,
-            sort: ( a, b ) => a.ref.created.getTime() - b.ref.created.getTime()
-        }
+        'Backlog.md': ( row: Ref<Task>) => !row.complete,
+        'Completed.md': ( row: Ref<Task>) => row.complete
     },
     timeBeforeArchive: 45,
     deleteSubtaskWithTask: false,
-    tasksDirectory: 'task',
+    tasksDirectory: 'tasks',
     parseOptions: {
         taskNameInclusive: false,
         taskPrefix: '#task',

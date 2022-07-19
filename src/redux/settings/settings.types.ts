@@ -1,4 +1,7 @@
+// noinspection ES6UnusedImports
+import { QuerySet } from 'redux-orm';
 import { Task } from '../orm';
+import LookupPredicate = QuerySet.LookupPredicate;
 
 export interface ParseOptions {
     usePrefix: boolean;
@@ -17,7 +20,7 @@ export type PluginSettings = {
     maxTasks: number,
     deleteSubtaskWithTask: boolean,
     timeBeforeArchive: number,
-    indexFiles: Record<string, TaskQuery>,
+    indexFiles: Record<string, LookupPredicate<Task>>,
     minTaskId: number,
     parseOptions: ParseOptions,
     renderOptions?: RenderOpts,
