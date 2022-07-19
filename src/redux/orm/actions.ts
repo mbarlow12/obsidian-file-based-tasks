@@ -1,4 +1,4 @@
-import { Dictionary } from '@reduxjs/toolkit';
+import { createAction, Dictionary } from '@reduxjs/toolkit';
 import { CreateProps } from 'redux-orm';
 import { Task } from './models';
 import { ITask, ITaskCreate, ITaskInstance, ITaskInstanceRecord } from './types';
@@ -116,7 +116,7 @@ export const addInstancesFromFile = (
 
 export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction => {
     const props: ITaskCreate = {
-        name: task.name
+        name: task.name,
     };
     if (task.id)
         props.id = task.id;
@@ -136,3 +136,6 @@ export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction 
         payload: props
     };
 }
+type Payload<T extends TaskAction> = T['payload'];
+export const deleteFile = createAction<Payload<DeleteFileAction>>(TaskActionType.DELETE_FILE);
+export const renameFileAction = createAction<Payload<RenameFileAction>>(TaskActionType.RENAME_FILE);

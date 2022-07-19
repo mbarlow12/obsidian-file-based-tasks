@@ -1,6 +1,6 @@
 import { CreateProps, SessionBoundModel, UpdateProps } from 'redux-orm';
-import { filterUnique, instancesKey } from './index';
-import { tagsEqual, Task, TaskInstance, TaskProps } from './models';
+import { filterUnique, InstanceFields, ITask, Task, TaskFields, TaskInstance, TaskProps } from './index';
+import { instancesKey, tagsEqual } from './models';
 import { ITaskCreate, ITaskInstance } from './types';
 
 export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task> => {
@@ -49,6 +49,62 @@ export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): Creat
                 parent: parentInstance.id
             }
         ),
+    }
+}
+
+export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, InstanceFields>): ITaskInstance => {
+    const {
+        line,
+        parentLine,
+        filePath,
+        parentInstance,
+        rawText,
+        task,
+        subTaskInstances,
+    } = instRef
+
+    return {
+        id: task.id,
+        name: task.name,
+        parentLine,
+        ...(parentInstance && { parentInstance: iTaskInstance( parentInstance ) } ),
+        filePath,
+        line,
+        links: [],
+        childLines: subTaskInstances.toRefArray().map(i => i.line),
+        completedDate: task.completedDate,
+        complete: task.complete,
+        tags: task.tags.toRefArray().map(t => t.name),
+        rawText
+    }
+}
+
+export const iTask = ( mTask: SessionBoundModel<Task, TaskFields>): ITask => {
+    const {
+        id,
+        name,
+        complete,
+        completedDate,
+        created,
+        dueDate,
+        instances,
+        content
+    } = mTask;
+
+    mTask.subTasks.toModelArray()
+
+    return {
+        id,
+        name,
+        complete,
+        completedDate,
+        childIds: mTask.subTasks.toRefArray().map(st => st.id),
+        parentIds: mTask.parentTasks.toRefArray().map(pt => pt.id),
+        tags: mTask.tags.toRefArray().map(t => t.name),
+        dueDate,
+        created,
+        instances: instances.toModelArray().map(iTaskInstance),
+        content
     }
 }
 export const taskCreatePropsFromInstance = ( {

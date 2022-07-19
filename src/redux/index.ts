@@ -6,7 +6,7 @@ import settings, { SettingsAction } from './settings/settings.slice';
 import { PluginState } from './types';
 
 
-export default function (  ) {
+export default function () {
     const { orm, state } = fetchOrm();
     const taskDb = reducerCreator( orm, state );
 
@@ -23,9 +23,12 @@ export default function (  ) {
         };
     }
 
-    return configureStore( {
-        reducer
-    } );
+    return {
+        store: configureStore( {
+            reducer
+        } ),
+        orm
+    }
 }
 export const hashTaskInstance = (
     { name, id, complete, parentLine, dueDate, childLines, tags, filePath, line }: ITaskInstance

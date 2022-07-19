@@ -1,7 +1,9 @@
-import { createDraftSafeSelector, Selector } from '@reduxjs/toolkit';
+import { createDraftSafeSelector, createSelector, Selector } from '@reduxjs/toolkit';
 import { ModelType, ORM } from 'redux-orm';
+import { PluginState } from '../types';
 import { Task, TaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema';
+import { iTaskInstance } from './transforms';
 import { RefFilter } from './types';
 
 const ormSelector = <R>( selector: Selector<TasksORMState, R, [ ORM<TaskORMSchema> ]> ) => (
@@ -21,13 +23,23 @@ export const sessionTask = createDraftSafeSelector(
     ( arg: TasksORMSession ) => arg.Task
 );
 
+export const sessionTaskInstance = createDraftSafeSelector(
+    ( s: TasksORMState, orm: ORM<TaskORMSchema> ) => sessionSelect( s, orm ).TaskInstance,
+    arg => arg
+);
+
+
 export const allTasks = createDraftSafeSelector(
     ormSelector( sessionTask ),
     ( task: ModelType<Task> ) => task.all()
 );
 
-
-/// const getTask = createOrmSelector(
+export const allTaskFiles = createSelector(
+    ( state: PluginState, orm: ORM<TaskORMSchema> ) => orm.session( state.taskDb ),
+    ( session ) => session.TaskInstance.all()
+        .toRefArray()
+        .map( i => i.filePath )
+        .filter( ( inst, i, arr ) => arr.indexOf( inst ) === i ) );
 
 export const getTask = createDraftSafeSelector(
     [
@@ -38,13 +50,10 @@ export const getTask = createDraftSafeSelector(
 );
 
 export const nextTaskId = createDraftSafeSelector(
-    ( s: TasksORMState, orm: ORM<TaskORMSchema> | TasksORMSession ) => ('Task' in orm ? orm.Task : sessionTask( s, orm )).all().toRefArray(),
+    ( s: TasksORMState, orm: ORM<TaskORMSchema> | TasksORMSession ) => ('Task' in orm
+                                                                        ? orm.Task
+                                                                        : sessionTask( s, orm )).all().toRefArray(),
     tasks => Math.max( ...tasks.map( t => t.id ) ) + 1
-);
-
-export const sessionTaskInstance = createDraftSafeSelector(
-    ( s: TasksORMState, orm: ORM<TaskORMSchema> ) => sessionSelect( s, orm ).TaskInstance,
-    arg => arg
 );
 
 export const taskParents = createDraftSafeSelector(
@@ -58,9 +67,9 @@ export const taskParents = createDraftSafeSelector(
 //     ( id: number ) => Math.max( id, minId )
 // );
 
-export const getNextTaskIdAboveMin = (state: TasksORMState, session: TasksORMSession, miniId = 0) => {
-    const nextId = nextTaskId(state, session);
-    return Math.max(miniId, nextId);
+export const getNextTaskIdAboveMin = ( state: TasksORMState, session: TasksORMSession, miniId = 0 ) => {
+    const nextId = nextTaskId( state, session );
+    return Math.max( miniId, nextId );
 }
 
 export const taskInstances = createDraftSafeSelector(
@@ -81,6 +90,14 @@ export const filePathInstances = createDraftSafeSelector(
     ) => 'TaskInstance' in orm ? orm.TaskInstance : sessionTaskInstance( s, orm ),
     ( taskInstance: ModelType<TaskInstance>, ) =>
         ( path: string ) => taskInstance.filter( ( i ) => i.filePath === path )
+);
+
+export const pathITaskInstances = createSelector(
+    filePathInstances,
+    (instances) => (path: string) => instances( path )
+        .orderBy('line')
+        .toModelArray()
+        .map(iTaskInstance)
 );
 
 

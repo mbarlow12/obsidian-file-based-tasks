@@ -125,8 +125,9 @@ describe( 'Task parsing', () => {
 
         line = '- [ ] test task name #atag @next friday #anothertag';
         task = parser.parseLine( line );
-        while ( checkDate.getDay() !== 5 )
+        while ( checkDate.getDay() !== 0 )
             checkDate.setDate( checkDate.getDate() + 1 );
+        checkDate.setDate(checkDate.getDate() + 5);
         expect( task.dueDate.toDateString() ).toEqual( checkDate.toDateString() );
 
     } );

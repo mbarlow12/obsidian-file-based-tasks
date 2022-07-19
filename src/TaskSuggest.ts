@@ -7,10 +7,11 @@ import {
     EditorSuggestTriggerInfo,
     TFile
 } from "obsidian";
+import { renderTaskInstance } from './file/render';
 import ObsidianTaskManager from './main';
 import { Parser } from './parse/Parser';
-import { emptyTaskInstance, ITask, TasksORMState } from './redux/orm';
-import { DEFAULT_RENDER_OPTS } from './redux/settings';
+import { ITask, TasksORMState } from './redux/orm';
+import { emptyTaskInstance } from './redux/orm/models';
 
 
 export class TaskEditorSuggest extends EditorSuggest<ITask> {
@@ -101,10 +102,20 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
             const range = editor.getRange( start, end );
             const rStart = editor.posToOffset( editor.getCursor() ) - query.length;
             const inst = emptyTaskInstance()
-            const line = this.plugin.taskFileManager.renderTaskInstance( inst, '', {
-                ...DEFAULT_RENDER_OPTS,
-                links: false
-            } )
+            const { id, name, complete } = task;
+            const line = renderTaskInstance(
+                {
+                    ...inst,
+                    id, name, complete
+                },
+                '',
+                this.plugin.settings.tasksDirectory,
+                {
+                    ...this.plugin.settings.renderOptions,
+                    links: false,
+                    primaryLink: false,
+                }
+            )
             editor.replaceRange(
                 `${range[ range.length - 1 ] === " " ? '' : ' '}${line.replace( /[*-]\s+\[.]\s+/, '' )}`,
                 editor.offsetToPos( rStart ),

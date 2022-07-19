@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     },
     timeBeforeArchive: 45,
     deleteSubtaskWithTask: false,
+    tasksDirectory: 'task',
     parseOptions: {
         taskNameInclusive: false,
         taskPrefix: '#task',
@@ -62,6 +63,7 @@ export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
 export const DEFAULT_RENDER_OPTS: RenderOpts = {
     id: true,
     links: false,
+    primaryLink: true,
     tags: true,
     recurrence: true,
     dueDate: true,

@@ -1,6 +1,6 @@
 import { CachedMetadata, Pos, TFile } from 'obsidian';
 import { ITaskYamlObject } from '../file';
-import { ITask, ITaskInstanceRecord } from '../redux/orm';
+import { ITask, ITaskInstance } from '../redux/orm';
 import { ParseOptions } from '../redux/settings';
 import { LOC_DELIM, pos } from '../Task';
 import { readTaskYaml, taskYamlFromFrontmatter } from './frontmatter';
@@ -42,12 +42,12 @@ export const getFileInstances = (
     cache: CachedMetadata,
     contents: string,
     options: ParseOptions
-): ITaskInstanceRecord => {
+): Record<number, ITaskInstance> => {
     if ( !cache.listItems )
         return {};
     const lines = contents.split( '\n' );
     const parser = Parser.create( options );
-    const rec: ITaskInstanceRecord = {};
+    const rec: Record<number, ITaskInstance> = {};
     for ( let i = 0; i < cache.listItems.length; i++ ) {
         const li = cache.listItems[ i ];
         if ( !li.task )

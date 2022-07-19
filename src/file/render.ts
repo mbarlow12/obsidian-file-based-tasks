@@ -1,9 +1,11 @@
-import { stringifyYaml } from 'obsidian';
+import { MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
 import path from 'path';
+import { ORM } from 'redux-orm';
 import { RRule } from 'rrule';
-import { ITask, ITaskInstance } from '../redux/orm';
+import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances, TaskORMSchema } from '../redux/orm';
 import { DEFAULT_RENDER_OPTS } from '../redux/settings';
-import { taskToBasename, taskToFilename } from './index';
+import { PluginState } from '../redux/types';
+import { getVaultConfig, taskToBasename, taskToFilename } from './index';
 import { ITaskInstanceYamlObject, ITaskYamlObject, TaskRecordType } from './types';
 
 export const renderTags = ( tags?: string[] ): string => (tags ?? []).join( ' ' );
@@ -18,7 +20,7 @@ export const taskInstanceToChecklist = ( { complete, name, id }: ITaskInstance )
 
 export const renderTaskInstanceLinks = ( task: ITask ) => {
     return task.instances
-        .filter( loc => !loc.filePath.includes( taskToBasename( task ) ) )
+        .filter( loc => !loc.filePath.includes( taskToBasename( task.name, task.id ) ) )
         .map( loc => `[[${loc.filePath}]]` ).join( ' ' );
 };
 export const taskToYamlObject = ( task: ITask ): ITaskYamlObject => {
@@ -90,11 +92,106 @@ export const renderTaskInstance = (
     const taskLinks = (instance.links ?? [])
         .filter( l => !l.includes( instance.filePath ) && !instance.filePath.includes( l ) )
         .map( link => `[[${link}#^${instance.id}|${path.parse( link ).name}]]` )
+    if (renderOpts.primaryLink)
+        taskLinks.push(`[[${path.join( tasksDirPath, taskToFilename( instance.name, instance.id ) )}]]`);
     const instanceLine = [
         baseLine,
         ...(renderOpts.links && taskLinks || []),
-        `[[${path.join( tasksDirPath, taskToFilename( instance ) )}]]`,
         renderOpts.id && `^${instance.id}` || ''
     ].join( ' ' );
     return pad + instanceLine;
+}
+
+export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 ) => {
+    let pad = '';
+    let parentLine = instance.parentLine;
+    while ( parentLine > -1 ) {
+        pad = pad.padStart( pad.length + tabSize, useTab ? '\t' : ' ' );
+        const parent = instance.parentInstance;
+        if ( !parent )
+            break
+        parentLine = parent.parentLine;
+    }
+    return pad;
+}
+
+export const taskFullPath = ( task: ITask | ITaskInstance | string, id?: number, dir = 'tasks' ) => {
+    if (typeof task !== 'string') {
+        id = task.id;
+        task = task.name;
+    }
+    return path.join(dir, taskToFilename( task, id ))
+}
+
+export const writeTask = async ( task: ITask, vault: Vault, mdCache: MetadataCache, taskDirPath = 'tasks' ) => {
+    /*
+     TODO: consider adding a completed folder to declutter the tasks directory
+     - and an archived folder
+     */
+    const fullPath = taskFullPath( task.name, task.id, taskDirPath );
+    const file = vault.getAbstractFileByPath( fullPath );
+    const yaml = taskToYamlObject( task );
+    const links = renderTaskInstanceLinks( task );
+    if ( !file ) {
+        return vault.create( fullPath, [
+            '---',
+            stringifyYaml( yaml ) + '---',
+            '\n',
+            'Links',
+            '---',
+            links
+        ].join( '\n' ) );
+    }
+    else {
+        const cache = mdCache.getFileCache( file as TFile );
+        const contents = await vault.cachedRead( file as TFile );
+        const lines = contents.split( '\n' );
+        const descStart = cache && cache.frontmatter?.position.end.line + 1;
+        const descEnd = cache && cache.headings?.find( s => s.heading.toLowerCase()
+            .includes( 'links' ) )?.position.start.line;
+        const description = lines.slice( descStart, descEnd || lines.length - 1 ).join( '\n' ).trim();
+        const newContents = [
+            '---',
+            stringifyYaml( yaml ) + '---',
+            description,
+            '### Links',
+            links
+        ].join( '\n' );
+        return await vault.modify( file as TFile, newContents )
+    }
+}
+
+export const writeState = async (
+    file: TFile,
+    vault: Vault,
+    state: PluginState,
+    orm: ORM<TaskORMSchema>,
+    currentInstances: ITaskInstance[],
+    isIndex = false,
+) => {
+    const { useTab, tabSize } = getVaultConfig( vault );
+    const instances = pathITaskInstances( state.taskDb, orm )( file.path );
+    if ( !arraysEqual( instances, currentInstances, instanceComparer ) ) {
+        const lines = isIndex ?
+                      new Array( instances.length ).fill( '' ) :
+                      (await vault.read( file )).split( '\n' );
+        for ( let i = 0; i < instances.length; i++ ) {
+            const inst = instances[ i ];
+            if ( inst.id === -1 )
+                continue;
+            lines[ inst.line ] = renderTaskInstance( inst, getIndent( inst, useTab as boolean, tabSize as number ) )
+        }
+        await vault.modify( file, lines.join( '\n' ) );
+    }
+    return instances;
+}
+
+export const writeIndexFile = async (
+    file: TFile,
+    vault: Vault,
+    state: PluginState,
+    orm: ORM<TaskORMSchema>,
+    currentInstances: ITaskInstance[]
+) => {
+    return writeState( file, vault, state, orm, currentInstances, true );
 }

@@ -4,13 +4,13 @@ import { PluginSettings, TaskQuery } from '../settings';
 import { PluginState } from '../types';
 import {
     instancePropsFromITaskInstance,
-    instancesKey,
     TaskAction,
     TaskActionType,
     taskCreatePropsFromInstance,
     taskCreatePropsFromITask,
     taskUpdatePropsFromITaskInstance
 } from './index';
+import { instancesKey } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
 import { filePathInstances, getNextTaskIdAboveMin } from './selectors';
 import { ITask, ITaskCreate, ITaskInstance, ITaskInstanceRecord } from './types';
@@ -95,7 +95,7 @@ const createTaskReducer = (
     settings: PluginSettings
 ) => {
     if ( !task.id || task.id < settings.minTaskId ) {
-        task.id = getNextTaskIdAboveMin(session.state, session, settings.minTaskId );
+        task.id = getNextTaskIdAboveMin( session.state, session, settings.minTaskId );
     }
     session.Task.create( taskCreatePropsFromITask( task ) );
     if ( task.instances ) {
@@ -105,7 +105,7 @@ const createTaskReducer = (
     }
 }
 
-const updateFileInstancesReducer = (
+export const updateFileInstancesReducer = (
     path: string,
     instances: ITaskInstanceRecord,
     session: TasksORMSession,
@@ -118,6 +118,12 @@ const updateFileInstancesReducer = (
     // handle parent completions, create new tasks for 0 ids
     for ( const key in instances ) {
         const inst = instances[ key ];
+
+        // placeholder instance
+        if ( inst.id === -1 ) {
+            TaskInstance.create( instancePropsFromITaskInstance( inst ) )
+        }
+
         // parent completions
         let { parentLine } = inst;
         while ( parentLine > -1 ) {
@@ -134,7 +140,7 @@ const updateFileInstancesReducer = (
         // new ids
         let task = Task.withId( inst.id );
         if ( !inst.id || !task ) {
-            const nextId = getNextTaskIdAboveMin(session.state, session, settings.minTaskId );
+            const nextId = getNextTaskIdAboveMin( session.state, session, settings.minTaskId );
             task = Task.create( {
                 ...taskCreatePropsFromInstance( inst ),
                 id: Math.max( nextId, inst.id ?? 0 ),

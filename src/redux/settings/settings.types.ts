@@ -1,5 +1,4 @@
-import { Dictionary } from '@reduxjs/toolkit';
-import { Task } from '../orm/models';
+import { Task } from '../orm';
 
 export interface ParseOptions {
     usePrefix: boolean;
@@ -12,10 +11,6 @@ export interface ParseOptions {
     taskNameInclusive: boolean; // if true, the whole line will be the 'name' except the id and  task file link
 }
 
-export interface RenderOptions {
-    fileTemplates: Dictionary<string>;
-}
-
 export type PluginSettings = {
     tabSize: number,
     ignoredPaths: string[],
@@ -25,7 +20,7 @@ export type PluginSettings = {
     indexFiles: Record<string, TaskQuery>,
     minTaskId: number,
     parseOptions: ParseOptions,
-    renderOptions?: RenderOptions,
+    renderOptions?: RenderOpts,
     tasksDirectory: string;
 }
 export type SettingsPayload = Partial<PluginSettings>;
@@ -38,6 +33,7 @@ export interface TaskQuery {
 export interface RenderOpts {
     id: boolean,
     links: boolean,
+    primaryLink: boolean,
     tags: boolean,
     recurrence: boolean,
     dueDate: boolean,

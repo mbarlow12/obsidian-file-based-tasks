@@ -3,6 +3,7 @@ import { ListItemCache } from 'obsidian';
 import * as path from 'path';
 import { taskIdToUid } from '../redux';
 import { ITaskInstance } from '../redux/orm';
+import { emptyTaskInstance, PLACEHOLDER_ID, PLACEHOLDER_NAME } from '../redux/orm/models';
 import { DEFAULT_SETTINGS, ParseOptions } from '../redux/settings';
 import { ParsedTask } from './types';
 
@@ -28,12 +29,13 @@ const parseDueDate = ( dueDate: string ): Date | null => chrono.parseDate( dueDa
 
 export class Parser {
     private settings: ParseOptions;
+    public static CHECKLIST_REGEX = /^\s*[-*](?: \[[ xX*]])?/;
     public static LINK_REGEX = /\[\[[^\][]+\]\]/g;
-    public static LINE_REGEX = /^\s*[-*] (\[(?<complete>\s|x)?])\s+(?<taskLine>.*)$/;
+    public static LINE_REGEX = /^\s*[-*] (\[(?<complete>[ xX*])?])\s+(?<taskLine>.*)$/;
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
     public static ID_REGEX = /\s\^[\w\d]+$/;
     public static FILE_LINK_REGEX = /\[\[(?<name>.+)\((?<id>[\w\d]+)\)(\.md)?\]\]/g;
-    public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[\sxX])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkName>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
+    public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[ xX*])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkName>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
 
     static create( settings: ParseOptions ) {
         return new Parser( settings );
@@ -60,8 +62,21 @@ export class Parser {
         }
 
         const pTask: ParsedTask = this.parseLine( line );
-        if ( !pTask )
+        if ( !pTask ) {
+            if (line.match(Parser.CHECKLIST_REGEX)) {
+                // empty checklist, placeholder
+                const inst = emptyTaskInstance();
+                return {
+                    ...inst,
+                    id: PLACEHOLDER_ID,
+                    name: PLACEHOLDER_NAME,
+                    line: position.start.line,
+                    filePath,
+                    parentLine: parent
+                }
+            }
             return null;
+        }
         return {
             ...pTask,
             filePath,
@@ -79,7 +94,7 @@ export class Parser {
                 return null;
             return {
                 ...this.parseMatchedContent( taskLine, line ),
-                complete: complete === 'x'
+                complete: complete && complete.length && complete !== ' ' || false,
             };
         }
 
@@ -305,7 +320,7 @@ export class Parser {
                 tags,
                 dueDate,
                 links,
-                complete: complete === 'x',
+                complete: complete !== ' ',
                 rawText: line,
             };
         }

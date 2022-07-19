@@ -1,27 +1,65 @@
+import { Comparer } from '@reduxjs/toolkit';
 import { ITask, ITaskInstance } from './types';
-
-export const INSTANCE_KEY_DELIM = '||';
 
 export const filterUnique = <T>(
     arr: T[],
-    comp: ( a: T, b: T ) => boolean = (a: T, b: T) => a === b
+    comp: ( a: T, b: T ) => boolean = ( a: T, b: T ) => a === b
 ) => arr.filter(
     ( elem, i ) => arr.findIndex( search => comp( elem, search ) ) === i
 );
 
-export const instancesKey = (
-    pathOrInst: string | ITaskInstance,
-    line = 0,
-    delimiter = INSTANCE_KEY_DELIM
+export const arraysEqual = <T>(
+    a: T[],
+    b: T[],
+    comparator: Comparer<T> = ( a: T, b: T ) => a === b ? 1 : 0
 ) => {
-    if ( typeof pathOrInst !== 'string' ) {
-        line = pathOrInst.line;
-        pathOrInst = pathOrInst.filePath;
+    if ( a.length !== b.length )
+        return false;
+    for ( let i = 0; i < a.length; i++ ) {
+        if ( comparator( a[ i ], b[ i ] ) === 0 )
+            return false;
     }
-    return [ pathOrInst, line ].join( delimiter )
+    return true;
+}
+
+export const instanceComparer: Comparer<ITaskInstance> = ( a, b ) => {
+    if (
+        a.id !== b.id ||
+        a.name !== b.name ||
+        a.line !== b.line ||
+        a.filePath !== b.filePath ||
+        a.parentLine !== b.parentLine ||
+        a.complete !== b.complete
+    )
+        return 0;
+
+    return 1;
 };
 
+export const instanceSorter = ( a: ITaskInstance, b: ITaskInstance ) => {
+    if ( a.filePath < b.filePath )
+        return -1;
+    else if ( b.filePath < a.filePath )
+        return 1;
+    else {
+        return a.line - b.line;
+    }
+}
 
+export const iTaskComparer: Comparer<ITask> = ( a, b ) => {
+    if (
+        a.id !== b.id || a.name !== b.name || a.complete !== b.complete || a.dueDate.getTime() !== b.dueDate.getTime()
+        || !arraysEqual<string>( a.tags.sort(), b.tags.sort() )
+        || !arraysEqual<ITaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ) )
+        || !arraysEqual( a.childIds.sort(), b.childIds.sort() ) || ~arraysEqual( a.parentIds.sort(), b.parentIds.sort() )
+    )
+        return 0;
+    return 1;
+}
+
+export const tasksEqual = ( a: ITask, b: ITask ) => {
+    return iTaskComparer( a, b ) === 1;
+};
 
 export type {
     UpdateFileInstanesAction,
@@ -46,19 +84,6 @@ export type {
     TasksORMState
 } from './schema';
 export type {
-    TagFields,
-    TaskProps,
-    TaskFields,
-    InstanceFields,
-    InstanceProps,
-    MinInstanceProps
-} from './models';
-export {
-    Task,
-    Tag,
-    TaskInstance
-} from './models';
-export type {
     ITaskBase,
     IBaseTask,
     ITaskCreate,
@@ -69,32 +94,16 @@ export type {
 } from './types'
 export * from './selectors';
 export * from './transforms';
-export const emptyTaskInstance = (): ITaskInstance => {
-    return {
-        id: 0,
-        complete: false,
-        name: '',
-        parentLine: -1,
-        line: 0,
-        links: [],
-        tags: [],
-        rawText: '',
-        filePath: '',
-        childLines: [],
-    };
-};
-export const emptyTask = (): ITask => {
-    const { id, complete, name } = emptyTaskInstance();
-    return {
-        id,
-        name,
-        complete,
-        created: new Date(),
-        content: '',
-        instances: [],
-        childIds: [],
-        tags: [],
-        parentIds: [],
-        dueDate: new Date()
-    }
-}
+export {
+    Task,
+    Tag,
+    TaskInstance
+} from './models';
+export type {
+    TaskProps,
+    TaskFields,
+    MinInstanceProps,
+    InstanceProps,
+    InstanceFields,
+    TagFields
+} from './models'

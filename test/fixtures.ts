@@ -1,5 +1,6 @@
 import { CreateProps, ORM } from 'redux-orm';
-import { instancesKey, Tag, Task, TaskInstance, TaskORMSchema, TasksORMSession } from '../src/redux/orm';
+import { Tag, Task, TaskInstance, TaskORMSchema, TasksORMSession } from '../src/redux/orm';
+import { instancesKey } from '../src/redux/orm/models';
 import { fetchOrm } from '../src/redux/orm/schema';
 import { DEFAULT_SETTINGS, PluginSettings } from '../src/redux/settings';
 import { PluginState } from '../src/redux/types';

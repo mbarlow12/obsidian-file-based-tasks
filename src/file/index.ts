@@ -1,6 +1,6 @@
-import { CachedMetadata, TFile, TFolder, Vault } from 'obsidian';
+import { CachedMetadata, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
 import { Parser } from '../parse/Parser';
-import { ITask, ITaskInstance } from '../redux/orm';
+import { taskUidToId } from '../redux';
 import { ParseOptions, PluginSettings } from '../redux/settings';
 import { TaskRecordType } from './types';
 
@@ -12,8 +12,8 @@ export { TaskRecordType } from './types';
 export { ITaskYamlObject } from './types';
 export { YamlObject } from './types';
 export { ITaskInstanceYamlObject } from './types';
-export const taskToBasename = ( task: ITaskInstance | ITask ) => `${Parser.normalizeName( task.name )} (${task.id})`;
-export const taskToFilename = ( task: ITaskInstance | ITask ) => `${taskToBasename( task )}.md`;
+export const taskToBasename = ( task: string, id: number ) => `${Parser.normalizeName( task )} (${taskUidToId( id )})`;
+export const taskToFilename = ( task: string, id: number ) => `${taskToBasename( task, id )}.md`;
 
 export const DEFAULT_TASKS_DIR = `tasks`;
 
@@ -54,13 +54,12 @@ export const isTaskFile = (
     cache.frontmatter.type &&
     cache.frontmatter.type === TaskRecordType;
 
-export const deleteFile = async (
-    path: string,
+export const deleteFileData = async (
+    file: TAbstractFile,
     vault: Vault,
     cache: CachedMetadata,
     settings: PluginSettings
 ) => {
-    const file = vault.getAbstractFileByPath( path );
     if ( !file )
         return;
     if ( isTaskFile( cache ) ) {
@@ -73,9 +72,9 @@ export const deleteFile = async (
     }
 }
 
-export const getFile = async ( path: string, vault: Vault ) =>  {
+export const getFile = async ( path: string, vault: Vault, create = false ) => {
     let ret = vault.getAbstractFileByPath( path );
-    if ( !ret )
+    if ( !ret && create )
         ret = await vault.create( path, '' );
     return ret as TFile;
 }

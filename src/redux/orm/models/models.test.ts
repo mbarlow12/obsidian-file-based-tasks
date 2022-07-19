@@ -1,7 +1,8 @@
 import { IdOrModelLike } from 'redux-orm';
-import { createTestSession } from '../../../test/fixtures';
-import { filterUnique, instancesKey } from './index';
-import { Tag, tagsEqual } from './models';
+import { createTestSession } from '../../../../test/fixtures';
+import { filterUnique } from '../index';
+import { instancesKey } from './index';
+import { Tag, tagsEqual } from './tag.model';
 
 
 describe( "Model relationships", () => {
@@ -68,6 +69,19 @@ describe( "Model relationships", () => {
         expect( session.Task.withId( 10000 )?.instances?.toRefArray() ).toHaveLength( 1 );
         expect( session.Task.withId( 10000 )?.instances?.at( 0 )?.key ).toEqual( instancesKey( 'file', 0 ) );
     } );
+
+    it( 'creates instances without task', () => {
+        session.TaskInstance.create( {
+            key: instancesKey( 'file', 0 ),
+            filePath: 'file',
+            line: 0,
+            parentLine: -1,
+            rawText: '- [ ] created task',
+            task: -1,
+        } );
+
+        expect(session.TaskInstance.withId('file||0')).toBeTruthy();
+    });
 
     it( 'handles parents through instances', () => {
         const task = session.Task.create( {
