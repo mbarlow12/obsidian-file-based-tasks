@@ -248,36 +248,6 @@ describe( 'Task parsing', () => {
         expect( task.id ).toEqual( taskIdToUid( 'cde2' ) )
     } );
 
-    test( 'normalize task file name', () => {
-        let normalized = Parser.normalizeName( 'simple task name' );
-        expect( normalized ).toEqual( 'simple task name' );
-
-        normalized = Parser.normalizeName( 'task name with [[link]]' )
-        expect( normalized ).toEqual( 'task name with link' )
-
-        normalized = Parser.normalizeName( '#tagged task name' );
-        expect( normalized ).toEqual( 'tagged task name' );
-
-        normalized = Parser.normalizeName( '[[task name inside | piped link]]' );
-        expect( normalized ).toEqual( 'task name inside piped link' );
-
-        normalized = Parser.normalizeName( '[[task name inside|piped link with^idblock]]' );
-        expect( normalized ).toEqual( 'task name inside piped link with idblock' );
-
-        normalized = Parser.normalizeName( '[[task name with#|^multiple|||||simultaneous[[]][chars]]' );
-        expect( normalized ).toEqual( 'task name with multiple simultaneous chars' );
-
-        normalized = Parser.normalizeName( 'task name with#|^multiple|||||simultaneous[[]][chars &every tuesday' );
-        expect( normalized ).toEqual( 'task name with multiple simultaneous chars &every tuesday' );
-
-        normalized = Parser.normalizeName( 'task name with#|^multiple|||||simultaneous[[]][chars &every tuesday @2pm' );
-        expect( normalized ).toEqual( 'task name with multiple simultaneous chars &every tuesday @2pm' );
-
-        normalized =
-            Parser.normalizeName( 'long/task/dir/task name with#|^multiple|||||simultaneous[[]][chars &every tuesday @2pm' );
-        expect( normalized ).toEqual( 'long task dir task name with multiple simultaneous chars &every tuesday @2pm' );
-    } )
-
     test( 'rendered task lines', () => {
         let line = `- [x] here's a [[a different name (443nd)]] another [[here's a a different name (443nd) another (3ad).md]] ^3ad`;
         let task = parser.fullParseLine( line, 'file.md', lic );

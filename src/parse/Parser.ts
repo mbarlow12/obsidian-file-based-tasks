@@ -1,5 +1,5 @@
 import * as chrono from "chrono-node";
-import { ListItemCache } from 'obsidian';
+import { ListItemCache, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { taskIdToUid } from '../redux';
 import { ITaskInstance } from '../redux/orm';
@@ -205,14 +205,6 @@ export class Parser {
         };
     }
 
-    static normalizeName( name: string ) {
-        return name.replace( INVALID_NAME_CHARS, '_' )
-            .replace( /(\s+_+|_+\s+|\s+_+\s+|_+)/g, ' ' ).trim()
-            .split( /\s/ ).filter( s => s ).join( ' ' )
-            .substring( 0, 100 );
-
-    }
-
     get namePattern() {
         return `^${this.negatedPattern}`;
     }
@@ -309,7 +301,7 @@ export class Parser {
         const match = line.match( Parser.RENDERED_TASK_REGEX );
         if ( match ) {
             const { complete, name, linkName, id, linkId } = match.groups;
-            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
+            if ( normalizePath( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
                 throw Error( `Tasks with ids cannot be rendered with a different task's link at the end of the link.` );
             const { tags, links, dueDate } = this.parseLineMetadata( line );
             if ( !name )

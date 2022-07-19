@@ -15,9 +15,10 @@ import {
     taskCreatePropsFromITask,
     TaskORMSchema,
     tasksEqual,
-    TasksORMState
+    TasksORMState,
+    updateFileInstances
 } from './redux/orm';
-import { deleteFile, renameFileAction } from './redux/orm/actions';
+import { deleteFile, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
 import { updateFileInstancesReducer } from './redux/orm/reducer';
 import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
 import store, { orm, RootState, state } from './redux/store';
@@ -33,8 +34,8 @@ import { TaskEditorSuggest } from './TaskSuggest';
  *  - reading files no longer is a problem, now the cache can be used just for writing
  */
 
-type Dis =  {
-    dispatch: Dispatch<TaskAction| SettingsAction>
+type Dis = {
+    dispatch: Dispatch<TaskAction | SettingsAction>
 };
 export const c: Dis = {
     dispatch: a => a
@@ -45,7 +46,7 @@ export default class ObsidianTaskManager extends Plugin {
     private currentFile: TFile;
     private vaultLoaded = false;
     private initialized = false;
-    private store: Store<PluginState, TaskAction|SettingsAction>
+    private store: Store<PluginState, TaskAction | SettingsAction>
     private state: RootState;
     private orm: ORM<TaskORMSchema>;
     private selectFiles: Selector<TasksORMState, string[]>;
@@ -60,45 +61,12 @@ export default class ObsidianTaskManager extends Plugin {
 
         this.app.workspace.onLayoutReady( async () => {
             if ( !this.initialized ) {
-                await this.loadSettings();
                 this.orm = orm;
                 this.store = store;
-                this.state.taskDb = { ...state };
+                this.state = { ...state };
+                await this.loadSettings();
                 this.taskSuggest = new TaskEditorSuggest( app, this );
                 this.registerEditorSuggest( this.taskSuggest );
-                if ( !this.vaultLoaded )
-                    await this.processVault();
-                this.addCommand( {
-                    id: 'toggle-task-complete',
-                    name: 'My toggle checklist',
-                    hotkeys: [
-                        {
-                            key: 'Enter',
-                            modifiers: [ 'Mod' ]
-                        }
-                    ],
-                    editorCallback: ( editor, view ) => {
-                        const { line, ch } = editor.getCursor();
-                        const raw = editor.getLine( line );
-                        const start = raw.indexOf( '[' ) + 1;
-                        const end = raw.indexOf( ']' );
-                        const parser = Parser.create( this.settings.parseOptions );
-                        const taskInstance = parser.parseLine( raw );
-                        console.log( `${taskInstance.name} ${taskInstance.complete ? 'completed' : 'not completed'}` )
-                        console.log( `line ${line} ch ${ch}` );
-                        const char = taskInstance.complete ? 'x' : ' ';
-                        editor.replaceRange( char, { line, ch: start }, { line, ch: end } );
-                        // to dispatch, first make sure we won't register the change
-                        // and let the system update the text
-                        // const file = view.file;
-                        // this.setFileIsReady(file, false);
-                        // this.store.dispatch(toggleTaskComplete(id))
-                    }
-                } );
-                await this.registerEvents();
-                this.store.subscribe( () => {
-                    this.handleStoreUpdate();
-                } );
                 this.selectFiles = createSelector(
                     ( s: TasksORMState ) => Object.values( s.TaskInstance.itemsById ),
                     instRefs => instRefs.map( r => r.filePath )
@@ -118,6 +86,13 @@ export default class ObsidianTaskManager extends Plugin {
                     ( s: TasksORMState ) => [ ...s.Task.items ].sort(),
                     ids => ids
                 );
+                if ( !this.vaultLoaded )
+                    await this.processVault();
+                this.registerEvents();
+                this.registerCommands();
+                // this.store.subscribe( () => {
+                //     this.handleStoreUpdate();
+                // } );
                 this.initialized = true;
             }
         } );
@@ -207,7 +182,6 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.vault.on( 'rename', this.handleFileRenamed.bind( this ) ) );
         const resolvedRef = this.app.metadataCache.on( 'resolve', async () => {
 
-            console.log( 'cache resolved' );
             if ( !this.vaultLoaded ) {
                 await this.processVault();
                 this.vaultLoaded = true;
@@ -215,50 +189,60 @@ export default class ObsidianTaskManager extends Plugin {
             this.app.metadataCache.offref( resolvedRef )
         } );
         this.registerEvent( this.app.workspace.on( 'file-open', async file => {
+            if ( this.currentFile )
+                await this.dispatchFileTaskUpdate( file );
             this.currentFile = file;
         } ) );
 
-        this.registerEvent( this.app.vault.on( 'closed', () => {
-            console.log( 'closed event' );
-            console.log( this.currentFile.name );
-        } ) );
-
-        this.registerEvent( this.app.workspace.on( 'active-leaf-change', ( leaf ) => {
-            if ( !leaf )
-                return
-            console.log( leaf )
-        } ) );
-
-        this.registerDomEvent( window, 'keydown', function ( ev: KeyboardEvent ) {
-            // if ( ev.key ) {}
+        this.registerDomEvent( window, 'keyup', async ( ev: KeyboardEvent ) => {
+            if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
+                const file = this.app.workspace.getActiveFile() || this.currentFile;
+                if ( !file )
+                    return;
+                await this.dispatchFileTaskUpdate( file );
+            }
         } );
     }
 
+    async dispatchFileTaskUpdate( file: TFile ) {
+        const { vault, metadataCache } = this.app;
+        const instances = getFileInstances(
+            file.path,
+            metadataCache.getFileCache( file ),
+            await vault.cachedRead( file ),
+            this.settings.parseOptions
+        );
+        this.store.dispatch( updateFileInstances( file.path, instances ) );
+    }
+
     registerCommands() {
+        // commands:
+        // create task
+        this.addCommand({
+            id: 'insert-new-task',
+            name: 'Create Task',
+            hotkeys: [],
+        })
+        // insert task
+        // delete task
+        // go to task under cursor
+        // update task
+        // archive tasks
+        // toggle task status
         this.addCommand( {
-            id: 'toggle-task-complete',
-            name: 'Toggle Task Checklist',
-            hotkeys: [
-                {
-                    key: 'Enter',
-                    modifiers: [ 'Mod' ]
-                }
-            ],
+            id: 'toggle-task',
+            name: 'Toggle Task',
+            hotkeys: [],
             editorCallback: ( editor, view ) => {
                 const cache = this.app.metadataCache.getFileCache( view.file );
-                const lis = cache.listItems;
-                if ( !lis )
+                const li = cache.listItems?.find( ( i ) => i.position.start.line === line );
+                if ( !li )
                     return;
                 const { line } = editor.getCursor();
-                const raw = editor.getLine( line );
                 const parser = Parser.create( this.settings.parseOptions );
-                const li = lis.find( ( i ) => i.position.start.line === line );
-                const taskInstance = parser.fullParseLine( raw, view.file.path, li );
-                // to dispatch, first make sure we won't register the change
-                // and let the system update the text
-                // const file = view.file;
-                // this.setFileIsReady(file, false);
-                // this.store.dispatch(toggleTaskComplete(id))
+                const taskInstance = parser.fullParseLine( editor.getLine( line ), view.file.path, li );
+                if (taskInstance && taskInstance.id > 0)
+                    this.store.dispatch( toggleTaskStatus( taskInstance ) );
             }
         } );
     }
@@ -281,12 +265,9 @@ export default class ObsidianTaskManager extends Plugin {
      * @private
      */
     private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
-        // const instIdx = this.taskStore.renameFilePath( oldPath, abstractFile.path );
-        // await this.updateState( instIdx );
         if ( !abstractFile )
             return;
         this.store.dispatch( renameFileAction( { oldPath, newPath: abstractFile.path } ) );
-        this.store.dispatch
     }
 
     private async processVault() {
@@ -314,6 +295,7 @@ export default class ObsidianTaskManager extends Plugin {
             }
         }
         this.state = { ...this.state, taskDb: session.state };
+        await this.handleStoreUpdate();
         this.vaultLoaded = true;
     }
 }

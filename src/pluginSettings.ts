@@ -14,7 +14,7 @@ export enum Operator {
 export interface TaskQueryBlock {
     field: keyof ITask;
     op: Operator,
-    value: Omit<ITask, 'locations'>[keyof Omit<ITask,'locations'>];
+    value: Omit<ITask, 'instance'>[keyof Omit<ITask,'instances'>];
 }
 
 
