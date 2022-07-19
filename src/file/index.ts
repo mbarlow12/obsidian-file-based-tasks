@@ -1,4 +1,4 @@
-import { CachedMetadata, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
+import { CachedMetadata, normalizePath, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
 import { Parser } from '../parse/Parser';
 import { taskUidToId } from '../redux';
 import { ParseOptions, PluginSettings } from '../redux/settings';
@@ -12,8 +12,8 @@ export { TaskRecordType } from './types';
 export { ITaskYamlObject } from './types';
 export { YamlObject } from './types';
 export { ITaskInstanceYamlObject } from './types';
-export const taskToBasename = ( task: string, id: number ) => `${Parser.normalizeName( task )} (${taskUidToId( id )})`;
-export const taskToFilename = ( task: string, id: number ) => `${taskToBasename( task, id )}.md`;
+export const taskToBasename = ( task: string, id: number ) => `${task} (${taskUidToId( id )})`;
+export const taskToFilename = ( task: string, id: number ) => normalizePath( `${taskToBasename( task, id )}.md` );
 
 export const DEFAULT_TASKS_DIR = `tasks`;
 
