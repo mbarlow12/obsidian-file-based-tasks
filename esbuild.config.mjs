@@ -28,6 +28,7 @@ esbuild.build({
 	},
 	entryPoints: [ entryPoint ],
 	bundle: true,
+	minify: prod,
 	external: [
 		'obsidian',
 		'electron',
