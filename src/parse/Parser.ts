@@ -35,7 +35,7 @@ export class Parser {
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
     public static ID_REGEX = /\s\^[\w\d]+$/;
     public static FILE_LINK_REGEX = /\[\[(?<name>.+)\((?<id>[\w\d]+)\)(\.md)?\]\]/g;
-    public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[ xX*])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkName>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
+    public static RENDERED_TASK_REGEX = /^\s*[-*](?: \[(?<complete>[ xX*])\])\s+(?<name>[^\s].*)(?=\[\[(?<linkPath>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
 
     static create( settings: ParseOptions ) {
         return new Parser( settings );
@@ -300,9 +300,13 @@ export class Parser {
     private parseRenderedTask( line: string ): ParsedTask {
         const match = line.match( Parser.RENDERED_TASK_REGEX );
         if ( match ) {
-            const { complete, name, linkName, id, linkId } = match.groups;
-            if ( normalizePath( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
+            const { complete, name, linkPath, id, linkId } = match.groups;
+            const linkName = path.parse(linkPath).name;
+            if ( normalizePath( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() ) {
+                // eslint-disable-next-line no-debugger
+                debugger;
                 throw Error( `Tasks with ids cannot be rendered with a different task's link at the end of the link.` );
+            }
             const { tags, links, dueDate } = this.parseLineMetadata( line );
             if ( !name )
                 return null;

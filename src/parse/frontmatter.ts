@@ -58,12 +58,14 @@ export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObjec
         childIds,
         parentIds,
         dueDate,
+        tags,
         completedDate
     } = cfm;
     return {
         type,
         id,
         name,
+        tags,
         instances,
         complete,
         created,
@@ -71,5 +73,5 @@ export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObjec
         parentIds,
         dueDate,
         completedDate
-    } as unknown as ITaskYamlObject
+    } as ITaskYamlObject;
 }

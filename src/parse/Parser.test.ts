@@ -14,6 +14,11 @@ import { ParsedTask } from './types';
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 
+jest.mock('obsidian', () => ({
+    normalizePath: (s: string) => s.replace(/[:;?^#|[\]]/g, '')
+        .replace(/\s+/, ' ')
+}));
+
 describe( 'Task parsing', () => {
 
     let parser: Parser;
@@ -260,6 +265,11 @@ describe( 'Task parsing', () => {
         } ).toThrow( Error );
 
         line = `     - [ ] [[another linked one (abc1)]] ^abc1`;
+        task = parser.parseInstanceFromLine( line, 'file.md', lic);
+        expect(task.id).toEqual(taskIdToUid('abc1'));
+
+
+        line = `     - [ ] easy [[tasks/easy (abc1)]] ^abc1`;
         task = parser.parseInstanceFromLine( line, 'file.md', lic);
         expect(task.id).toEqual(taskIdToUid('abc1'));
     } );
