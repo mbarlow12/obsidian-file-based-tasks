@@ -49,5 +49,4 @@ export const emptyTask = (): ITask => {
         dueDate: new Date()
     }
 }
-export const PLACEHOLDER_NAME = '---PLACEHOLDER TASK---';
 export const PLACEHOLDER_ID = -1;

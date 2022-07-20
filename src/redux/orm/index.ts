@@ -50,8 +50,8 @@ export const iTaskComparer: Comparer<ITask> = ( a, b ) => {
     if (
         a.id !== b.id || a.name !== b.name || a.complete !== b.complete || a.dueDate.getTime() !== b.dueDate.getTime()
         || !arraysEqual<string>( a.tags.sort(), b.tags.sort() )
-        || !arraysEqual<ITaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ) )
-        || !arraysEqual( a.childIds.sort(), b.childIds.sort() ) || ~arraysEqual( a.parentIds.sort(), b.parentIds.sort() )
+        || !arraysEqual<ITaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ), instanceComparer )
+        || !arraysEqual( a.childIds.sort(), b.childIds.sort() ) || !arraysEqual( a.parentIds.sort(), b.parentIds.sort() )
     )
         return 0;
     return 1;

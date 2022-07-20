@@ -117,8 +117,6 @@ export const iTask = ( mTask: SessionBoundModel<Task, TaskFields> ): ITask => {
         content
     } = mTask;
 
-    mTask.subTasks.toModelArray()
-
     return {
         id,
         name,
@@ -137,11 +135,9 @@ export const taskCreatePropsFromInstance = ( {
     name,
     tags,
     complete,
-    id,
     dueDate,
     completedDate,
 }: ITaskInstance ): TaskProps => ({
-    id,
     name,
     complete,
     tags,

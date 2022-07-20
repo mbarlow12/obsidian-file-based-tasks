@@ -1,4 +1,4 @@
-import { createSelector, Dispatch, Selector, Store } from '@reduxjs/toolkit';
+import { configureStore, createSelector, Dispatch, Selector, Store } from '@reduxjs/toolkit';
 import { App, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
 import { ORM } from 'redux-orm';
 import { deleteFileData, getFile, getTasksFolder, removeTaskDataFromContents } from './file';
@@ -11,17 +11,21 @@ import {
     iTask,
     iTaskInstance,
     ITaskInstance,
+    reducerCreator,
+    Tag,
+    Task,
     TaskAction,
     taskCreatePropsFromITask,
+    TaskInstance,
     TaskORMSchema,
     tasksEqual,
     TasksORMState,
     updateFileInstances
 } from './redux/orm';
-import { deleteFile, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
+import { deleteFile, isTaskAction, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
 import { updateFileInstancesReducer } from './redux/orm/reducer';
 import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
-import store, { orm, RootState, state } from './redux/store';
+import settingsSlice from './redux/settings/settings.slice';
 import { PluginState } from './redux/types';
 import { TaskEditorSuggest } from './TaskSuggest';
 
@@ -47,7 +51,7 @@ export default class ObsidianTaskManager extends Plugin {
     private vaultLoaded = false;
     private initialized = false;
     private store: Store<PluginState, TaskAction | SettingsAction>
-    private state: RootState;
+    private state: PluginState;
     private orm: ORM<TaskORMSchema>;
     private selectFiles: Selector<TasksORMState, string[]>;
     private selectFileInstances: Selector<TasksORMState, ITaskInstance[]>;
@@ -61,10 +65,7 @@ export default class ObsidianTaskManager extends Plugin {
 
         this.app.workspace.onLayoutReady( async () => {
             if ( !this.initialized ) {
-                this.orm = orm;
-                this.store = store;
-                this.state = { ...state };
-                await this.loadSettings();
+                await this.initStore();
                 this.taskSuggest = new TaskEditorSuggest( app, this );
                 this.registerEditorSuggest( this.taskSuggest );
                 this.selectFiles = createSelector(
@@ -90,9 +91,8 @@ export default class ObsidianTaskManager extends Plugin {
                     await this.processVault();
                 this.registerEvents();
                 this.registerCommands();
-                // this.store.subscribe( () => {
-                //     this.handleStoreUpdate();
-                // } );
+                this.store.subscribe( () => this.handleStoreUpdate() );
+                await this.handleStoreUpdate();
                 this.initialized = true;
             }
         } );
@@ -117,11 +117,11 @@ export default class ObsidianTaskManager extends Plugin {
         const deletePaths: string[] = [];
         for ( let i = 0; i < newTasks.length; i++ ) {
             const newTask = newTasks[ i ];
+            currentTaskIds.remove( newTask.id );
             const task = currentSession.Task.withId( newTask.id );
             if ( task && tasksEqual( iTask( newTask ), iTask( task ) ) )
                 continue;
             await writeTask( iTask( newTask ), vault, metadataCache, this.settings.tasksDirectory );
-            currentTaskIds.remove( newTask.id );
         }
 
         for ( const cid of currentTaskIds ) {
@@ -150,6 +150,7 @@ export default class ObsidianTaskManager extends Plugin {
         }
 
         this.state = newState;
+        await this.saveSettings();
     }
 
     onunload() {
@@ -169,8 +170,39 @@ export default class ObsidianTaskManager extends Plugin {
             .then( () => this.unload() );
     }
 
+    async initStore() {
+        this.orm = new ORM<TaskORMSchema>();
+        this.orm.register( Task, TaskInstance, Tag );
+        const settings = Object.assign( {}, DEFAULT_SETTINGS, await this.loadData() );
+        this.state = {settings, taskDb: this.orm.getEmptyState()};
+        const taskDb = await this.processVault( true );
+        const initialState: PluginState = { settings, taskDb };
+        const taskReducer = reducerCreator( this.orm, initialState.taskDb );
+        this.store = configureStore( {
+            reducer: ( state: PluginState, action: TaskAction | SettingsAction ) => {
+                if ( !state )
+                    return initialState;
+                let taskState = state.taskDb;
+                if ( isTaskAction( action ) )
+                    taskState = taskReducer( state, action );
+                return {
+                    settings: settingsSlice( state.settings, action ),
+                    taskDb: taskState
+                };
+            }
+        } );
+    }
+
     async loadSettings() {
-        this.state.settings = Object.assign( {}, DEFAULT_SETTINGS, await this.loadData() );
+        const settings = Object.assign( {}, DEFAULT_SETTINGS, await this.loadData() );
+        if ( !this.state ) {
+            this.state = {
+                settings,
+                taskDb: this.orm.getEmptyState(),
+            }
+        }
+        else
+            this.state.settings = settings;
     }
 
     async saveSettings() {
@@ -180,31 +212,22 @@ export default class ObsidianTaskManager extends Plugin {
     registerEvents() {
         this.registerEvent( this.app.vault.on( 'delete', this.handleFileDeleted.bind( this ) ) );
         this.registerEvent( this.app.vault.on( 'rename', this.handleFileRenamed.bind( this ) ) );
-        const resolvedRef = this.app.metadataCache.on( 'resolve', async () => {
-
-            if ( !this.vaultLoaded ) {
-                await this.processVault();
-                this.vaultLoaded = true;
-            }
-            this.app.metadataCache.offref( resolvedRef )
-        } );
         this.registerEvent( this.app.workspace.on( 'file-open', async file => {
-            if ( this.currentFile )
-                await this.dispatchFileTaskUpdate( file );
+            await this.dispatchFileTaskUpdate( this.currentFile );
             this.currentFile = file;
         } ) );
 
         this.registerDomEvent( window, 'keyup', async ( ev: KeyboardEvent ) => {
             if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
                 const file = this.app.workspace.getActiveFile() || this.currentFile;
-                if ( !file )
-                    return;
                 await this.dispatchFileTaskUpdate( file );
             }
         } );
     }
 
     async dispatchFileTaskUpdate( file: TFile ) {
+        if ( !file || this.ignorePath( file.path ) )
+            return;
         const { vault, metadataCache } = this.app;
         const instances = getFileInstances(
             file.path,
@@ -218,14 +241,46 @@ export default class ObsidianTaskManager extends Plugin {
     registerCommands() {
         // commands:
         // create task
-        this.addCommand({
-            id: 'insert-new-task',
+        this.addCommand( {
+            id: 'create-task',
             name: 'Create Task',
             hotkeys: [],
-        })
+            editorCallback: ( editor, view ) => {
+                // open task create modal
+                // add task with instance at cursor location
+            }
+        } );
         // insert task
         // delete task
+        this.addCommand( {
+            id: 'delete-task',
+            name: 'Delete Task',
+            hotkeys: [],
+            editorCallback: ( editor, view ) => {
+
+            }
+        } );
         // go to task under cursor
+        this.addCommand( {
+            id: 'go-to-task',
+            name: 'Go to Task under cursor',
+            hotkeys: [],
+            editorCallback: async ( editor, view ) => {
+                const { line } = editor.getCursor();
+                const parser = Parser.create( this.settings.parseOptions );
+                const taskInstance = parser.parseLine( editor.getLine( line ) );
+                if ( taskInstance && taskInstance.id > 0 ) {
+                    const path = taskFullPath( taskInstance.name, taskInstance.id, this.settings.tasksDirectory );
+                    const file = this.app.vault.getAbstractFileByPath( path ) as TFile;
+                    if ( !file ) {
+                        console.log( `${file.name} not found` );
+                    }
+                    const vaultRootpath = this.app.vault.getRoot().path;
+                    const linkText = this.app.metadataCache.fileToLinktext( file, vaultRootpath, false );
+                    await this.app.workspace.openLinkText( linkText, vaultRootpath );
+                }
+            }
+        } );
         // update task
         // archive tasks
         // toggle task status
@@ -240,19 +295,21 @@ export default class ObsidianTaskManager extends Plugin {
                     return;
                 const { line } = editor.getCursor();
                 const parser = Parser.create( this.settings.parseOptions );
-                const taskInstance = parser.fullParseLine( editor.getLine( line ), view.file.path, li );
-                if (taskInstance && taskInstance.id > 0)
+                const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
+                if ( taskInstance && taskInstance.id > 0 )
                     this.store.dispatch( toggleTaskStatus( taskInstance ) );
             }
         } );
     }
 
-    private ignorePath( filePath: string ) {
-        return this.settings.ignoredPaths.includes( filePath ) || filePath in this.settings.indexFiles;
+    private ignorePath( filePath: string ): boolean {
+        if ( filePath in this.settings.indexFiles )
+            return true;
+        return this.settings.ignoredPaths.reduce( ( ignored, p ) => ignored || filePath.includes( p ), false )
     }
 
     private async handleFileDeleted( abstractFile: TAbstractFile ) {
-        if ( !abstractFile )
+        if ( !abstractFile || this.ignorePath( abstractFile.path ) )
             return;
         this.store.dispatch( deleteFile( { path: abstractFile.path } ) );
     }
@@ -265,16 +322,17 @@ export default class ObsidianTaskManager extends Plugin {
      * @private
      */
     private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
-        if ( !abstractFile )
+        if ( !abstractFile || this.ignorePath( abstractFile.path ) )
             return;
         this.store.dispatch( renameFileAction( { oldPath, newPath: abstractFile.path } ) );
     }
 
-    private async processVault() {
-        if ( this.vaultLoaded ) return;
-        const session = this.orm.mutableSession( this.state.taskDb )
-        const tasksDir = getTasksFolder( this.settings.tasksDirectory, this.app.vault );
-        const files = this.app.vault.getMarkdownFiles().filter( f => f.parent === tasksDir );
+    private async processVault( ret = false ) {
+        if (this.vaultLoaded && !ret)
+            return;
+        const session = this.orm.mutableSession( this.orm.getEmptyState() )
+        const tasksDir = await getTasksFolder( this.settings.tasksDirectory, this.app.vault );
+        const files = this.app.vault.getMarkdownFiles().filter( f => !this.ignorePath( f.path ) );
         for ( let i = 0; i < files.length; i++ ) {
             const file = files[ i ];
             if ( file.parent === tasksDir ) {
@@ -294,8 +352,9 @@ export default class ObsidianTaskManager extends Plugin {
                 }
             }
         }
-        this.state = { ...this.state, taskDb: session.state };
-        await this.handleStoreUpdate();
         this.vaultLoaded = true;
+        if (ret)
+            return session.state;
+        await this.handleStoreUpdate();
     }
 }

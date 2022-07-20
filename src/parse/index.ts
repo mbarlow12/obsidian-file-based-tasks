@@ -1,6 +1,7 @@
 import { CachedMetadata, Pos, TFile } from 'obsidian';
 import { ITaskYamlObject } from '../file';
 import { ITask, ITaskInstance } from '../redux/orm';
+import { FileITaskInstanceRecord } from '../redux/orm/types';
 import { ParseOptions } from '../redux/settings';
 import { LOC_DELIM, pos } from '../Task';
 import { readTaskYaml, taskYamlFromFrontmatter } from './frontmatter';
@@ -24,7 +25,7 @@ export const readTaskFile = (
     const taskYml: ITaskYamlObject = taskYamlFromFrontmatter( cache.frontmatter )
     const task = readTaskYaml( taskYml );
     task.name = task.name ?? file.basename;
-    task.content = data && parseTaskContent(data, cache ).content || '';
+    task.content = data && parseTaskContent( data, cache ).content || '';
     return task;
 }
 
@@ -42,7 +43,7 @@ export const getFileInstances = (
     cache: CachedMetadata,
     contents: string,
     options: ParseOptions
-): Record<number, ITaskInstance> => {
+): FileITaskInstanceRecord => {
     if ( !cache.listItems )
         return {};
     const lines = contents.split( '\n' );
@@ -52,12 +53,20 @@ export const getFileInstances = (
         const li = cache.listItems[ i ];
         if ( !li.task )
             continue;
-        rec[ li.position.start.line ] = parser.fullParseLine( lines[ li.position.start.line ], path, li );
-        let parent = li.parent;
-        while ( parent > -1 ) {
-            rec[ parent ] = parser.fullParseLine( lines[ parent ], path, li )
-            parent = cache.listItems.find( li => li.position.start.line === parent ).parent;
+        const inst = parser.parseInstanceFromLine( lines[ li.position.start.line ], path, li );
+        if ( inst.parentLine > -1 ) {
+            let pInst = rec[ inst.parentLine ];
+            if ( !pInst ) {
+                const parentLi = cache.listItems.find( li => li.position.start.line === inst.parentLine );
+                pInst = parser.parseInstanceFromLine( lines[ inst.parentLine ], path, parentLi );
+            }
+            pInst.childLines.push( inst.line );
+            inst.parentInstance = pInst;
+            rec[ pInst.line ] = pInst;
+            if ( pInst.complete )
+                inst.complete = pInst.complete;
         }
+        rec[ inst.line ] = { ...inst };
     }
     return rec;
 }

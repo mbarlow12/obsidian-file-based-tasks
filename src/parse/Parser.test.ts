@@ -250,17 +250,17 @@ describe( 'Task parsing', () => {
 
     test( 'rendered task lines', () => {
         let line = `- [x] here's a [[a different name (443nd)]] another [[here's a a different name (443nd) another (3ad).md]] ^3ad`;
-        let task = parser.fullParseLine( line, 'file.md', lic );
+        let task = parser.parseInstanceFromLine( line, 'file.md', lic );
         expect( task.id ).toEqual( taskIdToUid( '3ad' ) );
 
         expect( () => {
             line =
                 `- [x] here's a [[a different name (443nd)]] another [[here's a a different (443nd) another (3ad).md]] ^3ad`;
-            task = parser.fullParseLine( line, 'file.md', lic );
+            task = parser.parseInstanceFromLine( line, 'file.md', lic );
         } ).toThrow( Error );
 
         line = `     - [ ] [[another linked one (abc1)]] ^abc1`;
-        task = parser.fullParseLine( line, 'file.md', lic);
+        task = parser.parseInstanceFromLine( line, 'file.md', lic);
         expect(task.id).toEqual(taskIdToUid('abc1'));
     } );
 

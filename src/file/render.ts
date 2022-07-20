@@ -92,35 +92,36 @@ export const renderTaskInstance = (
     const taskLinks = (instance.links ?? [])
         .filter( l => !l.includes( instance.filePath ) && !instance.filePath.includes( l ) )
         .map( link => `[[${link}#^${instance.id}|${path.parse( link ).name}]]` )
-    if (renderOpts.primaryLink)
-        taskLinks.push(`[[${path.join( tasksDirPath, taskToFilename( instance.name, instance.id ) )}]]`);
+    if ( renderOpts.primaryLink )
+        taskLinks.push( `[[${path.join( tasksDirPath, taskToFilename( instance.name, instance.id ) )}]]` );
     const instanceLine = [
         baseLine,
-        ...(renderOpts.links && taskLinks || []),
+        ...((renderOpts.links || renderOpts.primaryLink) && taskLinks || []),
         renderOpts.id && `^${instance.id}` || ''
     ].join( ' ' );
     return pad + instanceLine;
 }
 
 export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 ) => {
+    const rawPad = instance.rawText.match(/^\s+/);
+    if (rawPad)
+        return rawPad[0];
+
     let pad = '';
-    let parentLine = instance.parentLine;
-    while ( parentLine > -1 ) {
+    let { parentLine, parentInstance } = instance;
+    while ( parentLine > -1 && parentInstance ) {
         pad = pad.padStart( pad.length + tabSize, useTab ? '\t' : ' ' );
-        const parent = instance.parentInstance;
-        if ( !parent )
-            break
-        parentLine = parent.parentLine;
+        ({ parentLine, parentInstance } = parentInstance);
     }
     return pad;
 }
 
 export const taskFullPath = ( task: ITask | ITaskInstance | string, id?: number, dir = 'tasks' ) => {
-    if (typeof task !== 'string') {
+    if ( typeof task !== 'string' ) {
         id = task.id;
         task = task.name;
     }
-    return path.join(dir, taskToFilename( task, id ))
+    return path.join( dir, taskToFilename( task, id ) )
 }
 
 export const writeTask = async ( task: ITask, vault: Vault, mdCache: MetadataCache, taskDirPath = 'tasks' ) => {

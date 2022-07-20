@@ -5,7 +5,7 @@ import { getTask, taskInstances } from './selectors';
 
 describe( 'Reducer', () => {
 
-    const { state, orm } = createTestSession({minTaskId: 10000});
+    const { state, orm } = createTestSession( { minTaskId: 10000, indexFiles: {} } );
     const taskReducer = reducerCreator( orm, state.taskDb );
 
     beforeEach( () => {
@@ -14,9 +14,9 @@ describe( 'Reducer', () => {
         session.TaskInstance.all().delete();
         session.Tag.all().delete();
 
-        expect( session.Task.all().exists()).toEqual( false );
-        expect( session.Tag.all().exists()).toEqual( false );
-        expect( session.TaskInstance.all().exists()).toEqual( false );
+        expect( session.Task.all().exists() ).toEqual( false );
+        expect( session.Tag.all().exists() ).toEqual( false );
+        expect( session.TaskInstance.all().exists() ).toEqual( false );
         expect( state.taskDb.Tag.items ).toHaveLength( 0 );
         expect( state.taskDb.Task.items ).toHaveLength( 0 );
         expect( state.taskDb.TaskInstance.items ).toHaveLength( 0 );
@@ -38,7 +38,7 @@ describe( 'Reducer', () => {
 
     it( 'should create a task given a new instance', () => {
         const action = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 0,
                 complete: false,
@@ -68,7 +68,7 @@ describe( 'Reducer', () => {
         let end = taskReducer( state, action );
         expect( end.Task.items ).toEqual( [ 10000 ] );
         const instAction = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 10000,
                 complete: false,
@@ -83,7 +83,7 @@ describe( 'Reducer', () => {
         } );
         end = taskReducer( { ...state, taskDb: end }, instAction );
         expect( end.Task.items ).toEqual( [ 10000 ] );
-        const insts = taskInstances( end, orm)( 10000 );
+        const insts = taskInstances( end, orm )( 10000 );
         expect( insts?.toRefArray().map( i => i.key ) ).toEqual( [ 'file||1' ] );
     } );
 
@@ -94,7 +94,7 @@ describe( 'Reducer', () => {
         } );
         let taskDb = taskReducer( state, action );
         let instAction = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 10005,
                 complete: false,
@@ -109,7 +109,7 @@ describe( 'Reducer', () => {
         } );
         taskDb = taskReducer( { ...state, taskDb }, instAction );
         instAction = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 10005,
                 complete: false,
@@ -121,7 +121,7 @@ describe( 'Reducer', () => {
                 links: [],
                 tags: []
             },
-            [ 'file||2' ]: {
+            [ 2 ]: {
                 name: 'task',
                 id: 0,
                 complete: false,
@@ -146,7 +146,7 @@ describe( 'Reducer', () => {
         } );
         let taskDb = taskReducer( state, action );
         let instAction = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 10005,
                 complete: false,
@@ -161,7 +161,7 @@ describe( 'Reducer', () => {
         } );
         taskDb = taskReducer( { ...state, taskDb }, instAction );
         instAction = updateFileInstances( 'file', {
-            [ 'file||2' ]: {
+            [ 2 ]: {
                 name: 'task',
                 id: 0,
                 complete: false,
@@ -177,13 +177,13 @@ describe( 'Reducer', () => {
         taskDb = taskReducer( { ...state, taskDb }, instAction );
         expect( taskDb.Task.items ).toEqual( [ 10005, 10006 ] );
         expect( taskDb.TaskInstance.items ).toEqual( [ 'file||2' ] );
-        const insts = taskInstances( taskDb, orm)( 10005 );
+        const insts = taskInstances( taskDb, orm )( 10005 );
         expect( insts ).toBeUndefined();
     } );
 
     it( 'should handle parent completions', () => {
         const instAction = updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'task',
                 id: 10005,
                 complete: true,
@@ -195,7 +195,7 @@ describe( 'Reducer', () => {
                 links: [],
                 tags: []
             },
-            [ 'file||2' ]: {
+            [ 2 ]: {
                 name: 'task',
                 id: 0,
                 complete: false,
@@ -208,8 +208,8 @@ describe( 'Reducer', () => {
                 tags: []
             }
         } );
-        const taskDb = taskReducer( {...state }, instAction );
-        const t = getTask( taskDb, orm)( 10006 );
+        const taskDb = taskReducer( { ...state }, instAction );
+        const t = getTask( taskDb, orm )( 10006 );
         if ( !t ) {
             expect( t ).toBeTruthy();
             return;
@@ -226,7 +226,7 @@ describe( 'Reducer', () => {
             completedDate: new Date( '01/01/2022' ),
         } ) );
         state.taskDb = taskReducer( state, updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'completed task',
                 filePath: 'file',
                 id: 10000,
@@ -239,7 +239,7 @@ describe( 'Reducer', () => {
                 childLines: []
             }
         } ) );
-        expect( getTask( state.taskDb, orm)(10000 )?.completedDate?.toDateString() )
+        expect( getTask( state.taskDb, orm )( 10000 )?.completedDate?.toDateString() )
             .toEqual( (new Date( '01/01/22' )).toDateString() );
     } );
 
@@ -250,7 +250,7 @@ describe( 'Reducer', () => {
             completedDate: new Date( '01/01/2022' ),
         } ) );
         state.taskDb = taskReducer( state, updateFileInstances( 'file', {
-            [ 'file||1' ]: {
+            [ 1 ]: {
                 name: 'completed task',
                 filePath: 'file',
                 id: 10000,
@@ -263,6 +263,6 @@ describe( 'Reducer', () => {
                 childLines: []
             }
         } ) );
-        expect( getTask( state.taskDb, orm)( 10000 )?.completedDate ).toBeUndefined();
+        expect( getTask( state.taskDb, orm )( 10000 )?.completedDate ).toBeUndefined();
     } );
 } );

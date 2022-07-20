@@ -1,7 +1,7 @@
 import { createAction, Dictionary } from '@reduxjs/toolkit';
 import { CreateProps } from 'redux-orm';
 import { Task } from './models';
-import { ITask, ITaskCreate, ITaskInstance, ITaskInstanceRecord } from './types';
+import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
 
 export enum TaskActionType {
     CREATE_TASK = 'CREATE_TASK',
@@ -28,7 +28,7 @@ export interface UpdateFileInstanesAction {
     type: TaskActionType.UPDATE_FILE_INSTANCES;
     payload: {
         path: string,
-        instances: Record<string, ITaskInstance>
+        instances: FileITaskInstanceRecord,
     }
 }
 
@@ -102,7 +102,7 @@ export type TaskAction = CreateTaskAction
 
 export const updateFileInstances = (
     path: string,
-    instances: ITaskInstanceRecord
+    instances: FileITaskInstanceRecord
 ): UpdateFileInstanesAction => ({
     type: TaskActionType.UPDATE_FILE_INSTANCES,
     payload: { path, instances }

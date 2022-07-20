@@ -3,7 +3,7 @@ import { ListItemCache, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { taskIdToUid } from '../redux';
 import { ITaskInstance } from '../redux/orm';
-import { emptyTaskInstance, PLACEHOLDER_ID, PLACEHOLDER_NAME } from '../redux/orm/models';
+import { emptyTaskInstance, PLACEHOLDER_ID } from '../redux/orm/models';
 import { DEFAULT_SETTINGS, ParseOptions } from '../redux/settings';
 import { ParsedTask } from './types';
 
@@ -49,7 +49,7 @@ export class Parser {
     /*
      todo: handle strikethrough parsing, start/end with double tildes and adding removing completed dates
      */
-    fullParseLine( line: string, filePath: string, { position, parent }: ListItemCache ): ITaskInstance {
+    parseInstanceFromLine( line: string, filePath: string, { position, parent }: ListItemCache ): ITaskInstance {
         if ( line.match( Parser.RENDERED_TASK_REGEX ) ) {
             // parse as task
             return {
@@ -69,7 +69,7 @@ export class Parser {
                 return {
                     ...inst,
                     id: PLACEHOLDER_ID,
-                    name: PLACEHOLDER_NAME,
+                    name: '',
                     line: position.start.line,
                     filePath,
                     parentLine: parent
@@ -289,7 +289,7 @@ export class Parser {
         const tagMatches = taskLine.match( this.tagRegex ) || [];
         const tags = tagMatches.map( t => this.stripTagToken( t ) )
         const dueDateMatches = taskLine.match( this.dueDateRegex ) || [];
-        const dueDate = dueDateMatches.length && parseDueDate( this.stripDueDateToken( dueDateMatches[ 0 ] ) );
+        const dueDate = (dueDateMatches.length && parseDueDate( this.stripDueDateToken( dueDateMatches[ 0 ] ) )) || new Date();
         const linkMatches = taskLine.match( Parser.LINK_REGEX ) || [];
         const links = linkMatches.map( l => this.stripLinkToken( l ) );
         return {

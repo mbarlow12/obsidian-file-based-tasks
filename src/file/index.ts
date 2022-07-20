@@ -42,10 +42,10 @@ export const getVaultConfig = ( v: Vault ) => {
     return (v as Vault & { config: Record<string, boolean | number> }).config;
 }
 
-export const getTasksFolder = ( tasksDir: string, vault: Vault ) => {
+export const getTasksFolder = async ( tasksDir: string, vault: Vault ) => {
     if ( !tasksDir )
         tasksDir = DEFAULT_TASKS_DIR;
-    return vault.getAbstractFileByPath( tasksDir ) as TFolder;
+    return vault.getAbstractFileByPath( tasksDir ) as TFolder ?? await vault.createFolder( tasksDir );
 }
 
 export const isTaskFile = (

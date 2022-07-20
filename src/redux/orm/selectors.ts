@@ -50,10 +50,8 @@ export const getTask = createDraftSafeSelector(
 );
 
 export const nextTaskId = createDraftSafeSelector(
-    ( s: TasksORMState, orm: ORM<TaskORMSchema> | TasksORMSession ) => ('Task' in orm
-                                                                        ? orm.Task
-                                                                        : sessionTask( s, orm )).all().toRefArray(),
-    tasks => Math.max( ...tasks.map( t => t.id ) ) + 1
+    ( s: TasksORMState ) => s.Task.items,
+    tasks => Math.max( ...tasks, 0 ) + 1
 );
 
 export const taskParents = createDraftSafeSelector(
@@ -67,8 +65,8 @@ export const taskParents = createDraftSafeSelector(
 //     ( id: number ) => Math.max( id, minId )
 // );
 
-export const getNextTaskIdAboveMin = ( state: TasksORMState, session: TasksORMSession, miniId = 0 ) => {
-    const nextId = nextTaskId( state, session );
+export const getNextTaskIdAboveMin = ( state: TasksORMState, miniId = 0 ) => {
+    const nextId = Math.max( ...state.Task.items, 0 ) + 1;
     return Math.max( miniId, nextId );
 }
 
@@ -86,18 +84,18 @@ export const taskInstances = createDraftSafeSelector(
 export const filePathInstances = createDraftSafeSelector(
     (
         s: TasksORMState,
-        orm: ORM<TaskORMSchema> | TasksORMSession
-    ) => 'TaskInstance' in orm ? orm.TaskInstance : sessionTaskInstance( s, orm ),
+        session: TasksORMSession
+    ) => session.TaskInstance,
     ( taskInstance: ModelType<TaskInstance>, ) =>
         ( path: string ) => taskInstance.filter( ( i ) => i.filePath === path )
 );
 
 export const pathITaskInstances = createSelector(
-    filePathInstances,
-    (instances) => (path: string) => instances( path )
-        .orderBy('line')
+    ( s: TasksORMState, orm: ORM<TaskORMSchema> ) => filePathInstances( s, orm.session( s ) ),
+    ( instances ) => ( path: string ) => instances( path )
+        .orderBy( 'line' )
         .toModelArray()
-        .map(iTaskInstance)
+        .map( iTaskInstance )
 );
 
 

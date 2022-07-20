@@ -16,8 +16,8 @@ import {
 } from './index';
 import { instancesKey } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
-import { filePathInstances, getNextTaskIdAboveMin } from './selectors';
-import { ITask, ITaskCreate, ITaskInstance, ITaskInstanceRecord } from './types';
+import { filePathInstances } from './selectors';
+import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
 import LookupPredicate = QuerySet.LookupPredicate;
 
 const repopulateIndexFiles = (
@@ -59,14 +59,6 @@ export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMS
     const { settings, taskDb: dbState } = state;
     const session = orm.session( dbState );
 
-    /**
-     * how to handle ignored paths on renaming
-     * - if both are ignored, we can progress as usual since there won't be anything in state to begin with
-     * - if old is ignored and new isn't, then we'll hit a situation where that path should be reindexed
-     *      - rename event -> rename instances (no instances) -> store on subscribe
-     *      - the new file won't be in the state at all and no cache change happened
-
-     */
     const paths: string[] = [];
     switch ( action.type ) {
         case TaskActionType.RENAME_FILE:
@@ -77,18 +69,12 @@ export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMS
             paths.push( action.payload.path );
             break
     }
-    for ( const path of paths ) {
-        if ( settings.ignoredPaths.includes( path ) )
-            return session.state;
-    }
+    for ( const path of paths )
+        if ( settings.ignoredPaths.includes( path ) ) return session.state;
 
     switch ( action.type ) {
         case TaskActionType.CREATE_TASK:
-            createTaskReducer(
-                action.payload,
-                session,
-                settings
-            );
+            createTaskReducer( action.payload, session, settings );
             break;
         case TaskActionType.UPDATE_FILE_INSTANCES:
             updateFileInstancesReducer( action.payload.path, action.payload.instances, session, settings );
@@ -124,8 +110,8 @@ const createTaskReducer = (
     session: TasksORMSession,
     settings: PluginSettings
 ) => {
-    if ( !task.id || task.id < settings.minTaskId ) {
-        task.id = getNextTaskIdAboveMin( session.state, session, settings.minTaskId );
+    if ( !session.Task.first() ) {
+        task.id = Math.max(task.id ?? 0, settings.minTaskId);
     }
     session.Task.create( taskCreatePropsFromITask( task ) );
     if ( task.instances ) {
@@ -137,7 +123,7 @@ const createTaskReducer = (
 
 export const updateFileInstancesReducer = (
     path: string,
-    instances: ITaskInstanceRecord,
+    instances: FileITaskInstanceRecord,
     session: TasksORMSession,
     settings: PluginSettings
 ) => {
@@ -146,34 +132,21 @@ export const updateFileInstancesReducer = (
     TaskInstance.filter( i => i.filePath === path ).delete();
 
     // handle parent completions, create new tasks for 0 ids
-    for ( const key in instances ) {
-        const inst = instances[ key ];
+    for ( const lineStr in instances ) {
+        const line = Number.parseInt( lineStr );
+        const inst = instances[ line ];
 
         // placeholder instance
         if ( inst.id === -1 ) {
-            TaskInstance.create( instancePropsFromITaskInstance( inst ) )
-        }
-
-        // parent completions
-        let { parentLine } = inst;
-        while ( parentLine > -1 ) {
-            const parentInstance = instances[ instancesKey( path, parentLine ) ];
-            if ( !parentInstance )
-                throw new Error( `No parent for ${inst.name} from ${inst.line} to parent ${inst.parentLine}` );
-            if ( parentInstance.complete ) {
-                inst.complete = parentInstance.complete;
-                break;
-            }
-            parentLine = parentInstance.parentLine;
+            continue;
         }
 
         // new ids
         let task = Task.withId( inst.id );
         if ( !inst.id || !task ) {
-            const nextId = getNextTaskIdAboveMin( session.state, session, settings.minTaskId );
             task = Task.create( {
                 ...taskCreatePropsFromInstance( inst ),
-                id: Math.max( nextId, inst.id ?? 0 ),
+                ...(!Task.first() && { id: Math.max( inst.id ?? 0, settings.minTaskId ) }),
             } );
             inst.id = task.id;
         }
@@ -182,6 +155,8 @@ export const updateFileInstancesReducer = (
     // create instances & update task
     for ( const key in instances ) {
         const inst = instances[ key ];
+        if (inst.id === -1)
+            continue;
         TaskInstance.create( instancePropsFromITaskInstance( inst ) );
         const task = Task.withId( inst.id );
         if ( !task )

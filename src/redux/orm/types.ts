@@ -37,4 +37,5 @@ export interface ITask extends IBaseTask {
 export type ITaskCreate = Omit<Partial<ITask>, 'name'> & { name: string };
 
 export type ITaskInstanceRecord = Record<string, ITaskInstance>;
+export type FileITaskInstanceRecord = Record<number, ITaskInstance>;
 
