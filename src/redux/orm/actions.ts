@@ -118,8 +118,8 @@ export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction 
         props.created = task.created
     if ('complete' in task)
         props.complete = task.complete;
-    if (task.completedDate)
-        props.completedDate = task.completedDate;
+    if (task.completed)
+        props.completed = task.completed;
     props.tags = []
     if (task.tags)
         props.tags = task.tags.map(t => typeof t === 'string' ? t : t.getId());

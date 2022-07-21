@@ -8,6 +8,7 @@ import { Parser } from './parse/Parser';
 import {
     allTaskFiles,
     allTasks,
+    bestEffortDeduplicate,
     iTask,
     iTaskInstance,
     ITaskInstance,
@@ -23,7 +24,7 @@ import {
     updateFileInstances
 } from './redux/orm';
 import { deleteFile, isTaskAction, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
-import { updateFileInstancesReducer } from './redux/orm/reducer';
+import { repopulateIndexFiles, updateFileInstancesReducer } from './redux/orm/reducer';
 import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
 import settingsSlice from './redux/settings/settings.slice';
 import { PluginState } from './redux/types';
@@ -173,8 +174,9 @@ export default class ObsidianTaskManager extends Plugin {
     async initStore() {
         this.orm = new ORM<TaskORMSchema>();
         this.orm.register( Task, TaskInstance, Tag );
-        const settings = Object.assign( {}, DEFAULT_SETTINGS, await this.loadData() );
-        this.state = {settings, taskDb: this.orm.getEmptyState()};
+        const existing = await this.loadData();
+        const settings = Object.assign( {}, DEFAULT_SETTINGS, existing );
+        this.state = { settings, taskDb: this.orm.getEmptyState() };
         const taskDb = await this.processVault( true );
         const initialState: PluginState = { settings, taskDb };
         const taskReducer = reducerCreator( this.orm, initialState.taskDb );
@@ -328,7 +330,7 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     private async processVault( ret = false ) {
-        if (this.vaultLoaded && !ret)
+        if ( this.vaultLoaded && !ret )
             return;
         const session = this.orm.mutableSession( this.orm.getEmptyState() )
         const tasksDir = await getTasksFolder( this.settings.tasksDirectory, this.app.vault );
@@ -348,12 +350,14 @@ export default class ObsidianTaskManager extends Plugin {
                 if ( cache.listItems ) {
                     const contents = await this.app.vault.read( file );
                     const instances = getFileInstances( file.path, cache, contents, this.settings.parseOptions );
+                    bestEffortDeduplicate( session, instances );
                     updateFileInstancesReducer( file.path, instances, session, this.settings )
                 }
             }
         }
+        repopulateIndexFiles( session, this.settings.indexFiles );
         this.vaultLoaded = true;
-        if (ret)
+        if ( ret )
             return session.state;
         await this.handleStoreUpdate();
     }

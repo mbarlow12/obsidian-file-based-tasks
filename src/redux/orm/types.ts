@@ -7,12 +7,12 @@ export interface ITaskBase {
     name: string;
     complete: boolean;
     tags: string[];
-    completedDate?: Date;
+    completed?: number;
 }
 
 export interface IBaseTask extends ITaskBase {
     content: string;
-    created: Date;
+    created: number;
     parentIds: number[];
     childIds: number[];
 }
@@ -25,12 +25,12 @@ export interface ITaskInstance extends ITaskBase {
     parentInstance?: ITaskInstance;
     childLines: number[];
     instanceChildren?: ITaskInstance[];
-    dueDate?: Date;
+    dueDate?: number;
     links: string[];
 }
 
 export interface ITask extends IBaseTask {
-    dueDate: Date;
+    dueDate: number;
     instances: ITaskInstance[];
 }
 

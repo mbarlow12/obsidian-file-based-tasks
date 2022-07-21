@@ -13,24 +13,24 @@ export const readTaskYaml = ( yaml: ITaskYamlObject ): ITask => {
         instances,
         tags,
         dueDate,
-        completedDate,
+        completed,
     } = yaml;
     return {
         id: Number.parseInt( id ),
         name,
         complete: complete === 'true',
-        created: new Date( created ),
+        created: new Date( created ).getTime(),
         instances: instances.map( taskInstanceFromYaml( yaml ) ),
         childIds: childIds.map( Number.parseInt ),
         parentIds: parentIds.map( Number.parseInt ),
         tags,
-        dueDate: new Date(dueDate),
-        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
+        dueDate: new Date( dueDate ).getTime(),
+        ...(completed && completed.length && { completed: new Date( completed ).getTime() }),
         content: ''
     };
 }
 export const taskInstanceFromYaml = ( tYaml: ITaskYamlObject ) => ( yaml: ITaskInstanceYamlObject ): ITaskInstance => {
-    const { id, name, dueDate, completedDate, tags } = tYaml
+    const { id, name, dueDate, completed, tags } = tYaml
     const { rawText, filePath, complete, links, line, parentLine, childLines } = yaml;
     return {
         id: Number.parseInt( id ),
@@ -41,10 +41,10 @@ export const taskInstanceFromYaml = ( tYaml: ITaskYamlObject ) => ( yaml: ITaskI
         parentLine: Number.parseInt( parentLine ),
         complete: complete === 'true',
         ...(tags && tags.length && { tags }),
-        ...(dueDate && dueDate.length && { dueDate: new Date( dueDate ) }),
-        ...(completedDate && completedDate.length && { completedDate: new Date( completedDate ) }),
+        ...(dueDate && dueDate.length && { dueDate: (new Date( dueDate )).getTime() }),
+        ...(completed && completed.length && { completed: new Date( completed ).getTime() }),
         ...(links && links.length && { links }),
-        childLines: childLines.map( (c: string) => Number.parseInt( c ) ),
+        childLines: childLines.map( ( c: string ) => Number.parseInt( c ) ),
     } as ITaskInstance;
 }
 export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObject => {
@@ -59,7 +59,7 @@ export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObjec
         parentIds,
         dueDate,
         tags,
-        completedDate
+        completed
     } = cfm;
     return {
         type,
@@ -72,6 +72,6 @@ export const taskYamlFromFrontmatter = ( cfm: FrontMatterCache ): ITaskYamlObjec
         childIds,
         parentIds,
         dueDate,
-        completedDate
+        completed
     } as ITaskYamlObject;
 }

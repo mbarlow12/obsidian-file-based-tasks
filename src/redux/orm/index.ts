@@ -1,5 +1,8 @@
 import { Comparer } from '@reduxjs/toolkit';
-import { ITask, ITaskInstance } from './types';
+import { SessionBoundModel } from 'redux-orm';
+import { Task } from './models';
+import { TasksORMSession } from './schema';
+import { FileITaskInstanceRecord, ITask, ITaskInstance } from './types';
 
 export const filterUnique = <T>(
     arr: T[],
@@ -36,6 +39,21 @@ export const instanceComparer: Comparer<ITaskInstance> = ( a, b ) => {
     return 1;
 };
 
+export const instancesEqual = ( a: ITaskInstance, b: ITaskInstance ) => instanceComparer( a, b ) === 1
+
+export const fileRecordsEqual = ( a: FileITaskInstanceRecord, b: FileITaskInstanceRecord ) => {
+    if ( Object.keys( a ).length !== Object.keys( b ).length )
+        return false;
+
+    for ( const line in a ) {
+        if ( !(line in b) )
+            return false;
+        if ( !instancesEqual( a[ line ], b[ line ] ) )
+            return false;
+    }
+    return true;
+};
+
 export const instanceSorter = ( a: ITaskInstance, b: ITaskInstance ) => {
     if ( a.filePath < b.filePath )
         return -1;
@@ -48,7 +66,7 @@ export const instanceSorter = ( a: ITaskInstance, b: ITaskInstance ) => {
 
 export const iTaskComparer: Comparer<ITask> = ( a, b ) => {
     if (
-        a.id !== b.id || a.name !== b.name || a.complete !== b.complete || a.dueDate.getTime() !== b.dueDate.getTime()
+        a.id !== b.id || a.name !== b.name || a.complete !== b.complete || a.dueDate !== b.dueDate
         || !arraysEqual<string>( a.tags.sort(), b.tags.sort() )
         || !arraysEqual<ITaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ), instanceComparer )
         || !arraysEqual( a.childIds.sort(), b.childIds.sort() ) || !arraysEqual( a.parentIds.sort(), b.parentIds.sort() )
@@ -60,6 +78,42 @@ export const iTaskComparer: Comparer<ITask> = ( a, b ) => {
 export const tasksEqual = ( a: ITask, b: ITask ) => {
     return iTaskComparer( a, b ) === 1;
 };
+
+export const instanceIsOfTask = ( instance: ITaskInstance, task: SessionBoundModel<Task, {}> ): boolean => {
+    if (
+        (instance.id > 0 && instance.id !== task.id)
+        || instance.name !== task.name
+        || instance.dueDate !== task.dueDate
+    )
+        return false;
+    const iTags = instance.tags.sort();
+    const tTags = task.tags.orderBy( 'name' ).toRefArray().map( t => t.name );
+    if ( !arraysEqual( iTags, tTags ) )
+        return false
+
+    const iPid = instance.parentInstance?.id;
+    const tPids = task.parentTasks.toRefArray().map( p => p.id );
+    return !(iPid > 0 && !tPids.includes( iPid ));
+
+
+}
+
+export const bestEffortDeduplicate = ( session: TasksORMSession, fileIndex: FileITaskInstanceRecord ) => {
+    for ( const instance of Object.values( fileIndex ).sort( ( a, b ) => a.line - b.line ) ) {
+        if ( instance.id === 0 ) {
+            if ( session.Task.exists( { name: instance.name } ) ) {
+                const candidates = session.Task.filter( { name: instance.name } );
+                const instSubNames = instance.childLines.map( cl => fileIndex[ cl ].name ).sort();
+                for ( const candidate of candidates.toModelArray() ) {
+                    const tCinsts = candidate.subTasks.toRefArray().map( s => s.name ).sort();
+                    if ( instanceIsOfTask( instance, candidate ) || arraysEqual( instSubNames, tCinsts ) ) {
+                        instance.id = candidate.id;
+                    }
+                }
+            }
+        }
+    }
+}
 
 export type {
     UpdateFileInstanesAction,
@@ -106,3 +160,5 @@ export type {
     InstanceFields,
     TagFields
 } from './models'
+
+export * from './query';

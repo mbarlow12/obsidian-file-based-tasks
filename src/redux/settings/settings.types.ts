@@ -1,7 +1,6 @@
 // noinspection ES6UnusedImports
 import { QuerySet } from 'redux-orm';
-import { Task } from '../orm';
-import LookupPredicate = QuerySet.LookupPredicate;
+import { IndexFileSettings } from '../orm';
 
 export interface ParseOptions {
     usePrefix: boolean;
@@ -20,18 +19,13 @@ export type PluginSettings = {
     maxTasks: number,
     deleteSubtaskWithTask: boolean,
     timeBeforeArchive: number,
-    indexFiles: Record<string, LookupPredicate<Task>>,
+    indexFiles: IndexFileSettings,
     minTaskId: number,
     parseOptions: ParseOptions,
     renderOptions?: RenderOpts,
     tasksDirectory: string;
 }
 export type SettingsPayload = Partial<PluginSettings>;
-
-export interface TaskQuery {
-    filter: (t: Task) => boolean;
-    sort: (a: Task, b: Task) => number;
-}
 
 export interface RenderOpts {
     id: boolean,
@@ -40,6 +34,6 @@ export interface RenderOpts {
     tags: boolean,
     recurrence: boolean,
     dueDate: boolean,
-    completedDate: boolean,
+    showCompletedDate: boolean,
     strikeThroughOnComplete: boolean,
 }

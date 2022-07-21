@@ -19,7 +19,7 @@ export const parseTaskFrontmatter = ( fm: FrontMatterCache ): ITask => {
         id,
         instances,
         dueDate,
-        completedDate,
+        completed,
         tags,
         complete,
         childIds,
@@ -33,15 +33,15 @@ export const parseTaskFrontmatter = ( fm: FrontMatterCache ): ITask => {
         tags,
         content: '',
         complete: complete === 'true',
-        created: new Date( created ),
+        created: new Date( created ).getTime(),
         childIds: (childIds || []).map( ( cid: string ) => Number.parseInt( cid ) ),
         parentIds: (parentIds || []).map( ( cid: string ) => Number.parseInt( cid ) )
     };
-    if ( completedDate )
-        base.completedDate = new Date( completedDate );
+    if ( completed )
+        base.completed = new Date( completed ).getTime();
     return {
         ...base,
-        dueDate: new Date( dueDate ),
+        dueDate: new Date( dueDate ).getTime(),
         instances: instances.map( ( i: string ) => parseInstanceYaml( i ) )
     };
 }

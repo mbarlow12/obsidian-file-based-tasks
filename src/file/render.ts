@@ -2,6 +2,7 @@ import { MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
 import path from 'path';
 import { ORM } from 'redux-orm';
 import { RRule } from 'rrule';
+import { taskUidToId } from '../redux';
 import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances, TaskORMSchema } from '../redux/orm';
 import { DEFAULT_RENDER_OPTS } from '../redux/settings';
 import { PluginState } from '../redux/types';
@@ -12,9 +13,10 @@ export const renderTags = ( tags?: string[] ): string => (tags ?? []).join( ' ' 
 export const renderRecurrence = ( rrule?: RRule ): string => rrule ? '&' + rrule.toText() : '';
 export const renderDueDate = ( dueDate: Date ) => dueDate ? dueDate.toLocaleString() : '';
 
-export const taskInstanceToChecklist = ( { complete, name, id }: ITaskInstance ): string => [
-    `- [${complete ? 'x' : ' '}]`, name,
-    `^${id}`
+export const taskInstanceToChecklist = (
+    { complete, name, id }: ITaskInstance
+): string => [
+    `- [${complete ? 'x' : ' '}]`, name, `^${taskUidToId( id )}`
 ].join( ' ' );
 
 
@@ -34,20 +36,20 @@ export const taskToYamlObject = ( task: ITask ): ITaskYamlObject => {
         parentIds,
         childIds,
         instances,
-        completedDate,
+        completed,
     } = task;
     return {
         type: TaskRecordType,
         id: `${id}`,
         name,
         complete: `${complete}`,
-        created: created.toISOString(),
+        created: new Date( created ).toISOString(),
         tags,
-        dueDate: dueDate.toISOString(),
+        dueDate: new Date( dueDate ).toISOString(),
         parentIds: parentIds.map( id => `${id}` ),
         childIds: childIds.map( id => `${id}` ),
         instances: instances.map( taskInstanceToYamlObject ),
-        ...(completedDate && { completedDate: completedDate.toISOString() })
+        ...(completed && { completed: new Date( completed ).toISOString() })
     };
 }
 export const taskToTaskFileContents = ( task: ITask ): string => {
@@ -97,15 +99,15 @@ export const renderTaskInstance = (
     const instanceLine = [
         baseLine,
         ...((renderOpts.links || renderOpts.primaryLink) && taskLinks || []),
-        renderOpts.id && `^${instance.id}` || ''
+        renderOpts.id && `^${taskUidToId( instance.id )}` || ''
     ].join( ' ' );
     return pad + instanceLine;
 }
 
 export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 ) => {
-    const rawPad = instance.rawText.match(/^\s+/);
-    if (rawPad)
-        return rawPad[0];
+    const rawPad = instance.rawText.match( /^\s+/ );
+    if ( rawPad )
+        return rawPad[ 0 ];
 
     let pad = '';
     let { parentLine, parentInstance } = instance;
@@ -117,6 +119,8 @@ export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 
 }
 
 export const taskFullPath = ( task: ITask | ITaskInstance | string, id?: number, dir = 'tasks' ) => {
+    // eslint-disable-next-line no-debugger
+    debugger;
     if ( typeof task !== 'string' ) {
         id = task.id;
         task = task.name;

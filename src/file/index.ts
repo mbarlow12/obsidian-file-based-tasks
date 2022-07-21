@@ -1,4 +1,4 @@
-import { CachedMetadata, normalizePath, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
+import { CachedMetadata, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
 import { Parser } from '../parse/Parser';
 import { taskUidToId } from '../redux';
 import { ParseOptions, PluginSettings } from '../redux/settings';
@@ -13,7 +13,10 @@ export { ITaskYamlObject } from './types';
 export { YamlObject } from './types';
 export { ITaskInstanceYamlObject } from './types';
 export const taskToBasename = ( task: string, id: number ) => `${task} (${taskUidToId( id )})`;
-export const taskToFilename = ( task: string, id: number ) => normalizePath( `${taskToBasename( task, id )}.md` );
+export const taskToFilename = (
+    task: string,
+    id: number
+) => Parser.normalizeName( `${taskToBasename( task, id )}.md` );
 
 export const DEFAULT_TASKS_DIR = `tasks`;
 
@@ -24,14 +27,11 @@ export const removeTaskDataFromContents = ( contents: string, cache: CachedMetad
     const lines = contents.split( '\n' );
     for ( const taskItem of taskItems ) {
         let taskLine = lines[ taskItem.position.start.line ];
-        const task = parser.parseLine( taskLine );
-        if ( task ) {
-            // return line to normal
-            taskLine = taskLine.replace( Parser.ID_REGEX, '' )
-                .replace( Parser.FILE_LINK_REGEX, '' )
-                .replace( /\s+(?<!^\s+)/, ' ' )
+        const renderedMatch = taskLine.match(Parser.RENDERED_TASK_REGEX);
+        if ( renderedMatch ) {
+            taskLine = taskLine.replace(/\[\[.*\(([\w\d]+)\)]] \^\1\s*$/, '')
+                .replace( /(?<!^\s*)\s+/, ' ' )
                 .trimEnd();
-
             lines[ taskItem.position.start.line ] = taskLine;
         }
     }

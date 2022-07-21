@@ -32,7 +32,7 @@ export default function () {
 }
 export const hashTaskInstance = (
     { name, id, complete, parentLine, dueDate, childLines, tags, filePath, line }: ITaskInstance
-): string => [ line, id, name, complete ? 'x' : ' ', parentLine, dueDate.getTime(), filePath, ...tags.sort(), ...childLines.sort() ].join( '||' );
+): string => [ line, id, name, complete ? 'x' : ' ', parentLine, dueDate, filePath, ...tags.sort(), ...childLines.sort() ].join( '||' );
 
 export const taskUidToId = ( uid: number ) => uid.toString( 16 );
 

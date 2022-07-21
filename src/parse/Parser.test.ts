@@ -1,4 +1,5 @@
 import { ListItemCache, Pos } from 'obsidian';
+import { getDate } from '../../test/testUtils';
 import { taskIdToUid } from '../redux';
 import { pos } from '../Task';
 import { Parser } from './Parser';
@@ -13,11 +14,6 @@ import { ParsedTask } from './types';
 
 
 export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
-
-jest.mock('obsidian', () => ({
-    normalizePath: (s: string) => s.replace(/[:;?^#|[\]]/g, '')
-        .replace(/\s+/, ' ')
-}));
 
 describe( 'Task parsing', () => {
 
@@ -120,21 +116,27 @@ describe( 'Task parsing', () => {
     } );
 
     test( 'Parse due dates', () => {
+        const todayGetter = getDate();
         const checkDate = new Date();
         checkDate.setDate( checkDate.getDate() + 1 );
         let line = '- [ ] test task @tomorrow';
         const parser = new Parser();
         let task = parser.parseLine( line );
         expect( task.dueDate ).toBeTruthy();
-        expect( task.dueDate.toDateString() ).toEqual( checkDate.toDateString() );
+        expect( task.dueDate ).toEqual( checkDate.getTime() );
 
         line = '- [ ] test task name #atag @next friday #anothertag';
         task = parser.parseLine( line );
         while ( checkDate.getDay() !== 0 )
             checkDate.setDate( checkDate.getDate() + 1 );
         checkDate.setDate(checkDate.getDate() + 5);
-        expect( task.dueDate.toDateString() ).toEqual( checkDate.toDateString() );
+        expect( task.dueDate ).toEqual( checkDate.getTime() );
 
+        line = '- [ ] test task name #atag @three weeks from now #anothertag';
+        task = parser.parseLine( line );
+        const d = todayGetter();
+        d.setDate(d.getDate() + 21);
+        expect( task.dueDate).toEqual( d.getTime() )
     } );
 
     // test( 'Parse recurrences', () => {

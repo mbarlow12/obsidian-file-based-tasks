@@ -1,12 +1,14 @@
-// noinspection ES6UnusedImports
-import { ORM, QuerySet } from 'redux-orm';
+import { ORM } from 'redux-orm';
 import { OrmSession } from 'redux-orm/Session';
 import { PluginSettings } from '../settings';
 import { PluginState } from '../types';
 import {
+    fileRecordsEqual,
+    IndexFileSettings,
     instancePropsFromITaskInstance,
     instancePropsFromTask,
-    Task,
+    iTaskInstance,
+    queryToComparer,
     TaskAction,
     TaskActionType,
     taskCreatePropsFromInstance,
@@ -18,17 +20,17 @@ import { instancesKey } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
 import { filePathInstances } from './selectors';
 import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
-import LookupPredicate = QuerySet.LookupPredicate;
 
-const repopulateIndexFiles = (
+export const repopulateIndexFiles = (
     session: OrmSession<TaskORMSchema>,
-    indexFiles: Record<string, LookupPredicate<Task>>
+    indexFiles: IndexFileSettings
 ) => {
 
     for ( const filePath in indexFiles ) {
-        const query = indexFiles[ filePath ];
+        const { query } = indexFiles[ filePath ];
+        const filterFn = queryToComparer( query )
         session.TaskInstance.filter( ti => ti.filePath === filePath ).delete();
-        const tasks = session.Task.filter( query ).orderBy( 'created' ).toModelArray();
+        const tasks = session.Task.filter( filterFn ).orderBy( 'created' ).toModelArray();
         const seenIds = new Set<number>();
         let line = 0;
         for ( let i = 0; i < tasks.length; i++ ) {
@@ -111,7 +113,7 @@ const createTaskReducer = (
     settings: PluginSettings
 ) => {
     if ( !session.Task.first() ) {
-        task.id = Math.max(task.id ?? 0, settings.minTaskId);
+        task.id = Math.max( task.id ?? 0, settings.minTaskId );
     }
     session.Task.create( taskCreatePropsFromITask( task ) );
     if ( task.instances ) {
@@ -128,6 +130,16 @@ export const updateFileInstancesReducer = (
     settings: PluginSettings
 ) => {
     const { Task, TaskInstance } = session;
+
+    const existing = TaskInstance.filter( i => i.filePath === path ).all().toModelArray()
+        .reduce( ( rec, inst ) => ({
+            ...rec,
+            [ inst.line ]: iTaskInstance( inst )
+        }), {} as FileITaskInstanceRecord );
+
+    if ( fileRecordsEqual( instances, existing ) )
+        return;
+
     // delete previous file entries
     TaskInstance.filter( i => i.filePath === path ).delete();
 
@@ -155,7 +167,7 @@ export const updateFileInstancesReducer = (
     // create instances & update task
     for ( const key in instances ) {
         const inst = instances[ key ];
-        if (inst.id === -1)
+        if ( inst.id === -1 )
             continue;
         TaskInstance.create( instancePropsFromITaskInstance( inst ) );
         const task = Task.withId( inst.id );
@@ -195,8 +207,8 @@ const toggleComplete = ( payload: ToggleTaskComplete['payload'], session: TasksO
     if ( !task )
         return;
     const complete = !task.complete;
-    const completedDate = complete ? new Date() : undefined;
-    task.update( { complete, completedDate } );
-    task.subTasks.update( { complete, completedDate } );
+    const completed = complete ? new Date().getTime() : undefined;
+    task.update( { complete, completed } );
+    task.subTasks.update( { complete, completed } );
 }
 

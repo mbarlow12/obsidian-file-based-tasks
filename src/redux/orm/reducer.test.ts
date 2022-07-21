@@ -215,15 +215,15 @@ describe( 'Reducer', () => {
             return;
         }
         expect( t.complete ).toEqual( true );
-        expect( t.completedDate ).toBeTruthy();
-        expect( t.completedDate?.toDateString() ).toEqual( (new Date()).toDateString() );
+        expect( t.completed ).toBeTruthy();
+        expect( t.completed ).toEqual( (new Date()).getTime() );
     } );
 
     it( 'should not change existing completed date', () => {
         state.taskDb = taskReducer( state, createTask( {
             name: 'completed task',
             complete: true,
-            completedDate: new Date( '01/01/2022' ),
+            completed: new Date( '01/01/2022' ).getTime(),
         } ) );
         state.taskDb = taskReducer( state, updateFileInstances( 'file', {
             [ 1 ]: {
@@ -239,7 +239,7 @@ describe( 'Reducer', () => {
                 childLines: []
             }
         } ) );
-        expect( getTask( state.taskDb, orm )( 10000 )?.completedDate?.toDateString() )
+        expect( getTask( state.taskDb, orm )( 10000 )?.completed )
             .toEqual( (new Date( '01/01/22' )).toDateString() );
     } );
 
@@ -247,7 +247,7 @@ describe( 'Reducer', () => {
         state.taskDb = taskReducer( state, createTask( {
             name: 'completed task',
             complete: true,
-            completedDate: new Date( '01/01/2022' ),
+            completed: new Date( '01/01/2022' ).getTime(),
         } ) );
         state.taskDb = taskReducer( state, updateFileInstances( 'file', {
             [ 1 ]: {
@@ -263,6 +263,6 @@ describe( 'Reducer', () => {
                 childLines: []
             }
         } ) );
-        expect( getTask( state.taskDb, orm )( 10000 )?.completedDate ).toBeUndefined();
+        expect( getTask( state.taskDb, orm )( 10000 )?.completed ).toBeUndefined();
     } );
 } );

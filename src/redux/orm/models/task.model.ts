@@ -7,7 +7,7 @@ export type TaskFields = Omit<ITask, 'instances' | 'parentIds' | 'childIds' | 't
     parentTasks?: QuerySet<Task>,
     subTasks?: QuerySet<Task>,
     subTaskInstances?: QuerySet<TaskInstance>,
-    dueDate: Date,
+    dueDate: number,
     tags: MutableQuerySet<Tag>,
 }
 export type TaskProps = CreateProps<Task, TaskFields>;
@@ -27,8 +27,8 @@ export class Task extends Model<typeof Task, TaskFields> {
         name: attr(),
         content: attr( { getDefault: () => '' } ),
         complete: attr( { getDefault: () => false } ),
-        completedDate: attr(),
-        dueDate: attr( { getDefault: () => new Date() } ),
+        completed: attr(),
+        dueDate: attr( { getDefault: () => new Date().getTime() } ),
         tags: many( 'Tag', 'tasks' ),
         parentTasks: many( {
             to: 'this',
@@ -36,7 +36,7 @@ export class Task extends Model<typeof Task, TaskFields> {
             through: 'TaskInstance',
             throughFields: [ 'parent', 'task' ]
         } ),
-        created: attr( { getDefault: () => new Date() } ),
+        created: attr( { getDefault: () => new Date().getTime() } ),
     }
 
     // static create<M extends AnyModel, TProps extends CreateProps<M>>(userProps: TProps): SessionBoundModel<M,

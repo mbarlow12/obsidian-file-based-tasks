@@ -10,7 +10,7 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
         complete,
         tags,
         content,
-        completedDate,
+        completed,
         created,
         dueDate
     } = iTask;
@@ -20,7 +20,7 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
         name,
         tags,
         complete,
-        completedDate,
+        completed,
         dueDate,
         created,
         content,
@@ -49,7 +49,7 @@ export const instancePropsFromTask = (
         parentInstance,
         task: task.id,
         rawText: task.name,
-        parent: parentInstance.task
+        parent: parentInstance?.task
     };
 }
 
@@ -98,7 +98,7 @@ export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, Instance
         line,
         links: [],
         childLines: subTaskInstances.toRefArray().map( i => i.line ),
-        completedDate: task.completedDate,
+        completed: task.completed,
         complete: task.complete,
         tags: task.tags.toRefArray().map( t => t.name ),
         rawText
@@ -110,7 +110,7 @@ export const iTask = ( mTask: SessionBoundModel<Task, TaskFields> ): ITask => {
         id,
         name,
         complete,
-        completedDate,
+        completed,
         created,
         dueDate,
         instances,
@@ -121,7 +121,7 @@ export const iTask = ( mTask: SessionBoundModel<Task, TaskFields> ): ITask => {
         id,
         name,
         complete,
-        completedDate,
+        completed,
         childIds: mTask.subTasks.toRefArray().map( st => st.id ),
         parentIds: mTask.parentTasks.toRefArray().map( pt => pt.id ),
         tags: mTask.tags.toRefArray().map( t => t.name ),
@@ -136,14 +136,14 @@ export const taskCreatePropsFromInstance = ( {
     tags,
     complete,
     dueDate,
-    completedDate,
+    completed,
 }: ITaskInstance ): TaskProps => ({
     name,
     complete,
     tags,
-    dueDate: dueDate ?? new Date(),
-    completedDate: completedDate || (complete && new Date()) || undefined,
-    created: new Date(),
+    dueDate: dueDate ?? new Date().getTime(),
+    completed: completed ?? complete ? new Date().getTime() : undefined,
+    created: new Date().getTime(),
 });
 
 export const taskUpdatePropsFromITaskInstance = (
@@ -158,9 +158,9 @@ export const taskUpdatePropsFromITaskInstance = (
         ], tagsEqual ),
     };
     if ( complete && !task.complete )
-        props.completedDate = new Date();
-    if ( !complete && task.completedDate ) {
-        props.completedDate = undefined;
+        props.completed = new Date().getTime();
+    if ( !complete && task.completed ) {
+        props.completed = undefined;
     }
     return props;
 }

@@ -40,13 +40,13 @@ export const emptyTask = (): ITask => {
         id,
         name,
         complete,
-        created: new Date(),
+        created: new Date().getTime(),
         content: '',
         instances: [],
         childIds: [],
         tags: [],
         parentIds: [],
-        dueDate: new Date()
+        dueDate: new Date().getTime()
     }
 }
 export const PLACEHOLDER_ID = -1;

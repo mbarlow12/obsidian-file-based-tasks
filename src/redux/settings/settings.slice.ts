@@ -1,7 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Ref } from 'redux-orm';
 import { ParserSettings } from '../../parse/Parser';
-import { Task } from '../orm';
+import { DEFAULT_BACKLOG_SETTING, DEFAULT_COMPLETED_SETTING } from '../orm';
 import { PluginSettings, RenderOpts, SettingsPayload } from './settings.types';
 
 export const DEFAULT_PARSER_SETTINGS: ParserSettings = {
@@ -20,7 +19,7 @@ export const DEFAULT_RENDER_OPTS: RenderOpts = {
     tags: true,
     recurrence: true,
     dueDate: true,
-    completedDate: true,
+    showCompletedDate: true,
     strikeThroughOnComplete: false
 };
 
@@ -30,8 +29,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     maxTasks: 500,
     minTaskId: 1000,
     indexFiles: {
-        'Backlog.md': ( row: Ref<Task>) => !row.complete,
-        'Completed.md': ( row: Ref<Task>) => row.complete
+        'Backlog.md': DEFAULT_BACKLOG_SETTING,
+        'Completed.md': DEFAULT_COMPLETED_SETTING
     },
     timeBeforeArchive: 45,
     deleteSubtaskWithTask: false,

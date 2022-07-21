@@ -45,11 +45,11 @@ describe( "Model relationships", () => {
         const task = session.Task.withId( 10000 ) ?? session.Task.create( {
             id: 10000, name: 'created task 1',
         } );
-        const d = new Date();
-        task.update( { completedDate: d } );
-        expect( task.completedDate ).toEqual( new Date( d ) );
-        task.update( { completedDate: undefined } );
-        expect( task.completedDate ).toBeFalsy();
+        const d = new Date().getTime();
+        task.update( { completed: d } );
+        expect( task.completed ).toEqual( new Date( d ) );
+        task.update( { completed: undefined } );
+        expect( task.completed ).toBeFalsy();
     } );
 
     it( 'automatically adds instances to task', () => {

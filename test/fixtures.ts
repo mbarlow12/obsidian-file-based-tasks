@@ -33,8 +33,8 @@ export const INITIAL_TASKS: Record<number, CreateProps<Task> & { id: number }> =
         complete: false,
         content: '',
         tags: TAGS[ i ],
-        created: new Date(),
-        dueDate: new Date(),
+        created: new Date().getTime(),
+        dueDate: new Date().getTime(),
     }
     return {
         ...acc,
