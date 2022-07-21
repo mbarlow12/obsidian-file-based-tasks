@@ -1,4 +1,4 @@
-import { attr, CreateProps, many, Model, MutableQuerySet, QuerySet } from 'redux-orm';
+import { attr, CreateProps, many, Model, MutableQuerySet, QuerySet, SessionBoundModel } from 'redux-orm';
 import { ITask } from '../types';
 import { MIN_ID, Tag, TaskInstance } from './index';
 
@@ -11,6 +11,8 @@ export type TaskFields = Omit<ITask, 'instances' | 'parentIds' | 'childIds' | 't
     tags: MutableQuerySet<Tag>,
 }
 export type TaskProps = CreateProps<Task, TaskFields>;
+
+export type MTask = SessionBoundModel<Task>;
 
 export class Task extends Model<typeof Task, TaskFields> {
     private fields: TaskFields;

@@ -9,6 +9,8 @@ import {
     allTaskFiles,
     allTasks,
     bestEffortDeduplicate,
+    filePathInstances,
+    fileRecordsEqual,
     iTask,
     iTaskInstance,
     ITaskInstance,
@@ -25,6 +27,7 @@ import {
 } from './redux/orm';
 import { deleteFile, isTaskAction, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
 import { repopulateIndexFiles, updateFileInstancesReducer } from './redux/orm/reducer';
+import { FileITaskInstanceRecord } from './redux/orm/types';
 import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
 import settingsSlice from './redux/settings/settings.slice';
 import { PluginState } from './redux/types';
@@ -237,7 +240,13 @@ export default class ObsidianTaskManager extends Plugin {
             await vault.cachedRead( file ),
             this.settings.parseOptions
         );
-        this.store.dispatch( updateFileInstances( file.path, instances ) );
+        const state = this.store.getState();
+        const existing = filePathInstances( state.taskDb, this.orm.session( state.taskDb ) )( file.path ).toModelArray()
+            .reduce( ( rec, mIt ) => ({
+                ...rec, [ mIt.line ]: iTaskInstance( mIt )
+            }), {} as FileITaskInstanceRecord );
+        if ( !fileRecordsEqual( instances, existing ) )
+            this.store.dispatch( updateFileInstances( file.path, instances ) );
     }
 
     registerCommands() {
@@ -291,11 +300,11 @@ export default class ObsidianTaskManager extends Plugin {
             name: 'Toggle Task',
             hotkeys: [],
             editorCallback: ( editor, view ) => {
+                const { line } = editor.getCursor();
                 const cache = this.app.metadataCache.getFileCache( view.file );
                 const li = cache.listItems?.find( ( i ) => i.position.start.line === line );
                 if ( !li )
                     return;
-                const { line } = editor.getCursor();
                 const parser = Parser.create( this.settings.parseOptions );
                 const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
                 if ( taskInstance && taskInstance.id > 0 )

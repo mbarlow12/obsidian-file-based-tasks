@@ -1,6 +1,15 @@
 import { CreateProps, SessionBoundModel, UpdateProps } from 'redux-orm';
-import { filterUnique, InstanceFields, ITask, Task, TaskFields, TaskInstance, TaskProps } from './index';
-import { instancesKey, tagsEqual } from './models';
+import {
+    filterUnique,
+    InstanceFields,
+    ITask,
+    removeUndefined,
+    Task,
+    TaskFields,
+    TaskInstance,
+    TaskProps
+} from './index';
+import { instancesKey, MTask, MTaskInstance, tagsEqual } from './models';
 import { ITaskCreate, ITaskInstance } from './types';
 
 export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task> => {
@@ -28,7 +37,7 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
 }
 
 export const instancePropsFromTask = (
-    task: SessionBoundModel<Task, {}>,
+    task: MTask,
     filePath: string,
     line = 0,
 ): CreateProps<TaskInstance> => {
@@ -39,9 +48,9 @@ export const instancePropsFromTask = (
         if ( instMatch.exists() )
             acc.push( instMatch.first() );
         return [ ...acc ];
-    }, [] as Array<SessionBoundModel<TaskInstance, {}>> )
+    }, [] as Array<MTaskInstance> )
     const parentInstance = pInsts.shift();
-    return {
+    return removeUndefined( {
         key,
         filePath,
         line,
@@ -50,7 +59,7 @@ export const instancePropsFromTask = (
         task: task.id,
         rawText: task.name,
         parent: parentInstance?.task
-    };
+    } );
 }
 
 export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): CreateProps<TaskInstance> => {
@@ -137,26 +146,27 @@ export const taskCreatePropsFromInstance = ( {
     complete,
     dueDate,
     completed,
-}: ITaskInstance ): TaskProps => ({
+}: ITaskInstance ): TaskProps => removeUndefined( {
     name,
     complete,
     tags,
     dueDate: dueDate ?? new Date().getTime(),
     completed: completed ?? complete ? new Date().getTime() : undefined,
     created: new Date().getTime(),
-});
+} );
 
 export const taskUpdatePropsFromITaskInstance = (
     { name, complete, tags, dueDate }: ITaskInstance,
     task: SessionBoundModel<Task>
 ): UpdateProps<Task> => {
-    const props: UpdateProps<Task> = {
-        name, complete, dueDate,
+    const props: UpdateProps<Task> = removeUndefined( {
+        name, complete,
+        ...(dueDate && { dueDate }),
         tags: filterUnique( [
             ...task.tags.toModelArray(),
             ...tags
         ], tagsEqual ),
-    };
+    } );
     if ( complete && !task.complete )
         props.completed = new Date().getTime();
     if ( !complete && task.completed ) {

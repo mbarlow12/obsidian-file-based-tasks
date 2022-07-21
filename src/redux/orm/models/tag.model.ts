@@ -1,10 +1,12 @@
-import { attr, IdOrModelLike, Model, QuerySet } from 'redux-orm';
+import { attr, IdOrModelLike, Model, QuerySet, SessionBoundModel } from 'redux-orm';
 import { Task } from '../models';
 
 export interface TagFields {
     name: string,
     tasks?: QuerySet<Task>,
 }
+
+export type MTag = SessionBoundModel<Tag>;
 
 export class Tag extends Model<typeof Tag, TagFields> {
     static modelName = 'Tag' as const;

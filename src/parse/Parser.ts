@@ -29,7 +29,7 @@ const parseDueDate = ( dueDate: string ): Date | null => chrono.parseDate( dueDa
 
 export class Parser {
     private settings: ParseOptions;
-    public static CHECKLIST_REGEX = /^\s*[-*](?: \[[ xX*]])?/;
+    public static CHECKLIST_REGEX = /^\s*[-*](?: \[[ xX*]])/;
     public static LINK_REGEX = /\[\[[^\][]+\]\]/g;
     public static LINE_REGEX = /^\s*[-*] (\[(?<complete>[ xX*])?])\s+(?<taskLine>.*)$/;
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
@@ -54,7 +54,8 @@ export class Parser {
     /*
      todo: handle strikethrough parsing, start/end with double tildes and adding removing completed dates
      */
-    parseInstanceFromLine( line: string, filePath: string, { position, parent }: ListItemCache ): ITaskInstance {
+    parseInstanceFromLine( line: string, filePath: string, lic: ListItemCache ): ITaskInstance {
+        const { position, parent } = lic;
         if ( line.match( Parser.RENDERED_TASK_REGEX ) ) {
             // parse as task
             return {
@@ -65,6 +66,7 @@ export class Parser {
                 childLines: []
             };
         }
+
 
         const pTask: ParsedTask = this.parseLine( line );
         if ( !pTask ) {
@@ -80,7 +82,8 @@ export class Parser {
                     parentLine: parent
                 }
             }
-            return null;
+
+            return this.parseListItemLine( line, filePath, lic );
         }
         return {
             ...pTask,
@@ -167,7 +170,7 @@ export class Parser {
         return {
             ...pTask,
             id,
-            name: pTask.name.trim(),
+            name: name.trim(),
             tags,
             dueDate
         };
@@ -307,11 +310,8 @@ export class Parser {
         if ( match ) {
             const { complete, name, linkPath, id, linkId } = match.groups;
             const linkName = path.parse( linkPath ).name;
-            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() ) {
-                // eslint-disable-next-line no-debugger
-                debugger;
+            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
                 throw Error( `Tasks with ids cannot be rendered with a different task's link at the end of the link.` );
-            }
             const { tags, links, dueDate } = this.parseLineMetadata( line );
             if ( !name )
                 return null;

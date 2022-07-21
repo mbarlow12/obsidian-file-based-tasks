@@ -119,8 +119,6 @@ export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 
 }
 
 export const taskFullPath = ( task: ITask | ITaskInstance | string, id?: number, dir = 'tasks' ) => {
-    // eslint-disable-next-line no-debugger
-    debugger;
     if ( typeof task !== 'string' ) {
         id = task.id;
         task = task.name;

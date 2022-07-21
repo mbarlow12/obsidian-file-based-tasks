@@ -1,4 +1,4 @@
-import { attr, CreateProps, fk, Model, QuerySet } from 'redux-orm';
+import { attr, CreateProps, fk, Model, QuerySet, SessionBoundModel } from 'redux-orm';
 import { Task } from '../models';
 
 export interface InstanceFields {
@@ -17,6 +17,8 @@ export type InstanceProps = CreateProps<TaskInstance>;
 export type MinInstanceProps =
     Omit<CreateProps<TaskInstance>, 'key' | 'parentLine'>
     & { key?: string, parentLine?: number }
+
+export type MTaskInstance = SessionBoundModel<TaskInstance>;
 
 export class TaskInstance extends Model<typeof TaskInstance, InstanceFields> {
     private fields: InstanceFields;

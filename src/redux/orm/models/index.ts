@@ -3,9 +3,9 @@ import { ITask, ITaskInstance } from '../types';
 export { Task } from './task.model';
 export { TaskInstance } from './instance.model';
 export { Tag, tagsEqual } from './tag.model';
-export type { TaskProps, TaskFields } from './task.model';
-export type { MinInstanceProps, InstanceProps, InstanceFields } from './instance.model';
-export type { TagFields } from './tag.model';
+export type { TaskProps, TaskFields, MTask } from './task.model';
+export type { MinInstanceProps, InstanceProps, InstanceFields, MTaskInstance } from './instance.model';
+export type { TagFields, MTag } from './tag.model';
 
 export const MIN_ID = 10000;
 export const INSTANCE_KEY_DELIM = '||';

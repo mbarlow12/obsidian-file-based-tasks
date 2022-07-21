@@ -129,14 +129,14 @@ describe( 'Task parsing', () => {
         task = parser.parseLine( line );
         while ( checkDate.getDay() !== 0 )
             checkDate.setDate( checkDate.getDate() + 1 );
-        checkDate.setDate(checkDate.getDate() + 5);
+        checkDate.setDate( checkDate.getDate() + 5 );
         expect( task.dueDate ).toEqual( checkDate.getTime() );
 
         line = '- [ ] test task name #atag @three weeks from now #anothertag';
         task = parser.parseLine( line );
         const d = todayGetter();
-        d.setDate(d.getDate() + 21);
-        expect( task.dueDate).toEqual( d.getTime() )
+        d.setDate( d.getDate() + 21 );
+        expect( task.dueDate ).toEqual( d.getTime() )
     } );
 
     // test( 'Parse recurrences', () => {
@@ -267,13 +267,19 @@ describe( 'Task parsing', () => {
         } ).toThrow( Error );
 
         line = `     - [ ] [[another linked one (abc1)]] ^abc1`;
-        task = parser.parseInstanceFromLine( line, 'file.md', lic);
-        expect(task.id).toEqual(taskIdToUid('abc1'));
+        task = parser.parseInstanceFromLine( line, 'file.md', lic );
+        expect( task.id ).toEqual( taskIdToUid( 'abc1' ) );
 
 
         line = `     - [ ] easy [[tasks/easy (abc1)]] ^abc1`;
-        task = parser.parseInstanceFromLine( line, 'file.md', lic);
-        expect(task.id).toEqual(taskIdToUid('abc1'));
+        task = parser.parseInstanceFromLine( line, 'file.md', lic );
+        expect( task.id ).toEqual( taskIdToUid( 'abc1' ) );
+    } );
+
+    test( 'non checklist lines', () => {
+        let line = '- test task';
+        let task = parser.parseInstanceFromLine( line, '', { parent: -1, task: ' ', position: emptyPosition( 0 ) } );
+        expect( task.name ).toEqual( 'test task' );
     } );
 
 } )

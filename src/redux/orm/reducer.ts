@@ -7,6 +7,7 @@ import {
     IndexFileSettings,
     instancePropsFromITaskInstance,
     instancePropsFromTask,
+    iTask,
     iTaskInstance,
     queryToComparer,
     TaskAction,
@@ -16,7 +17,7 @@ import {
     taskUpdatePropsFromITaskInstance,
     ToggleTaskComplete
 } from './index';
-import { instancesKey } from './models';
+import { instancesKey, MTask, MTaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
 import { filePathInstances } from './selectors';
 import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
@@ -30,23 +31,43 @@ export const repopulateIndexFiles = (
         const { query } = indexFiles[ filePath ];
         const filterFn = queryToComparer( query )
         session.TaskInstance.filter( ti => ti.filePath === filePath ).delete();
-        const tasks = session.Task.filter( filterFn ).orderBy( 'created' ).toModelArray();
+        const filteredTasks = session.Task.filter( filterFn )
+            .orderBy( 'created' ).toModelArray()
+            .filter( mT => !mT.parentTasks.filter( filterFn ).exists() );
+        // .reduce( ( tops, t ) => {
+        //         const parents = [ ...t.parentTasks.filter( filterFn ).toModelArray() ];
+        //         while ( parents.length > 0 ) {
+        //             const p = parents.shift();
+        //             const fParents = p.parentTasks.filter( filterFn ).toModelArray()
+        //             if ( fParents.length === 0 ) // no parents that apply (e.g. no complete parents
+        //                 tops.push( p )
+        //             else
+        //                 parents.unshift( ...fParents );
+        //         }
+        //         return tops;
+        //     }, [] as MTask[] ), ( a, b ) => a.id === b.id );
         const seenIds = new Set<number>();
         let line = 0;
-        for ( let i = 0; i < tasks.length; i++ ) {
-            const task = tasks[ i ];
+        for ( let i = 0; i < filteredTasks.length; i++ ) {
+            const task = filteredTasks[ i ];
             if ( seenIds.has( task.id ) )
                 continue;
             seenIds.add( task.id );
-            const parentInstance = session.TaskInstance.create( instancePropsFromTask( task, filePath, line++ ) );
-
-            if ( task.subTasks.exists() ) {
-                const subTasks = task.subTasks.all().toModelArray();
-                subTasks.forEach( st => session.TaskInstance.create( {
-                    ...instancePropsFromTask( st, filePath, line++ ),
+            const currentParent = session.TaskInstance.create( instancePropsFromTask( task, filePath, line++ ) );
+            const subTasks = [
+                ...task.subTasks.toModelArray()
+                    .map( st => [ currentParent, st ] as [ MTaskInstance, MTask ] )
+            ];
+            while ( subTasks.length > 0 ) {
+                const [ parentInstance, subtask ] = subTasks.shift();
+                if ( !filterFn( iTask( subtask ) ) )
+                    continue;
+                const subInst = session.TaskInstance.create( {
+                    ...instancePropsFromTask( subtask, filePath, line++ ),
                     parentInstance,
                     parentLine: parentInstance.line
-                } ) );
+                } );
+                subtask.subTasks.toModelArray().forEach( tim => subTasks.unshift( [ subInst, tim ] ) )
             }
         }
     }

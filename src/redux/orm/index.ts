@@ -1,6 +1,5 @@
 import { Comparer } from '@reduxjs/toolkit';
-import { SessionBoundModel } from 'redux-orm';
-import { Task } from './models';
+import { MTask, Task } from './models';
 import { TasksORMSession } from './schema';
 import { FileITaskInstanceRecord, ITask, ITaskInstance } from './types';
 
@@ -23,6 +22,16 @@ export const arraysEqual = <T>(
             return false;
     }
     return true;
+}
+
+export const removeUndefined = <T extends Record<keyof T, unknown>>( obj: T ): T => {
+    const ret: T = { ...obj };
+    for ( const key in obj ) {
+        if ( obj[ key ] === null || obj[ key ] === undefined || typeof obj[ key ] === 'undefined' )
+            continue;
+        ret[ key ] = obj[ key ]
+    }
+    return ret;
 }
 
 export const instanceComparer: Comparer<ITaskInstance> = ( a, b ) => {
@@ -79,7 +88,7 @@ export const tasksEqual = ( a: ITask, b: ITask ) => {
     return iTaskComparer( a, b ) === 1;
 };
 
-export const instanceIsOfTask = ( instance: ITaskInstance, task: SessionBoundModel<Task, {}> ): boolean => {
+export const instanceIsOfTask = ( instance: ITaskInstance, task: MTask ): boolean => {
     if (
         (instance.id > 0 && instance.id !== task.id)
         || instance.name !== task.name

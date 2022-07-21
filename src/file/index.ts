@@ -27,10 +27,12 @@ export const removeTaskDataFromContents = ( contents: string, cache: CachedMetad
     const lines = contents.split( '\n' );
     for ( const taskItem of taskItems ) {
         let taskLine = lines[ taskItem.position.start.line ];
-        const renderedMatch = taskLine.match(Parser.RENDERED_TASK_REGEX);
-        if ( renderedMatch ) {
-            taskLine = taskLine.replace(/\[\[.*\(([\w\d]+)\)]] \^\1\s*$/, '')
-                .replace( /(?<!^\s*)\s+/, ' ' )
+       const task = parser.parseLine( taskLine );
+        if ( task ) {
+            // return line to normal
+            taskLine = taskLine.replace( Parser.ID_REGEX, '' )
+                .replace( Parser.FILE_LINK_REGEX, '' )
+                .replace( /\s+(?<!^\s+)/, ' ' )
                 .trimEnd();
             lines[ taskItem.position.start.line ] = taskLine;
         }
