@@ -1,5 +1,5 @@
 import { createDraftSafeSelector, createSelector, Selector } from '@reduxjs/toolkit';
-import { ModelType, ORM } from 'redux-orm';
+import { createSelector as createOrmSelector, ModelType, ORM } from 'redux-orm';
 import { PluginState } from '../types';
 import { Task, TaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema';
@@ -29,9 +29,23 @@ export const sessionTaskInstance = createDraftSafeSelector(
 );
 
 
-export const allTasks = createDraftSafeSelector(
+export const allTasks = createSelector(
     ormSelector( sessionTask ),
     ( task: ModelType<Task> ) => task.all()
+);
+
+export const searchTasks = createSelector(
+    (
+        state: TasksORMState,
+        orm: ORM<TaskORMSchema>
+    ) => createOrmSelector( orm, ( state: TasksORMState ) => state, session => session.Task )(state),
+    (
+        state: TasksORMState,
+        search: string
+    ) => search,
+    ( tasks, search ) => {
+        return tasks.filter(t => t.name.includes( search )).all().toModelArray();
+    }
 );
 
 export const allTaskFiles = createSelector(
@@ -59,16 +73,6 @@ export const taskParents = createDraftSafeSelector(
     ( _: TasksORMState, id: number ) => id,
     ( task: ModelType<Task>, id: number ) => task.withId( id )?.parentTasks?.all()
 );
-
-// export const getNextTaskIdAboveMin = ( minId = 0 ) => createDraftSafeSelector(
-//     ( ormState: TasksORMState, orm: ORM<TaskORMSchema> | TasksORMSession ) => nextTaskId( ormState, orm ),
-//     ( id: number ) => Math.max( id, minId )
-// );
-
-export const getNextTaskIdAboveMin = ( state: TasksORMState, miniId = 0 ) => {
-    const nextId = Math.max( ...state.Task.items, 0 ) + 1;
-    return Math.max( miniId, nextId );
-}
 
 export const taskInstances = createDraftSafeSelector(
     ( s: TasksORMState, orm: ORM<TaskORMSchema> ) => sessionTask( s, orm ),

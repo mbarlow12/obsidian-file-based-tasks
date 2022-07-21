@@ -34,18 +34,6 @@ export const repopulateIndexFiles = (
         const filteredTasks = session.Task.filter( filterFn )
             .orderBy( 'created' ).toModelArray()
             .filter( mT => !mT.parentTasks.filter( filterFn ).exists() );
-        // .reduce( ( tops, t ) => {
-        //         const parents = [ ...t.parentTasks.filter( filterFn ).toModelArray() ];
-        //         while ( parents.length > 0 ) {
-        //             const p = parents.shift();
-        //             const fParents = p.parentTasks.filter( filterFn ).toModelArray()
-        //             if ( fParents.length === 0 ) // no parents that apply (e.g. no complete parents
-        //                 tops.push( p )
-        //             else
-        //                 parents.unshift( ...fParents );
-        //         }
-        //         return tops;
-        //     }, [] as MTask[] ), ( a, b ) => a.id === b.id );
         const seenIds = new Set<number>();
         let line = 0;
         for ( let i = 0; i < filteredTasks.length; i++ ) {

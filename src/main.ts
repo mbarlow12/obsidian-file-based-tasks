@@ -51,12 +51,12 @@ export const c: Dis = {
 
 export default class ObsidianTaskManager extends Plugin {
     taskSuggest: TaskEditorSuggest;
+    store: Store<PluginState, TaskAction | SettingsAction>
+    orm: ORM<TaskORMSchema>;
+    state: PluginState;
     private currentFile: TFile;
     private vaultLoaded = false;
     private initialized = false;
-    private store: Store<PluginState, TaskAction | SettingsAction>
-    private state: PluginState;
-    private orm: ORM<TaskORMSchema>;
     private selectFiles: Selector<TasksORMState, string[]>;
     private selectFileInstances: Selector<TasksORMState, ITaskInstance[]>;
     private selectCurrentIds: Selector<TasksORMState, number[]>
@@ -107,9 +107,8 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     get parseOptions() {
-        return this.state.settings.parseOptions;
+        return this.settings.parseOptions;
     }
-
 
     async handleStoreUpdate() {
         const { vault, metadataCache } = this.app;
@@ -158,8 +157,6 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     onunload() {
-        this.taskSuggest?.unsubscribe();
-
         // use store state
         const proms = this.app.vault.getMarkdownFiles().filter( f => !this.ignorePath( f.path ) )
             .map( async file => {

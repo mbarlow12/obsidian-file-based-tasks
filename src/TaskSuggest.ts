@@ -10,7 +10,7 @@ import {
 import { renderTaskInstance } from './file/render';
 import ObsidianTaskManager from './main';
 import { Parser } from './parse/Parser';
-import { ITask, TasksORMState } from './redux/orm';
+import { allTasks, iTask, ITask, TasksORMState } from './redux/orm';
 import { emptyTaskInstance } from './redux/orm/models';
 
 
@@ -24,45 +24,22 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
     app: App;
     taskState: TasksORMState;
 
-    private parser: Parser;
     private plugin: ObsidianTaskManager;
 
     constructor( app: App, plugin: ObsidianTaskManager ) {
         super( app );
         this.app = app;
         this.plugin = plugin;
-        this.parser = new Parser();
-        // this.subscribe();
-    }
-
-    subscribe() {
-    }
-
-    unsubscribe() {
-    }
-
-    updateState( state: TasksORMState ) {
-        this.taskState = state;
     }
 
     getSuggestions( context: EditorSuggestContext ): ITask[] | Promise<ITask[]> {
-        return [];
-        // const searchText = context.query;
-        // const tasks = [...this.taskState.taskIndex.values()].filter(t => t.name.startsWith(searchText));
-        // if ( !context?.query || context.query.trim() === '' )
-        //     return [ ...this.taskState.taskIndex.values() ].filter( t => !t.complete ).sort()
-        //
-        // return [ ...this.taskState.taskIndex.values() ]
-        //     .filter( t => t.name.includes( context.query ) && !t.complete )
-        //     .sort( ( a, b ) => {
-        //         if ( a.name < b.name )
-        //             return -1;
-        //         if ( b.name < a.name )
-        //             return 1;
-        //         if ( a.name === b.name ) {
-        //             return a.created.getTime() - b.created.getTime();
-        //         }
-        //     } );
+        const searchText = context.query;
+        const tasksQuery = allTasks( this.plugin.store.getState().taskDb, this.plugin.orm );
+        if ( !context?.query || context.query.trim() === '' )
+            return tasksQuery.toModelArray().map( t => iTask( t ) );
+        return tasksQuery.filter( t => t.name.startsWith( searchText ) )
+            .toModelArray()
+            .map( m => iTask( m ) );
     }
 
     onTrigger( cursor: EditorPosition, editor: Editor, file: TFile ): EditorSuggestTriggerInfo | null {
