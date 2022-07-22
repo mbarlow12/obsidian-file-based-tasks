@@ -46,7 +46,7 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
         if ( editor.getLine( cursor.line ).match( Parser.ID_REGEX ) )
             return null
         const line = editor.getLine( cursor.line ).substring( 0, cursor.ch );
-        const match = line.match( /\s*[-*] \[.]\s+([\w\d]+)$/ );
+        const match = line.match( /\s*[-*] \[.]\s+([\w\d].*)$/ );
         if ( match ) {
             const q = match[ 1 ].trim();
             return {
@@ -74,10 +74,8 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
     selectSuggestion( task: ITask, evt: MouseEvent | KeyboardEvent ): void {
         if ( this.context ) {
             const {
-                editor, query, start, end
+                editor, start, end, file
             } = this.context;
-            const range = editor.getRange( start, end );
-            const rStart = editor.posToOffset( editor.getCursor() ) - query.length;
             const inst = emptyTaskInstance()
             const { id, name, complete } = task;
             const line = renderTaskInstance(
@@ -90,14 +88,16 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
                 {
                     ...this.plugin.settings.renderOptions,
                     links: false,
-                    primaryLink: false,
+                    primaryLink: true,
                 }
             )
             editor.replaceRange(
-                `${range[ range.length - 1 ] === " " ? '' : ' '}${line.replace( /[*-]\s+\[.]\s+/, '' )}`,
-                editor.offsetToPos( rStart ),
+                line,
+                start,
                 end
             );
+
+            this.plugin.dispatchFileTaskUpdateSync( file );
         }
     }
 }

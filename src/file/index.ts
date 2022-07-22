@@ -1,4 +1,5 @@
 import { CachedMetadata, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
+import path from 'path';
 import { Parser } from '../parse/Parser';
 import { taskUidToId } from '../redux';
 import { ParseOptions, PluginSettings } from '../redux/settings';
@@ -27,7 +28,7 @@ export const removeTaskDataFromContents = ( contents: string, cache: CachedMetad
     const lines = contents.split( '\n' );
     for ( const taskItem of taskItems ) {
         let taskLine = lines[ taskItem.position.start.line ];
-       const task = parser.parseLine( taskLine );
+        const task = parser.parseLine( taskLine );
         if ( task ) {
             // return line to normal
             taskLine = taskLine.replace( Parser.ID_REGEX, '' )
@@ -44,19 +45,27 @@ export const getVaultConfig = ( v: Vault ) => {
     return (v as Vault & { config: Record<string, boolean | number> }).config;
 }
 
-export const getTasksFolder = async ( tasksDir: string, vault: Vault ) => {
+export const getTasksFolder = ( tasksDir: string, vault: Vault ) => {
     if ( !tasksDir )
         tasksDir = DEFAULT_TASKS_DIR;
-    return vault.getAbstractFileByPath( tasksDir ) as TFolder ?? await vault.createFolder( tasksDir );
+    return vault.getAbstractFileByPath( tasksDir ) as TFolder;
 }
 
 export const isTaskFile = (
-    cache: CachedMetadata,
-): boolean => cache?.frontmatter &&
-    cache.frontmatter.type &&
-    cache.frontmatter.type === TaskRecordType;
+    file: TAbstractFile,
+    cache?: CachedMetadata,
+): boolean => {
+    if ( cache ) {
+        return cache?.frontmatter &&
+            cache.frontmatter.type &&
+            cache.frontmatter.type === TaskRecordType;
+    }
 
-export const deleteFileData = async (
+    const parts = path.parse( file.path );
+    return parts.dir === getTasksFolder( 'tasks', file.vault ).path;
+}
+
+export const deleteTaskDataFromFile = async (
     file: TAbstractFile,
     vault: Vault,
     cache: CachedMetadata,
@@ -64,7 +73,7 @@ export const deleteFileData = async (
 ) => {
     if ( !file )
         return;
-    if ( isTaskFile( cache ) ) {
+    if ( isTaskFile( file ) ) {
         await vault.delete( file );
     }
     else {
@@ -72,11 +81,4 @@ export const deleteFileData = async (
         const removed = removeTaskDataFromContents( contents, cache, settings.parseOptions )
         await vault.modify( file as TFile, removed );
     }
-}
-
-export const getFile = async ( path: string, vault: Vault, create = false ) => {
-    let ret = vault.getAbstractFileByPath( path );
-    if ( !ret && create )
-        ret = await vault.create( path, '' );
-    return ret as TFile;
 }

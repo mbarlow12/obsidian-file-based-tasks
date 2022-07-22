@@ -131,6 +131,8 @@ export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction 
     };
 }
 type Payload<T extends TaskAction> = T['payload'];
+export const deleteTask = createAction<Payload<DeleteTaskAction>>(TaskActionType.DELETE_TASK);
 export const deleteFile = createAction<Payload<DeleteFileAction>>(TaskActionType.DELETE_FILE);
 export const renameFileAction = createAction<Payload<RenameFileAction>>(TaskActionType.RENAME_FILE);
 export const toggleTaskStatus = createAction<Payload<ToggleTaskComplete>>(TaskActionType.TOGGLE_COMPLETE);
+export const updateTaskAction = createAction<Payload<UpdateTaskAction>>(TaskActionType.UPDATE_TASK);

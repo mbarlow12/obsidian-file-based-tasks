@@ -218,6 +218,13 @@ const toggleComplete = ( payload: ToggleTaskComplete['payload'], session: TasksO
     const complete = !task.complete;
     const completed = complete ? new Date().getTime() : undefined;
     task.update( { complete, completed } );
-    task.subTasks.update( { complete, completed } );
+    if ( complete ) {
+        const subTasks = [ ...task.subTasks.toModelArray() ];
+        while ( subTasks.length > 0 ) {
+            const st = subTasks.shift();
+            st.update( { complete } );
+            subTasks.push( ...st.subTasks.toModelArray() );
+        }
+    }
 }
 

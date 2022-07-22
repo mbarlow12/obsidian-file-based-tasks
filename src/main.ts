@@ -1,10 +1,10 @@
 import { configureStore, createSelector, Dispatch, Selector, Store } from '@reduxjs/toolkit';
-import { App, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
+import { App, CachedMetadata, debounce, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
 import { ORM } from 'redux-orm';
-import { deleteFileData, getFile, getTasksFolder, removeTaskDataFromContents } from './file';
+import { deleteTaskDataFromFile, getTasksFolder, isTaskFile, removeTaskDataFromContents } from './file';
 import { taskFullPath, writeState, writeTask } from './file/render';
 import { getFileInstances, readTaskFile } from './parse';
-import { Parser } from './parse/Parser';
+import { Parser, TASK_BASENAME_REGEX } from './parse/Parser';
 import {
     allTaskFiles,
     allTasks,
@@ -25,7 +25,14 @@ import {
     TasksORMState,
     updateFileInstances
 } from './redux/orm';
-import { deleteFile, isTaskAction, renameFileAction, toggleTaskStatus } from './redux/orm/actions';
+import {
+    deleteFile,
+    deleteTask,
+    isTaskAction,
+    renameFileAction,
+    toggleTaskStatus,
+    updateTaskAction
+} from './redux/orm/actions';
 import { repopulateIndexFiles, updateFileInstancesReducer } from './redux/orm/reducer';
 import { FileITaskInstanceRecord } from './redux/orm/types';
 import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
@@ -132,8 +139,7 @@ export default class ObsidianTaskManager extends Plugin {
             if ( !task )
                 continue;
             const path = taskFullPath( task.name, task.id, this.settings.tasksDirectory );
-            const file = await getFile( path, vault );
-            deletePaths.push( file.path );
+            deletePaths.push( path );
         }
 
         const newPaths = allTaskFiles( newState, this.orm );
@@ -142,14 +148,18 @@ export default class ObsidianTaskManager extends Plugin {
             const newPath = newPaths[ i ];
             currentPaths.remove( newPath );
             const currentFileInstances = this.selectFileInstances( this.state.taskDb, newPath );
-            const file = await getFile( newPath, vault, true );
+            let file = vault.getAbstractFileByPath( newPath ) as TFile;
+            if ( !file )
+                file = await vault.create( newPath, '' );
             const isIndex = file.path in this.settings.indexFiles;
             await writeState( file, vault, newState, this.orm, currentFileInstances, isIndex );
         }
         // delete data from paths not in state
         for ( const currentPath of [ ...currentPaths, ...deletePaths ] ) {
-            const file = await getFile( currentPath, vault );
-            await deleteFileData( file, vault, metadataCache.getFileCache( file ), this.settings )
+            const file = vault.getAbstractFileByPath( currentPath ) as TFile;
+            if ( !file )
+                continue;
+            await deleteTaskDataFromFile( file, vault, metadataCache.getFileCache( file ), this.settings )
         }
 
         this.state = newState;
@@ -211,39 +221,62 @@ export default class ObsidianTaskManager extends Plugin {
         await this.saveData( this.settings );
     }
 
+
     registerEvents() {
         this.registerEvent( this.app.vault.on( 'delete', this.handleFileDeleted.bind( this ) ) );
         this.registerEvent( this.app.vault.on( 'rename', this.handleFileRenamed.bind( this ) ) );
-        this.registerEvent( this.app.workspace.on( 'file-open', async file => {
-            await this.dispatchFileTaskUpdate( this.currentFile );
+
+        this.registerEvent( this.app.workspace.on( 'file-open', file => {
+            if ( this.currentFile ) {
+                const cache = this.app.metadataCache.getFileCache( this.currentFile );
+                // @ts-ignore
+                if ( this.currentFile.deleted || !cache ) return;
+                if ( isTaskFile( this.currentFile, cache ) )
+                    this.dispatchTaskUpdate( this.currentFile, cache )
+                else
+                    this.dispatchFileTaskUpdateSync( this.currentFile )
+            }
             this.currentFile = file;
         } ) );
 
-        this.registerDomEvent( window, 'keyup', async ( ev: KeyboardEvent ) => {
+        const debouncedDispatch = debounce( ( file: TFile ) => {
+            this.dispatchFileTaskUpdateSync( file );
+            console.log( 'just dispatched', (new Date()).getMilliseconds() );
+        }, 300, true );
+
+        this.registerDomEvent( window, 'keydown', async ( ev: KeyboardEvent ) => {
             if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
                 const file = this.app.workspace.getActiveFile() || this.currentFile;
-                await this.dispatchFileTaskUpdate( file );
+                console.log( 'waiting to dispatch', (new Date()).getMilliseconds() );
+                debouncedDispatch( file );
             }
         } );
     }
 
-    async dispatchFileTaskUpdate( file: TFile ) {
+    dispatchTaskUpdate( file: TFile, cache: CachedMetadata ) {
+        this.app.vault.cachedRead( file )
+            .then( data => {
+                const task = readTaskFile( file, cache, data );
+                this.store.dispatch( updateTaskAction( task ) );
+            } );
+    }
+
+    dispatchFileTaskUpdateSync( file: TFile ) {
         if ( !file || this.ignorePath( file.path ) )
             return;
-        const { vault, metadataCache } = this.app;
-        const instances = getFileInstances(
-            file.path,
-            metadataCache.getFileCache( file ),
-            await vault.cachedRead( file ),
-            this.settings.parseOptions
-        );
-        const state = this.store.getState();
-        const existing = filePathInstances( state.taskDb, this.orm.session( state.taskDb ) )( file.path ).toModelArray()
-            .reduce( ( rec, mIt ) => ({
-                ...rec, [ mIt.line ]: iTaskInstance( mIt )
-            }), {} as FileITaskInstanceRecord );
-        if ( !fileRecordsEqual( instances, existing ) )
-            this.store.dispatch( updateFileInstances( file.path, instances ) );
+        const cache = this.app.metadataCache.getFileCache( file );
+        const { parseOptions } = this.settings;
+        const { taskDb } = this.store.getState();
+        this.app.vault.read( file )
+            .then( data => {
+                const instances = getFileInstances( file.path, cache, data, parseOptions );
+                const existing = filePathInstances( taskDb, this.orm.session( taskDb ) )( file.path ).toModelArray()
+                    .reduce( ( rec, mIt ) => ({
+                        ...rec, [ mIt.line ]: iTaskInstance( mIt )
+                    }), {} as FileITaskInstanceRecord );
+                if ( !fileRecordsEqual( instances, existing ) )
+                    this.store.dispatch( updateFileInstances( file.path, instances ) );
+            } );
     }
 
     registerCommands() {
@@ -276,7 +309,11 @@ export default class ObsidianTaskManager extends Plugin {
             editorCallback: async ( editor, view ) => {
                 const { line } = editor.getCursor();
                 const parser = Parser.create( this.settings.parseOptions );
-                const taskInstance = parser.parseLine( editor.getLine( line ) );
+                const li = this.app.metadataCache.getFileCache( view.file ).listItems
+                    .find( lic => lic.position.start.line === line );
+                if ( !li )
+                    return;
+                const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
                 if ( taskInstance && taskInstance.id > 0 ) {
                     const path = taskFullPath( taskInstance.name, taskInstance.id, this.settings.tasksDirectory );
                     const file = this.app.vault.getAbstractFileByPath( path ) as TFile;
@@ -310,36 +347,58 @@ export default class ObsidianTaskManager extends Plugin {
         } );
     }
 
-    private ignorePath( filePath: string ): boolean {
+    ignorePath( filePath: string ): boolean {
         if ( filePath in this.settings.indexFiles )
             return true;
         return this.settings.ignoredPaths.reduce( ( ignored, p ) => ignored || filePath.includes( p ), false )
     }
 
-    private async handleFileDeleted( abstractFile: TAbstractFile ) {
-        if ( !abstractFile || this.ignorePath( abstractFile.path ) )
-            return;
-        this.store.dispatch( deleteFile( { path: abstractFile.path } ) );
+    async getFileData( file: TFile ) {
+        return {
+            cache: this.app.metadataCache.getFileCache( file ),
+            contents: await this.app.vault.read( file )
+        }
     }
 
-    /**
-     * if task file, we're renaming the task, and its presence in all parents & locations
-     * if not a task file, we're only changing location references
-     * @param abstractFile
-     * @param oldPath
-     * @private
-     */
-    private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
-        if ( !abstractFile || this.ignorePath( abstractFile.path ) )
+    private async handleFileDeleted( abstractFile: TAbstractFile ) {
+        if ( !abstractFile || this.ignorePath( abstractFile.path ) || !(abstractFile instanceof TFile) )
             return;
-        this.store.dispatch( renameFileAction( { oldPath, newPath: abstractFile.path } ) );
+        if ( abstractFile.path.includes( this.settings.tasksDirectory ) ) {
+            const idMatch = abstractFile.basename.trim().match( /\(([\w\d]+)\)$/ );
+            if ( idMatch ) {
+                const id = idMatch[ 1 ];
+                this.store.dispatch( deleteTask( Number.parseInt( id, 16 ) ) )
+            }
+        }
+        else {
+            this.store.dispatch( deleteFile( { path: abstractFile.path } ) );
+        }
+    }
+
+    private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
+        if ( !abstractFile || this.ignorePath( abstractFile.path ) || !(abstractFile instanceof TFile) )
+            return;
+
+        if ( abstractFile.path.includes( this.settings.tasksDirectory ) ) {
+            const { cache, contents } = await this.getFileData( abstractFile );
+            const task = readTaskFile( abstractFile, cache, contents );
+            const match = abstractFile.basename.match( TASK_BASENAME_REGEX );
+            if ( !match )
+                return;
+            const { name } = match.groups;
+            this.store.dispatch( updateTaskAction( { ...task, name } ) )
+        }
+        else
+            this.store.dispatch( renameFileAction( { oldPath, newPath: abstractFile.path } ) );
     }
 
     private async processVault( ret = false ) {
         if ( this.vaultLoaded && !ret )
             return;
         const session = this.orm.mutableSession( this.orm.getEmptyState() )
-        const tasksDir = await getTasksFolder( this.settings.tasksDirectory, this.app.vault );
+        const tasksDir = getTasksFolder( this.settings.tasksDirectory, this.app.vault );
+        if ( !tasksDir )
+            await this.app.vault.createFolder( this.settings.tasksDirectory );
         const files = this.app.vault.getMarkdownFiles().filter( f => !this.ignorePath( f.path ) );
         for ( let i = 0; i < files.length; i++ ) {
             const file = files[ i ];

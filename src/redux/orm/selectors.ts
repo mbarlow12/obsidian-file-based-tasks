@@ -30,7 +30,7 @@ export const sessionTaskInstance = createDraftSafeSelector(
 
 
 export const allTasks = createSelector(
-    ormSelector( sessionTask ),
+    (state: TasksORMState, orm: ORM<TaskORMSchema>) => orm.session(state).Task,
     ( task: ModelType<Task> ) => task.all()
 );
 
