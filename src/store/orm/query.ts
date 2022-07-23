@@ -48,7 +48,7 @@ export const DEFAULT_BACKLOG_SETTING: IndexSetting = {
 
 export const DEFAULT_COMPLETED_SETTING: IndexSetting = {
     query: [ 'complete', Operator.EQ, true ],
-    sort: [ 'completed', SortDirection.ASC ]
+    sort: [ 'completed', SortDirection.DESC ]
 }
 
 const inArray = <T>(
