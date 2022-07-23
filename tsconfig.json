@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
-    "outDir": "dist",
+    "baseUrl": "src",
     "inlineSourceMap": true,
     "inlineSources": true,
-    "allowSyntheticDefaultImports": true,
     "module": "ESNext",
     "target": "ES6",
     "allowJs": true,
@@ -16,9 +15,12 @@
       "ES5",
       "ES7",
       "ES2019"
-    ]
+    ],
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist"
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "test/**/*.ts"
   ],
 }

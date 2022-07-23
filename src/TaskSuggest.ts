@@ -7,11 +7,11 @@ import {
     EditorSuggestTriggerInfo,
     TFile
 } from "obsidian";
-import { renderTaskInstance } from './file/render';
+import { taskAsChecklist } from './file';
 import ObsidianTaskManager from './main';
+import { getFileInstances } from './parse';
 import { Parser } from './parse/Parser';
-import { allTasks, iTask, ITask, TasksORMState } from './redux/orm';
-import { emptyTaskInstance } from './redux/orm/models';
+import { allTasks, iTask, ITask, updateFileInstances } from './store/orm';
 
 
 export class TaskEditorSuggest extends EditorSuggest<ITask> {
@@ -22,7 +22,6 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
     context: EditorSuggestContext | null;
     limit: number;
     app: App;
-    taskState: TasksORMState;
 
     private plugin: ObsidianTaskManager;
 
@@ -74,30 +73,33 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
     selectSuggestion( task: ITask, evt: MouseEvent | KeyboardEvent ): void {
         if ( this.context ) {
             const {
-                editor, start, end, file
+                start, file
             } = this.context;
-            const inst = emptyTaskInstance()
             const { id, name, complete } = task;
-            const line = renderTaskInstance(
-                {
-                    ...inst,
-                    id, name, complete
-                },
-                '',
-                this.plugin.settings.tasksDirectory,
-                {
-                    ...this.plugin.settings.renderOptions,
-                    links: false,
-                    primaryLink: true,
-                }
-            )
-            editor.replaceRange(
-                line,
-                start,
-                end
-            );
-
-            this.plugin.dispatchFileTaskUpdateSync( file );
+            const cache = this.app.metadataCache.getFileCache( file );
+            const li = cache.listItems.find( i => i.position.start.line === start.line );
+            this.app.vault.cachedRead( file )
+                .then( contents => {
+                    const cache = this.app.metadataCache.getFileCache( file );
+                    const instances = getFileInstances( file.path, cache, contents, this.plugin.settings.parseOptions );
+                    const parentLine = li?.parent ?? -1;
+                    instances[ start.line ] = {
+                        id,
+                        name,
+                        complete,
+                        filePath: file.path,
+                        line: start.line,
+                        parentLine,
+                        ...(parentLine > -1 && { parentInstance: instances[ parentLine ] }),
+                        dueDate: task.dueDate,
+                        childLines: (cache.listItems ?? []).filter( l => l.parent === start.line )
+                            .map( li => Number.parseInt( li.id || '0', 16 ) ),
+                        rawText: taskAsChecklist( task ),
+                        tags: task.tags,
+                        links: []
+                    };
+                    this.plugin.store.dispatch( updateFileInstances( file.path, instances ) );
+                } );
         }
     }
 }

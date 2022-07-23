@@ -1,5 +1,6 @@
 import { IdOrModelLike } from 'redux-orm';
 import { createTestSession } from '../../../../test/fixtures';
+import { dateStr } from '../../../../test/testUtils';
 import { filterUnique } from '../index';
 import { instancesKey } from './index';
 import { Tag, tagsEqual } from './tag.model';
@@ -47,7 +48,7 @@ describe( "Model relationships", () => {
         } );
         const d = new Date().getTime();
         task.update( { completed: d } );
-        expect( task.completed ).toEqual( new Date( d ) );
+        expect( dateStr(task.completed) ).toEqual( dateStr(d) );
         task.update( { completed: undefined } );
         expect( task.completed ).toBeFalsy();
     } );

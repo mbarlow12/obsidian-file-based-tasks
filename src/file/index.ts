@@ -1,8 +1,8 @@
 import { CachedMetadata, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
 import path from 'path';
 import { Parser } from '../parse/Parser';
-import { taskUidToId } from '../redux';
-import { ParseOptions, PluginSettings } from '../redux/settings';
+import { taskUidToId } from '../store';
+import { ParseOptions, PluginSettings } from '../store/settings';
 import { TaskRecordType } from './types';
 
 export { taskToTaskFileContents } from './render';

@@ -1,5 +1,7 @@
 import { createTestSession } from '../../../test/fixtures';
-import { createTask, updateFileInstances } from './index';
+import { dateStr } from '../../../test/testUtils';
+import { TaskActionType } from './actions';
+import { allTasks, createTask, updateFileInstances } from './index';
 import { reducerCreator } from './reducer';
 import { getTask, taskInstances } from './selectors';
 
@@ -216,7 +218,7 @@ describe( 'Reducer', () => {
         }
         expect( t.complete ).toEqual( true );
         expect( t.completed ).toBeTruthy();
-        expect( t.completed ).toEqual( (new Date()).getTime() );
+        expect( dateStr( t.completed ) ).toEqual( (dateStr( (new Date()).getTime() )) );
     } );
 
     it( 'should not change existing completed date', () => {
@@ -240,7 +242,7 @@ describe( 'Reducer', () => {
             }
         } ) );
         expect( getTask( state.taskDb, orm )( 10000 )?.completed )
-            .toEqual( (new Date( '01/01/22' )).toDateString() );
+            .toEqual( (new Date( '01/01/22' )).getTime() );
     } );
 
     it( 'should remove completed date if instance set to incomplete', () => {
@@ -264,5 +266,112 @@ describe( 'Reducer', () => {
             }
         } ) );
         expect( getTask( state.taskDb, orm )( 10000 )?.completed ).toBeUndefined();
+    } );
+
+    it( 'should toggle a task complete', () => {
+        state.taskDb = taskReducer( state, createTask( {
+            name: 'task 1',
+        } ) );
+        state.taskDb = taskReducer( state, { type: TaskActionType.TOGGLE_COMPLETE, payload: 10000 } );
+        expect( getTask( state.taskDb, orm )( 10000 )?.complete ).toEqual( true );
+    } );
+
+    it( 'should toggle sub tasks complete', () => {
+        state.taskDb = taskReducer( state, createTask( {
+            name: 'task 1',
+        } ) );
+        state.taskDb = taskReducer( state, createTask( {
+            name: 'task 2',
+            id: 10001,
+        } ) );
+        state.taskDb = taskReducer( state, createTask( {
+            name: 'task 3',
+            id: 10002
+        } ) );
+        expect( allTasks( state.taskDb, orm ).toModelArray().map( t => t.id ) ).toEqual( [ 10000, 10001, 10002 ] )
+        let instAction = updateFileInstances( 'file', {
+            [ 1 ]: {
+                name: 'task 1',
+                id: 10000,
+                complete: false,
+                line: 1,
+                rawText: 'raw',
+                parentLine: -1,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            },
+            [ 2 ]: {
+                name: 'task 2',
+                id: 10001,
+                complete: false,
+                line: 2,
+                rawText: 'raw',
+                parentLine: 1,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            },
+            [ 3 ]: {
+                name: 'task 3',
+                id: 10002,
+                complete: false,
+                line: 3,
+                rawText: 'raw',
+                parentLine: 1,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            }
+        } );
+        state.taskDb = taskReducer( state, instAction );
+        state.taskDb = taskReducer( state, { type: TaskActionType.TOGGLE_COMPLETE, payload: 10000 } );
+        expect( getTask( state.taskDb, orm )( 10000 )?.complete ).toEqual( true );
+        expect( getTask( state.taskDb, orm )( 10001 )?.complete ).toEqual( true );
+        expect( getTask( state.taskDb, orm )( 10002 )?.complete ).toEqual( true );
+        instAction = updateFileInstances( 'file', {
+            [ 1 ]: {
+                name: 'task 1',
+                id: 10000,
+                complete: false,
+                line: 1,
+                rawText: 'raw',
+                parentLine: -1,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            },
+            [ 2 ]: {
+                name: 'task 2',
+                id: 10001,
+                complete: false,
+                line: 2,
+                rawText: 'raw',
+                parentLine: 1,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            },
+            [ 3 ]: {
+                name: 'task 3',
+                id: 10002,
+                complete: false,
+                line: 3,
+                rawText: 'raw',
+                parentLine: 2,
+                filePath: 'file',
+                childLines: [],
+                links: [],
+                tags: []
+            }
+        } );
+        state.taskDb = taskReducer( state, instAction );
+        state.taskDb = taskReducer( state, { type: TaskActionType.TOGGLE_COMPLETE, payload: 10000 } );
+        expect( getTask( state.taskDb, orm )( 10002 ).complete ).toEqual( true );
     } );
 } );

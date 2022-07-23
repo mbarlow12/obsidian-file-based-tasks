@@ -1,19 +1,8 @@
-import { ListItemCache, Pos } from 'obsidian';
-import { getDate } from '../../test/testUtils';
-import { taskIdToUid } from '../redux';
-import { pos } from '../Task';
+import { ListItemCache } from 'obsidian';
+import { dateStr, emptyPosition, getDate } from '../../test/testUtils';
+import { taskIdToUid } from '../store';
 import { Parser } from './Parser';
 import { ParsedTask } from './types';
-
-/**
- * TODO invalid cases and handle reformatting
- *  - more than one x
- *  - missing [ or ]
- *  - other characters within brackets
- */
-
-
-export const emptyPosition = ( line: number ): Pos => pos( line, 0, 0, 0, 0, 0 );
 
 describe( 'Task parsing', () => {
 
@@ -123,20 +112,20 @@ describe( 'Task parsing', () => {
         const parser = new Parser();
         let task = parser.parseLine( line );
         expect( task.dueDate ).toBeTruthy();
-        expect( task.dueDate ).toEqual( checkDate.getTime() );
+        expect( dateStr( task.dueDate ) ).toEqual( dateStr( checkDate.getTime() ) );
 
         line = '- [ ] test task name #atag @next friday #anothertag';
         task = parser.parseLine( line );
         while ( checkDate.getDay() !== 0 )
             checkDate.setDate( checkDate.getDate() + 1 );
         checkDate.setDate( checkDate.getDate() + 5 );
-        expect( task.dueDate ).toEqual( checkDate.getTime() );
+        expect( dateStr( task.dueDate ) ).toEqual( dateStr( checkDate.getTime() ) );
 
         line = '- [ ] test task name #atag @three weeks from now #anothertag';
         task = parser.parseLine( line );
         const d = todayGetter();
         d.setDate( d.getDate() + 21 );
-        expect( task.dueDate ).toEqual( d.getTime() )
+        expect( dateStr( task.dueDate ) ).toEqual( dateStr( d.getTime() ) )
     } );
 
     // test( 'Parse recurrences', () => {
@@ -272,6 +261,10 @@ describe( 'Task parsing', () => {
 
 
         line = `     - [ ] easy [[tasks/easy (abc1)]] ^abc1`;
+        task = parser.parseInstanceFromLine( line, 'file.md', lic );
+        expect( task.id ).toEqual( taskIdToUid( 'abc1' ) );
+
+        line = `     - [ ] easy. [[tasks/easy. (abc1).md]] ^abc1`;
         task = parser.parseInstanceFromLine( line, 'file.md', lic );
         expect( task.id ).toEqual( taskIdToUid( 'abc1' ) );
     } );

@@ -27,8 +27,10 @@ export const arraysEqual = <T>(
 export const removeUndefined = <T extends Record<keyof T, unknown>>( obj: T ): T => {
     const ret: T = { ...obj };
     for ( const key in obj ) {
-        if ( obj[ key ] === null || obj[ key ] === undefined || typeof obj[ key ] === 'undefined' )
+        if ( obj[ key ] === null || obj[ key ] === undefined || typeof obj[ key ] === 'undefined' ) {
+            delete ret[key]
             continue;
+        }
         ret[ key ] = obj[ key ]
     }
     return ret;

@@ -1,5 +1,5 @@
 import { CachedMetadata, TFile } from "obsidian";
-import { ITaskInstance } from '../redux/orm';
+import { ITaskInstance } from '../store/orm';
 import { LOC_DELIM } from '../Task';
 
 const testContents1 = `- [ ] t1

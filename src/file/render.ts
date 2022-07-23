@@ -2,10 +2,11 @@ import { CachedMetadata, MetadataCache, stringifyYaml, TFile, Vault } from 'obsi
 import path from 'path';
 import { ORM } from 'redux-orm';
 import { RRule } from 'rrule';
-import { taskUidToId } from '../redux';
-import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances, TaskORMSchema } from '../redux/orm';
-import { DEFAULT_RENDER_OPTS } from '../redux/settings';
-import { PluginState } from '../redux/types';
+import { AppHelper } from '../helper';
+import { taskUidToId } from '../store';
+import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances, TaskORMSchema } from '../store/orm';
+import { DEFAULT_RENDER_OPTS } from '../store/settings';
+import { PluginState } from '../store/types';
 import { getVaultConfig, taskToBasename, taskToFilename } from './index';
 import { ITaskInstanceYamlObject, ITaskYamlObject, TaskRecordType } from './types';
 
@@ -91,16 +92,23 @@ export const renderTaskInstance = (
     renderOpts = DEFAULT_RENDER_OPTS
 ): string => {
     const baseLine = taskInstanceToChecklist( instance ).replace( /\^[\w\d]+/, '' ).trim();
+    const app = AppHelper.app;
+    renderOpts = AppHelper.plugin.settings.renderOptions;
     const taskLinks = (instance.links ?? [])
         .filter( l => !l.includes( instance.filePath ) && !instance.filePath.includes( l ) )
-        .map( link => `[[${link}#^${instance.id}|${path.parse( link ).name}]]` )
-    if ( renderOpts.primaryLink )
-        taskLinks.push( `[[${path.join( tasksDirPath, taskToFilename( instance.name, instance.id ) )}]]` );
+        .map( linkText => {
+            const f = app.metadataCache.getFirstLinkpathDest( linkText, '' );
+            return app.fileManager.generateMarkdownLink( f, '', '#^' + instance.id.toString( 16 ) )
+        } )
+    if ( renderOpts.primaryLink ) {
+        const file = app.metadataCache.getFirstLinkpathDest( taskToFilename( instance.name, instance.id ), '' );
+        taskLinks.push( app.fileManager.generateMarkdownLink( file, '' ) );
+    }
     const instanceLine = [
         baseLine,
         ...((renderOpts.links || renderOpts.primaryLink) && taskLinks || []),
         renderOpts.id && `^${taskUidToId( instance.id )}` || ''
-    ].join( ' ' );
+    ].join( ' ' ).trim();
     return pad + instanceLine;
 }
 
@@ -126,7 +134,13 @@ export const taskFullPath = ( task: ITask | ITaskInstance | string, id?: number,
     return path.join( dir, taskToFilename( task, id ) )
 }
 
-export const writeTask = async ( task: ITask, vault: Vault, mdCache: MetadataCache, taskDirPath = 'tasks' ) => {
+export const writeTask = async (
+    task: ITask,
+    vault: Vault,
+    mdCache: MetadataCache,
+    taskDirPath = 'tasks',
+    init = false
+) => {
     /*
      TODO: consider adding a completed folder to declutter the tasks directory
      - and an archived folder
@@ -160,7 +174,11 @@ export const writeTask = async ( task: ITask, vault: Vault, mdCache: MetadataCac
             '### Links',
             links
         ].join( '\n' );
-        return await vault.modify( file as TFile, newContents )
+        const { mtime } = (file as TFile).stat;
+        await vault.modify( file as TFile, newContents )
+        if ( init )
+            (file as TFile).stat.mtime = mtime;
+        return
     }
 }
 
@@ -171,6 +189,7 @@ export const writeState = async (
     orm: ORM<TaskORMSchema>,
     currentInstances: ITaskInstance[],
     isIndex = false,
+    init = false,
 ) => {
     const { useTab, tabSize } = getVaultConfig( file.vault );
     const instances = pathITaskInstances( state.taskDb, orm )( file.path );
@@ -192,7 +211,10 @@ export const writeState = async (
                     lines[ line ] = '';
             }
         }
+        const { mtime } = file.stat;
         await file.vault.modify( file, lines.join( '\n' ) );
+        if ( init )
+            file.stat.mtime = mtime;
     }
     return instances;
 }

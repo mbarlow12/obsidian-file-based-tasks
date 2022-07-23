@@ -1,7 +1,7 @@
 import { createDraftSafeSelector, createSelector, Selector } from '@reduxjs/toolkit';
 import { createSelector as createOrmSelector, ModelType, ORM } from 'redux-orm';
 import { PluginState } from '../types';
-import { Task, TaskInstance } from './models';
+import { MTask, Task, TaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema';
 import { iTaskInstance } from './transforms';
 import { RefFilter } from './types';
@@ -30,7 +30,7 @@ export const sessionTaskInstance = createDraftSafeSelector(
 
 
 export const allTasks = createSelector(
-    (state: TasksORMState, orm: ORM<TaskORMSchema>) => orm.session(state).Task,
+    ( state: TasksORMState, orm: ORM<TaskORMSchema> ) => orm.session( state ).Task,
     ( task: ModelType<Task> ) => task.all()
 );
 
@@ -38,13 +38,13 @@ export const searchTasks = createSelector(
     (
         state: TasksORMState,
         orm: ORM<TaskORMSchema>
-    ) => createOrmSelector( orm, ( state: TasksORMState ) => state, session => session.Task )(state),
+    ) => createOrmSelector( orm, ( state: TasksORMState ) => state, session => session.Task )( state ),
     (
         state: TasksORMState,
         search: string
     ) => search,
     ( tasks, search ) => {
-        return tasks.filter(t => t.name.includes( search )).all().toModelArray();
+        return tasks.filter( t => t.name.includes( search ) ).all().toModelArray();
     }
 );
 
@@ -113,4 +113,23 @@ export const queryInstances = createDraftSafeSelector(
     ormSelector( sessionTaskInstance ),
     ( _: TasksORMState, comparator: RefFilter<TaskInstance> ) => comparator,
     ( taskInstance: ModelType<TaskInstance>, comp: RefFilter<TaskInstance> ) => taskInstance.filter( comp )
+);
+
+export const subTaskTree = createSelector(
+    [
+        ( s: TasksORMState ) => s,
+        (
+            s: TasksORMState,
+            arg: { session: TasksORMSession, id: number }
+        ): [ ModelType<Task>, number ] => [ arg.session.Task, arg.id ],
+    ],
+    ( state, [ task, id ] ) => {
+        const t = task.withId( id );
+        return [ ...t.subTasks.all().toModelArray() ].reduce( ( acc, st, _, arr ) => {
+            const subs = st.subTasks.all().toModelArray();
+            if ( subs.length > 0 )
+                arr.push( ...subs.filter( s => s.subTasks.exists() ) );
+            return acc.concat( [ st ].concat( subs ) );
+        }, [] as MTask[] )
+    }
 );

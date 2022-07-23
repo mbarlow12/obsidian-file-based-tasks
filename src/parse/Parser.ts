@@ -1,14 +1,12 @@
 import * as chrono from "chrono-node";
 import { ListItemCache } from 'obsidian';
-import * as path from 'path';
-import { taskIdToUid } from '../redux';
-import { ITaskInstance } from '../redux/orm';
-import { emptyTaskInstance, PLACEHOLDER_ID } from '../redux/orm/models';
-import { DEFAULT_SETTINGS, ParseOptions } from '../redux/settings';
+import { taskIdToUid } from '../store';
+import { ITaskInstance } from '../store/orm';
+import { emptyTaskInstance, PLACEHOLDER_ID } from '../store/orm/models';
+import { DEFAULT_SETTINGS, ParseOptions } from '../store/settings';
 import { ParsedTask } from './types';
 
-export const INVALID_NAME_CHARS = /[\\/|^#[];:?]/g;
-export const TASK_BASENAME_REGEX = /^(?<name>.+)(?=\((?<id>[\w\d]+)\))\([\w\d]+\)/;
+export const TASK_BASENAME_REGEX = /^(?<name>.*) \((?<id>[\w\d]+)\)(?:\.md)?/;
 
 export interface ParserSettings {
     tokens: {
@@ -35,7 +33,7 @@ export class Parser {
     public static NO_TASK_REGEX = /^\s*[-*]\s+(?<taskLine>.*)$/;
     public static ID_REGEX = /\s\^[\w\d]+$/;
     public static FILE_LINK_REGEX = /\[\[(?<name>.+)\((?<id>[\w\d]+)\)(\.md)?\]\]/g;
-    public static RENDERED_TASK_REGEX = /^\s*[-*] \[(?<complete>[ xX*])\]\s+(?<name>[^\s].*)\s*(?=\[\[(?<linkPath>.*)\((?<linkId>[\w\d]+)\)(?:\.md)?\]\] \^(?<id>[\w\d]+)$)/;
+    public static RENDERED_TASK_REGEX = /^\s*[-*] \[(?<complete>[ xX*])\]\s+(?<name>[^\s].*)\s*(?=\[\[(?<linkText>.*\([\w\d]+\)(?:\.md)?)\]\] \^(?<id>[\w\d]+)$)/;
     public static INVALID_NAME_CHARS = /[\^|\][?}{:;#!\\/%$@&]/g;
 
     static create( settings: ParseOptions ) {
@@ -48,7 +46,7 @@ export class Parser {
     }
 
     static normalizeName( name: string ) {
-        return name.replace( Parser.INVALID_NAME_CHARS, '' );
+        return name.replace( Parser.INVALID_NAME_CHARS, '' ).substring( 0, 100 );
     }
 
     /*
@@ -197,12 +195,12 @@ export class Parser {
      * @private
      */
     private parseTaskFromLinkText( linkText: string ): { id: number, name: string } {
-        const pathParts = path.parse( linkText );
-        const names = pathParts.name.split( '#^' )
+        const pathParts = linkText.split( '/' );
+        const names = pathParts.pop().split( '#^' )
             .filter( s => s );
         if ( !names.length )
             return null;
-        const matchedNames = names.filter( n => n.match( TASK_BASENAME_REGEX ) );
+        const matchedNames = names.filter( n => n.trim().match( TASK_BASENAME_REGEX ) );
         if ( matchedNames.length > 0 ) {
             const { name, id } = matchedNames[ 0 ].match( TASK_BASENAME_REGEX ).groups;
             return { name: name.trim(), id: taskIdToUid( id ) };
@@ -308,10 +306,16 @@ export class Parser {
     private parseRenderedTask( line: string ): ParsedTask {
         const match = line.match( Parser.RENDERED_TASK_REGEX );
         if ( match ) {
-            const { complete, name, linkPath, id, linkId } = match.groups;
-            const linkName = path.parse( linkPath ).name;
-            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() )
+            const { complete, name, linkText, id } = match.groups;
+            const nameMatch = linkText.split('/').pop().trim().match( TASK_BASENAME_REGEX );
+            if ( !nameMatch )
+                return null;
+            const { name: linkName, id: linkId } = nameMatch.groups;
+            if ( Parser.normalizeName( name ).trim() !== linkName.trim() || id.trim() !== linkId.trim() ) {
+                // eslint-disable-next-line no-debugger
+                debugger;
                 throw Error( `Tasks with ids cannot be rendered with a different task's link at the end of the link.` );
+            }
             const { tags, links, dueDate } = this.parseLineMetadata( line );
             if ( !name )
                 return null;

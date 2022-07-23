@@ -10,6 +10,7 @@ import {
     iTask,
     iTaskInstance,
     queryToComparer,
+    subTaskTree,
     TaskAction,
     TaskActionType,
     taskCreatePropsFromInstance,
@@ -124,7 +125,8 @@ const createTaskReducer = (
     if ( !session.Task.first() ) {
         task.id = Math.max( task.id ?? 0, settings.minTaskId );
     }
-    session.Task.create( taskCreatePropsFromITask( task ) );
+    const props = taskCreatePropsFromITask( task );
+    const mTask = session.Task.create( props );
     if ( task.instances ) {
         task.instances.forEach( i => {
             session.TaskInstance.create( instancePropsFromITaskInstance( i ) )
@@ -153,9 +155,15 @@ export const updateFileInstancesReducer = (
     TaskInstance.filter( i => i.filePath === path ).delete();
 
     // handle parent completions, create new tasks for 0 ids
-    for ( const lineStr in instances ) {
-        const line = Number.parseInt( lineStr );
+    const lines = Object.keys( instances ).map( k => Number.parseInt( k ) ).sort();
+    for ( const line of lines ) {
         const inst = instances[ line ];
+        if ( inst.parentLine > -1 ) {
+            if ( !inst.parentInstance )
+                inst.parentInstance = instances[ inst.parentLine ];
+            if ( instances[ inst.parentLine ].complete )
+                inst.complete = true;
+        }
 
         // placeholder instance
         if ( inst.id === -1 ) {
@@ -219,12 +227,9 @@ const toggleComplete = ( payload: ToggleTaskComplete['payload'], session: TasksO
     const completed = complete ? new Date().getTime() : undefined;
     task.update( { complete, completed } );
     if ( complete ) {
-        const subTasks = [ ...task.subTasks.toModelArray() ];
-        while ( subTasks.length > 0 ) {
-            const st = subTasks.shift();
-            st.update( { complete } );
-            subTasks.push( ...st.subTasks.toModelArray() );
-        }
+        const subs = subTaskTree( session.state, { session, id: task.id } );
+        subs.forEach( st => st.update( { complete } ) );
     }
+
 }
 

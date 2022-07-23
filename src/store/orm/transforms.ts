@@ -24,7 +24,7 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
         dueDate
     } = iTask;
 
-    return {
+    return removeUndefined( {
         id,
         name,
         tags,
@@ -33,7 +33,7 @@ export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task
         dueDate,
         created,
         content,
-    }
+    } );
 }
 
 export const instancePropsFromTask = (

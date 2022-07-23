@@ -1,8 +1,10 @@
-import { configureStore, createSelector, Dispatch, Selector, Store } from '@reduxjs/toolkit';
-import { App, CachedMetadata, debounce, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
+import { configureStore, createSelector, Selector, Store } from '@reduxjs/toolkit';
+import { App, CachedMetadata, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
 import { ORM } from 'redux-orm';
+import { asyncDebounce } from '../lib/debounce';
 import { deleteTaskDataFromFile, getTasksFolder, isTaskFile, removeTaskDataFromContents } from './file';
 import { taskFullPath, writeState, writeTask } from './file/render';
+import { AppHelper } from './helper';
 import { getFileInstances, readTaskFile } from './parse';
 import { Parser, TASK_BASENAME_REGEX } from './parse/Parser';
 import {
@@ -24,7 +26,7 @@ import {
     tasksEqual,
     TasksORMState,
     updateFileInstances
-} from './redux/orm';
+} from './store/orm';
 import {
     deleteFile,
     deleteTask,
@@ -32,12 +34,12 @@ import {
     renameFileAction,
     toggleTaskStatus,
     updateTaskAction
-} from './redux/orm/actions';
-import { repopulateIndexFiles, updateFileInstancesReducer } from './redux/orm/reducer';
-import { FileITaskInstanceRecord } from './redux/orm/types';
-import { DEFAULT_SETTINGS, SettingsAction } from './redux/settings';
-import settingsSlice from './redux/settings/settings.slice';
-import { PluginState } from './redux/types';
+} from './store/orm/actions';
+import { repopulateIndexFiles, updateFileInstancesReducer } from './store/orm/reducer';
+import { FileITaskInstanceRecord } from './store/orm/types';
+import { DEFAULT_SETTINGS, SettingsAction } from './store/settings';
+import settingsSlice from './store/settings/settings.slice';
+import { PluginState } from './store/types';
 import { TaskEditorSuggest } from './TaskSuggest';
 
 /**
@@ -48,17 +50,9 @@ import { TaskEditorSuggest } from './TaskSuggest';
  *      - this is where the temp task would come in handy (placeholder instance?)
  *  - reading files no longer is a problem, now the cache can be used just for writing
  */
-
-type Dis = {
-    dispatch: Dispatch<TaskAction | SettingsAction>
-};
-export const c: Dis = {
-    dispatch: a => a
-}
-
 export default class ObsidianTaskManager extends Plugin {
     taskSuggest: TaskEditorSuggest;
-    store: Store<PluginState, TaskAction | SettingsAction>
+    store: Store<PluginState, TaskAction | SettingsAction>;
     orm: ORM<TaskORMSchema>;
     state: PluginState;
     private currentFile: TFile;
@@ -70,6 +64,7 @@ export default class ObsidianTaskManager extends Plugin {
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
+        AppHelper.init( app, this )
     }
 
     async onload() {
@@ -104,6 +99,7 @@ export default class ObsidianTaskManager extends Plugin {
                 this.registerCommands();
                 this.store.subscribe( () => this.handleStoreUpdate() );
                 await this.handleStoreUpdate();
+                this.currentFile = this.app.workspace.getActiveFile();
                 this.initialized = true;
             }
         } );
@@ -117,7 +113,7 @@ export default class ObsidianTaskManager extends Plugin {
         return this.settings.parseOptions;
     }
 
-    async handleStoreUpdate() {
+    async handleStoreUpdate( init = false ) {
         const { vault, metadataCache } = this.app;
         const currentSession = this.orm.session( this.state.taskDb );
         const newState = this.store.getState();
@@ -131,7 +127,7 @@ export default class ObsidianTaskManager extends Plugin {
             const task = currentSession.Task.withId( newTask.id );
             if ( task && tasksEqual( iTask( newTask ), iTask( task ) ) )
                 continue;
-            await writeTask( iTask( newTask ), vault, metadataCache, this.settings.tasksDirectory );
+            await writeTask( iTask( newTask ), vault, metadataCache, this.settings.tasksDirectory, init );
         }
 
         for ( const cid of currentTaskIds ) {
@@ -158,7 +154,8 @@ export default class ObsidianTaskManager extends Plugin {
                 newState,
                 this.orm,
                 currentFileInstances,
-                isIndex
+                isIndex,
+                init
             );
         }
         // delete data from paths not in state
@@ -166,7 +163,11 @@ export default class ObsidianTaskManager extends Plugin {
             const file = vault.getAbstractFileByPath( currentPath ) as TFile;
             if ( !file )
                 continue;
+            const { mtime } = file.stat;
             await deleteTaskDataFromFile( file, vault, metadataCache.getFileCache( file ), this.settings )
+            //@ts-ignore
+            if ( file && !file.deleted )
+                file.stat.mtime = mtime;
         }
 
         this.state = newState;
@@ -247,16 +248,13 @@ export default class ObsidianTaskManager extends Plugin {
             this.currentFile = file;
         } ) );
 
-        const debouncedFileUpdate = debounce( () => {
-            const ref = this.app.metadataCache.on( 'changed', file => {
-                this.dispatchFileTaskUpdateSync( file );
-                this.app.metadataCache.offref( ref );
-            } );
-        }, 100, true );
+        const debouncedFileUpdate = asyncDebounce( async ( file: TFile ) => {
+            this.dispatchFileTaskUpdateSync( file );
+        }, 200 );
 
         this.registerDomEvent( window, 'keydown', async ( ev: KeyboardEvent ) => {
             if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
-                debouncedFileUpdate();
+                await debouncedFileUpdate( this.currentFile )
             }
         } );
     }
@@ -431,6 +429,7 @@ export default class ObsidianTaskManager extends Plugin {
         if ( !tasksDir )
             await this.app.vault.createFolder( this.settings.tasksDirectory );
         const files = this.app.vault.getMarkdownFiles().filter( f => !this.ignorePath( f.path ) );
+        const seenIds = new Set<number>();
         for ( let i = 0; i < files.length; i++ ) {
             const file = files[ i ];
             if ( file.parent === tasksDir ) {
@@ -446,8 +445,16 @@ export default class ObsidianTaskManager extends Plugin {
                 if ( cache.listItems ) {
                     const contents = await this.app.vault.read( file );
                     const instances = getFileInstances( file.path, cache, contents, this.settings.parseOptions );
+                    Object.values( instances ).forEach( i => seenIds.add( i.id ) );
+                    seenIds.delete( 0 );
                     bestEffortDeduplicate( session, instances );
-                    updateFileInstancesReducer( file.path, instances, session, this.settings )
+                    updateFileInstancesReducer( file.path, instances, session, this.settings );
+                    for ( const newInst of filePathInstances( session.state, session )( file.path ).toModelArray() ) {
+                        const id = newInst.task.id;
+                        if ( !seenIds.has( id ) ) {
+                            session.Task.withId( id ).update( { created: file.stat.mtime } );
+                        }
+                    }
                 }
             }
         }

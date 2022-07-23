@@ -1,8 +1,8 @@
 import { CachedMetadata, Pos, TFile } from 'obsidian';
 import { ITaskYamlObject } from '../file';
-import { ITask, ITaskInstance } from '../redux/orm';
-import { FileITaskInstanceRecord } from '../redux/orm/types';
-import { ParseOptions } from '../redux/settings';
+import { ITask, ITaskInstance } from '../store/orm';
+import { FileITaskInstanceRecord } from '../store/orm/types';
+import { ParseOptions } from '../store/settings';
 import { LOC_DELIM, pos } from '../Task';
 import { readTaskYaml, taskYamlFromFrontmatter } from './frontmatter';
 import { Parser, TASK_BASENAME_REGEX } from './Parser';

@@ -1,6 +1,6 @@
 import { FrontMatterCache } from 'obsidian';
 import { ITaskInstanceYamlObject, ITaskYamlObject } from '../file';
-import { ITask, ITaskInstance } from '../redux/orm';
+import { ITask, ITaskInstance } from '../store/orm';
 
 export const readTaskYaml = ( yaml: ITaskYamlObject ): ITask => {
     const {

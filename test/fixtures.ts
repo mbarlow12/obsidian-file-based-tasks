@@ -1,9 +1,9 @@
 import { CreateProps, ORM } from 'redux-orm';
-import { Tag, Task, TaskInstance, TaskORMSchema, TasksORMSession } from '../src/redux/orm';
-import { instancesKey } from '../src/redux/orm/models';
-import { fetchOrm } from '../src/redux/orm/schema';
-import { DEFAULT_SETTINGS, PluginSettings } from '../src/redux/settings';
-import { PluginState } from '../src/redux/types';
+import { Tag, Task, TaskInstance, TaskORMSchema, TasksORMSession } from '../src/store/orm';
+import { instancesKey } from '../src/store/orm/models';
+import { fetchOrm } from '../src/store/orm/schema';
+import { DEFAULT_SETTINGS, PluginSettings } from '../src/store/settings';
+import { PluginState } from '../src/store/types';
 import { createTestTaskLine } from './testUtils';
 
 export const INITIAL_TASK_IDS = [ 1, 2, 3, 4, 5 ].map( i => i + 10000 );

@@ -12,14 +12,11 @@ if you want to view the source, please visit the github repository of this plugi
 const prod = (process.argv[2] === 'production');
 const test = (process.argv[2] === 'test' || process.argv[3] === 'test');
 
-let entryPoint, outDir;
+let entryPoint;
 if (!test) {
 	entryPoint = 'src/main.ts';
-	outDir = 'ebdist';
 }
 else {
-	entryPoint = 'test/main.test.ts';
-	outDir = 'ebdist-test'
 }
 
 esbuild.build({
@@ -28,7 +25,7 @@ esbuild.build({
 	},
 	entryPoints: [ entryPoint ],
 	bundle: true,
-	minify: prod,
+	// minify: prod,
 	external: [
 		'obsidian',
 		'electron',

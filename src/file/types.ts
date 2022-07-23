@@ -1,4 +1,4 @@
-import { ITask, ITaskInstance } from '../redux/orm';
+import { ITask, ITaskInstance } from '../store/orm';
 
 export const TaskRecordType = '--TASK--';
 
