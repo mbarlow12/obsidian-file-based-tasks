@@ -1,4 +1,4 @@
-import { MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
+import { CachedMetadata, MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
 import path from 'path';
 import { ORM } from 'redux-orm';
 import { RRule } from 'rrule';
@@ -166,35 +166,43 @@ export const writeTask = async ( task: ITask, vault: Vault, mdCache: MetadataCac
 
 export const writeState = async (
     file: TFile,
-    vault: Vault,
+    cache: CachedMetadata,
     state: PluginState,
     orm: ORM<TaskORMSchema>,
     currentInstances: ITaskInstance[],
     isIndex = false,
 ) => {
-    const { useTab, tabSize } = getVaultConfig( vault );
+    const { useTab, tabSize } = getVaultConfig( file.vault );
     const instances = pathITaskInstances( state.taskDb, orm )( file.path );
-    if ( !arraysEqual( instances, currentInstances, instanceComparer ) ) {
+    if ( !arraysEqual( instances, currentInstances, instanceComparer ) || isIndex ) {
         const lines = isIndex ?
                       new Array( instances.length ).fill( '' ) :
-                      (await vault.read( file )).split( '\n' );
+                      (await file.vault.read( file )).split( '\n' );
         for ( let i = 0; i < instances.length; i++ ) {
             const inst = instances[ i ];
             if ( inst.id === -1 )
                 continue;
             lines[ inst.line ] = renderTaskInstance( inst, getIndent( inst, useTab as boolean, tabSize as number ) )
         }
-        await vault.modify( file, lines.join( '\n' ) );
+        if ( !isIndex ) {
+            const taskItems = cache.listItems.filter( li => li.task );
+            for ( let i = 0; i < taskItems.length; i++ ) {
+                const { line } = taskItems[ i ].position.start;
+                if ( !instances.find( newInst => newInst.line === line ) )
+                    lines[ line ] = '';
+            }
+        }
+        await file.vault.modify( file, lines.join( '\n' ) );
     }
     return instances;
 }
 
 export const writeIndexFile = async (
     file: TFile,
-    vault: Vault,
+    cache: CachedMetadata,
     state: PluginState,
     orm: ORM<TaskORMSchema>,
     currentInstances: ITaskInstance[]
 ) => {
-    return writeState( file, vault, state, orm, currentInstances, true );
+    return writeState( file, cache, state, orm, currentInstances, true );
 }

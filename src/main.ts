@@ -152,7 +152,14 @@ export default class ObsidianTaskManager extends Plugin {
             if ( !file )
                 file = await vault.create( newPath, '' );
             const isIndex = file.path in this.settings.indexFiles;
-            await writeState( file, vault, newState, this.orm, currentFileInstances, isIndex );
+            await writeState(
+                file,
+                this.app.metadataCache.getFileCache( file ),
+                newState,
+                this.orm,
+                currentFileInstances,
+                isIndex
+            );
         }
         // delete data from paths not in state
         for ( const currentPath of [ ...currentPaths, ...deletePaths ] ) {
@@ -230,25 +237,26 @@ export default class ObsidianTaskManager extends Plugin {
             if ( this.currentFile ) {
                 const cache = this.app.metadataCache.getFileCache( this.currentFile );
                 // @ts-ignore
-                if ( this.currentFile.deleted || !cache ) return;
-                if ( isTaskFile( this.currentFile, cache ) )
-                    this.dispatchTaskUpdate( this.currentFile, cache )
-                else
-                    this.dispatchFileTaskUpdateSync( this.currentFile )
+                if ( !this.currentFile.deleted && cache ) {
+                    if ( isTaskFile( this.currentFile, cache ) )
+                        this.dispatchTaskUpdate( this.currentFile, cache )
+                    else
+                        this.dispatchFileTaskUpdateSync( this.currentFile )
+                }
             }
             this.currentFile = file;
         } ) );
 
-        const debouncedDispatch = debounce( ( file: TFile ) => {
-            this.dispatchFileTaskUpdateSync( file );
-            console.log( 'just dispatched', (new Date()).getMilliseconds() );
-        }, 300, true );
+        const debouncedFileUpdate = debounce( () => {
+            const ref = this.app.metadataCache.on( 'changed', file => {
+                this.dispatchFileTaskUpdateSync( file );
+                this.app.metadataCache.offref( ref );
+            } );
+        }, 100, true );
 
         this.registerDomEvent( window, 'keydown', async ( ev: KeyboardEvent ) => {
             if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
-                const file = this.app.workspace.getActiveFile() || this.currentFile;
-                console.log( 'waiting to dispatch', (new Date()).getMilliseconds() );
-                debouncedDispatch( file );
+                debouncedFileUpdate();
             }
         } );
     }
@@ -345,6 +353,29 @@ export default class ObsidianTaskManager extends Plugin {
                     this.store.dispatch( toggleTaskStatus( taskInstance ) );
             }
         } );
+
+        // update from file
+        this.addCommand( {
+            id: 'update-from-file',
+            name: 'Update Task Data from File',
+            hotkeys: [
+                {
+                    key: 'u',
+                    modifiers: [ 'Shift', 'Ctrl' ]
+                }
+            ],
+            editorCallback: async ( editor, view ) => {
+                const { file } = view;
+                const { cache, contents } = await this.getFileData( file );
+                if ( isTaskFile( file, cache ) ) {
+                    const task = readTaskFile( file, cache, contents );
+                    this.store.dispatch( updateTaskAction( task ) );
+                }
+                else {
+                    this.dispatchFileTaskUpdateSync( file );
+                }
+            }
+        } )
     }
 
     ignorePath( filePath: string ): boolean {
