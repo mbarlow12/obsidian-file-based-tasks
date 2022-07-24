@@ -2,6 +2,7 @@ import { createTestSession } from '../../../test/fixtures';
 import { dateStr } from '../../../test/testUtils';
 import { TaskActionType } from './actions';
 import { allTasks, createTask, updateFileInstances } from './index';
+import { emptyTaskInstance } from './models';
 import { reducerCreator } from './reducer';
 import { getTask, taskInstances } from './selectors';
 
@@ -373,5 +374,38 @@ describe( 'Reducer', () => {
         state.taskDb = taskReducer( state, instAction );
         state.taskDb = taskReducer( state, { type: TaskActionType.TOGGLE_COMPLETE, payload: 10000 } );
         expect( getTask( state.taskDb, orm )( 10002 ).complete ).toEqual( true );
+    } );
+
+    it( 'should add tags', () => {
+        state.taskDb = taskReducer( state, createTask( {
+            name: 'task 1',
+            tags: [ 't1']
+        } ) );
+        let tag = orm.session( state.taskDb ).Tag.withId('t1');
+        expect(tag.tasks.toRefArray().map(t => t.name)).toEqual(['task 1']);
+
+        state.taskDb = taskReducer( state, updateFileInstances('file1.md', {
+            3: {
+                ...emptyTaskInstance(),
+                name: 'task 1',
+                tags: ['t2', 't1'],
+                id: 10000,
+                filePath: 'file1.md',
+                line: 3,
+            },
+            5: {
+                ...emptyTaskInstance(),
+                name: 'task 2',
+                tags: ['t2', 't3'],
+                id: 0,
+                filePath: 'file1.md',
+                line: 5,
+            }
+        }));
+        const tags = orm.session( state.taskDb ).Tag;
+        expect(tags.all().toRefArray()).toHaveLength(3);
+        tag = tags.withId('t2');
+        const tasks = tag.tasks.toRefArray();
+        expect(tasks.map(t => t.name)).toEqual(['task 1', 'task 2']);
     } );
 } );

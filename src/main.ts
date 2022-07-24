@@ -1,7 +1,6 @@
 import { configureStore, createSelector, Selector, Store } from '@reduxjs/toolkit';
-import { App, CachedMetadata, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
+import { App, CachedMetadata, debounce, MarkdownView, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
 import { ORM } from 'redux-orm';
-import { asyncDebounce } from '../lib/debounce';
 import { deleteTaskDataFromFile, getTasksFolder, isTaskFile, removeTaskDataFromContents } from './file';
 import { taskFullPath, writeState, writeTask } from './file/render';
 import { AppHelper } from './helper';
@@ -27,14 +26,7 @@ import {
     TasksORMState,
     updateFileInstances
 } from './store/orm';
-import {
-    deleteFile,
-    deleteTask,
-    isTaskAction,
-    renameFileAction,
-    toggleTaskStatus,
-    updateTaskAction
-} from './store/orm/actions';
+import { deleteFile, deleteTask, isTaskAction, renameFileAction, updateTaskAction } from './store/orm/actions';
 import { repopulateIndexFiles, updateFileInstancesReducer } from './store/orm/reducer';
 import { FileITaskInstanceRecord } from './store/orm/types';
 import { DEFAULT_SETTINGS, SettingsAction } from './store/settings';
@@ -42,25 +34,18 @@ import settingsSlice from './store/settings/settings.slice';
 import { PluginState } from './store/types';
 import { TaskEditorSuggest } from './TaskSuggest';
 
-/**
- * add commands for 'Process file tasks'
- * delete all onCacheChange logic
- *  - what if you press enter, it starts a new task on the line below, but now the empty line is a new parent?
- *  on 'enter' (or custom key), on file close, custom command hotkey
- *      - this is where the temp task would come in handy (placeholder instance?)
- *  - reading files no longer is a problem, now the cache can be used just for writing
- */
 export default class ObsidianTaskManager extends Plugin {
     taskSuggest: TaskEditorSuggest;
     store: Store<PluginState, TaskAction | SettingsAction>;
     orm: ORM<TaskORMSchema>;
     state: PluginState;
+    readyForUpdate = false;
     private currentFile: TFile;
     private vaultLoaded = false;
     private initialized = false;
-    private selectFiles: Selector<TasksORMState, string[]>;
-    private selectFileInstances: Selector<TasksORMState, ITaskInstance[]>;
-    private selectCurrentIds: Selector<TasksORMState, number[]>
+    selectFiles: Selector<TasksORMState, string[]>;
+    selectFileInstances: Selector<TasksORMState, ITaskInstance[]>;
+    selectCurrentIds: Selector<TasksORMState, number[]>
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
@@ -81,8 +66,10 @@ export default class ObsidianTaskManager extends Plugin {
                 );
 
                 this.selectFileInstances = createSelector(
-                    ( s: TasksORMState ) => this.orm.session( s ).TaskInstance,
-                    ( s: TasksORMState, path: string ) => path,
+                    [
+                        ( s: TasksORMState ) => this.orm.session( s ).TaskInstance,
+                        ( s: TasksORMState, path: string ) => path
+                    ],
                     ( task, path ) => task.filter( t => t.filePath === path )
                         .orderBy( [ 'line' ] )
                         .toModelArray()
@@ -143,18 +130,12 @@ export default class ObsidianTaskManager extends Plugin {
         for ( let i = 0; i < newPaths.length; i++ ) {
             const newPath = newPaths[ i ];
             currentPaths.remove( newPath );
-            const currentFileInstances = this.selectFileInstances( this.state.taskDb, newPath );
             let file = vault.getAbstractFileByPath( newPath ) as TFile;
             if ( !file )
                 file = await vault.create( newPath, '' );
-            const isIndex = file.path in this.settings.indexFiles;
             await writeState(
                 file,
-                this.app.metadataCache.getFileCache( file ),
                 newState,
-                this.orm,
-                currentFileInstances,
-                isIndex,
                 init
             );
         }
@@ -234,55 +215,57 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.vault.on( 'delete', this.handleFileDeleted.bind( this ) ) );
         this.registerEvent( this.app.vault.on( 'rename', this.handleFileRenamed.bind( this ) ) );
 
-        this.registerEvent( this.app.workspace.on( 'file-open', file => {
-            if ( this.currentFile ) {
+        this.registerEvent( this.app.workspace.on( 'file-open', async ( file ) => {
+            if ( this.currentFile && !this.ignorePath( this.currentFile.path ) ) {
                 const cache = this.app.metadataCache.getFileCache( this.currentFile );
                 // @ts-ignore
                 if ( !this.currentFile.deleted && cache ) {
-                    if ( isTaskFile( this.currentFile, cache ) )
-                        this.dispatchTaskUpdate( this.currentFile, cache )
-                    else
-                        this.dispatchFileTaskUpdateSync( this.currentFile )
+                    const contents = await this.app.vault.cachedRead( this.currentFile );
+                    this.updateFromFile( this.currentFile, cache, contents );
                 }
             }
             this.currentFile = file;
         } ) );
 
-        const debouncedFileUpdate = asyncDebounce( async ( file: TFile ) => {
-            this.dispatchFileTaskUpdateSync( file );
-        }, 200 );
-
         this.registerDomEvent( window, 'keydown', async ( ev: KeyboardEvent ) => {
-            if ( ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey ) {
-                await debouncedFileUpdate( this.currentFile )
+            if ( ev.key === 'Enter' ) {
+                this.readyForUpdate = true;
             }
         } );
+
+        const debouncedUpdate = debounce( ( file: TFile, data: string, cache: CachedMetadata ) => {
+            this.updateFromFile( file, cache, data );
+        }, 100, true );
+
+        this.registerEvent( this.app.metadataCache.on( 'changed', async ( file, data, cache ) => {
+            if ( this.app.workspace.getActiveFile() !== file || this.ignorePath( file.path ) )
+                return;
+            if ( this.readyForUpdate ) {
+                this.readyForUpdate = false;
+                debouncedUpdate( file, data, cache );
+            }
+        } ) );
     }
 
-    dispatchTaskUpdate( file: TFile, cache: CachedMetadata ) {
-        this.app.vault.cachedRead( file )
-            .then( data => {
-                const task = readTaskFile( file, cache, data );
-                this.store.dispatch( updateTaskAction( task ) );
-            } );
+    updateTask( file: TFile, data: string, cache: CachedMetadata ) {
+        const task = readTaskFile( file, cache, data );
+        this.store.dispatch( updateTaskAction( task ) );
     }
 
-    dispatchFileTaskUpdateSync( file: TFile ) {
+    updateFileTasks( file: TFile, data: string, cache: CachedMetadata ) {
         if ( !file || this.ignorePath( file.path ) )
             return;
-        const cache = this.app.metadataCache.getFileCache( file );
         const { parseOptions } = this.settings;
         const { taskDb } = this.store.getState();
-        this.app.vault.read( file )
-            .then( data => {
-                const instances = getFileInstances( file.path, cache, data, parseOptions );
-                const existing = filePathInstances( taskDb, this.orm.session( taskDb ) )( file.path ).toModelArray()
-                    .reduce( ( rec, mIt ) => ({
-                        ...rec, [ mIt.line ]: iTaskInstance( mIt )
-                    }), {} as FileITaskInstanceRecord );
-                if ( !fileRecordsEqual( instances, existing ) )
-                    this.store.dispatch( updateFileInstances( file.path, instances ) );
-            } );
+        const instances = getFileInstances( file.path, cache, data, parseOptions );
+        const existing = filePathInstances( taskDb, this.orm.session( taskDb ) )( file.path ).toModelArray()
+            .reduce( ( rec, mIt ) => ({
+                ...rec, [ mIt.line ]: iTaskInstance( mIt )
+            }), {} as FileITaskInstanceRecord );
+        const cursor = this.app.workspace.getActiveViewOfType( MarkdownView ).editor.getCursor();
+        delete instances[ cursor.line ];
+        if ( !fileRecordsEqual( instances, existing ) )
+            this.store.dispatch( updateFileInstances( file.path, instances ) );
     }
 
     registerCommands() {
@@ -334,23 +317,6 @@ export default class ObsidianTaskManager extends Plugin {
         } );
         // update task
         // archive tasks
-        // toggle task status
-        this.addCommand( {
-            id: 'toggle-task',
-            name: 'Toggle Task',
-            hotkeys: [],
-            editorCallback: ( editor, view ) => {
-                const { line } = editor.getCursor();
-                const cache = this.app.metadataCache.getFileCache( view.file );
-                const li = cache.listItems?.find( ( i ) => i.position.start.line === line );
-                if ( !li )
-                    return;
-                const parser = Parser.create( this.settings.parseOptions );
-                const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
-                if ( taskInstance && taskInstance.id > 0 )
-                    this.store.dispatch( toggleTaskStatus( taskInstance ) );
-            }
-        } );
 
         // update from file
         this.addCommand( {
@@ -365,15 +331,20 @@ export default class ObsidianTaskManager extends Plugin {
             editorCallback: async ( editor, view ) => {
                 const { file } = view;
                 const { cache, contents } = await this.getFileData( file );
-                if ( isTaskFile( file, cache ) ) {
-                    const task = readTaskFile( file, cache, contents );
-                    this.store.dispatch( updateTaskAction( task ) );
-                }
-                else {
-                    this.dispatchFileTaskUpdateSync( file );
-                }
+                this.updateFromFile( file, cache, contents );
             }
         } )
+    }
+
+    private updateFromFile( file: TFile, cache: CachedMetadata, contents: string ) {
+        if ( !file || this.ignorePath( file.path ) )
+            return;
+        if ( isTaskFile( file, cache ) ) {
+            this.updateTask( file, contents, cache );
+        }
+        else {
+            this.updateFileTasks( file, contents, cache );
+        }
     }
 
     ignorePath( filePath: string ): boolean {

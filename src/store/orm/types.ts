@@ -1,6 +1,6 @@
 import { Model, Ref } from 'redux-orm';
 
-export type RefFilter<T extends Model> = (arg: Ref<T>) => boolean;
+export type RefFilter<T extends Model> = ( arg: Ref<T> ) => boolean;
 
 export interface ITaskBase {
     id: number;
@@ -38,4 +38,6 @@ export type ITaskCreate = Omit<Partial<ITask>, 'name'> & { name: string };
 
 export type ITaskInstanceRecord = Record<string, ITaskInstance>;
 export type FileITaskInstanceRecord = Record<number, ITaskInstance>;
+
+// export type Row<T> = [ ...(keyof T) ]
 

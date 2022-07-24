@@ -7,11 +7,11 @@ import {
     EditorSuggestTriggerInfo,
     TFile
 } from "obsidian";
-import { taskAsChecklist } from './file';
+import { renderTaskInstance } from './file/render';
 import ObsidianTaskManager from './main';
-import { getFileInstances } from './parse';
 import { Parser } from './parse/Parser';
-import { allTasks, iTask, ITask, updateFileInstances } from './store/orm';
+import { allTasks, iTask, ITask } from './store/orm';
+import { emptyTaskInstance } from './store/orm/models';
 
 
 export class TaskEditorSuggest extends EditorSuggest<ITask> {
@@ -73,33 +73,29 @@ export class TaskEditorSuggest extends EditorSuggest<ITask> {
     selectSuggestion( task: ITask, evt: MouseEvent | KeyboardEvent ): void {
         if ( this.context ) {
             const {
-                start, file
+                start, editor, end
             } = this.context;
+            const inst = emptyTaskInstance()
             const { id, name, complete } = task;
-            const cache = this.app.metadataCache.getFileCache( file );
-            const li = cache.listItems.find( i => i.position.start.line === start.line );
-            this.app.vault.cachedRead( file )
-                .then( contents => {
-                    const cache = this.app.metadataCache.getFileCache( file );
-                    const instances = getFileInstances( file.path, cache, contents, this.plugin.settings.parseOptions );
-                    const parentLine = li?.parent ?? -1;
-                    instances[ start.line ] = {
-                        id,
-                        name,
-                        complete,
-                        filePath: file.path,
-                        line: start.line,
-                        parentLine,
-                        ...(parentLine > -1 && { parentInstance: instances[ parentLine ] }),
-                        dueDate: task.dueDate,
-                        childLines: (cache.listItems ?? []).filter( l => l.parent === start.line )
-                            .map( li => Number.parseInt( li.id || '0', 16 ) ),
-                        rawText: taskAsChecklist( task ),
-                        tags: task.tags,
-                        links: []
-                    };
-                    this.plugin.store.dispatch( updateFileInstances( file.path, instances ) );
-                } );
+            const line = renderTaskInstance(
+                {
+                    ...inst,
+                    id, name, complete
+                },
+                '',
+                this.plugin.settings.tasksDirectory,
+                {
+                    ...this.plugin.settings.renderOptions,
+                    links: false,
+                    primaryLink: true,
+                }
+            )
+            this.plugin.readyForUpdate = true;
+            editor.replaceRange(
+                line,
+                start,
+                end
+            );
         }
     }
 }

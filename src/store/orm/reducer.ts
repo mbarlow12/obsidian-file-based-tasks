@@ -126,12 +126,16 @@ const createTaskReducer = (
         task.id = Math.max( task.id ?? 0, settings.minTaskId );
     }
     const props = taskCreatePropsFromITask( task );
-    const mTask = session.Task.create( props );
+    session.Task.create( props );
     if ( task.instances ) {
         task.instances.forEach( i => {
             session.TaskInstance.create( instancePropsFromITaskInstance( i ) )
         } );
     }
+    task.tags.forEach( tag => {
+        if ( !session.Tag.withId( tag ) )
+            session.Tag.create( { name: tag } );
+    } );
 }
 
 export const updateFileInstancesReducer = (
@@ -140,7 +144,7 @@ export const updateFileInstancesReducer = (
     session: TasksORMSession,
     settings: PluginSettings
 ) => {
-    const { Task, TaskInstance } = session;
+    const { Task, TaskInstance, Tag } = session;
 
     const existing = TaskInstance.filter( i => i.filePath === path ).all().toModelArray()
         .reduce( ( rec, inst ) => ({
@@ -178,6 +182,10 @@ export const updateFileInstancesReducer = (
                 ...(!Task.first() && { id: Math.max( inst.id ?? 0, settings.minTaskId ) }),
             } );
             inst.id = task.id;
+            inst.tags.forEach( tag => {
+                if ( !Tag.withId( tag ) )
+                    Tag.create( { name: tag } )
+            } );
         }
     }
 

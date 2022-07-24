@@ -1,10 +1,9 @@
-import { CachedMetadata, MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
+import { MarkdownView, MetadataCache, stringifyYaml, TFile, Vault } from 'obsidian';
 import path from 'path';
-import { ORM } from 'redux-orm';
 import { RRule } from 'rrule';
 import { AppHelper } from '../helper';
 import { taskUidToId } from '../store';
-import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances, TaskORMSchema } from '../store/orm';
+import { arraysEqual, instanceComparer, ITask, ITaskInstance, pathITaskInstances } from '../store/orm';
 import { DEFAULT_RENDER_OPTS } from '../store/settings';
 import { PluginState } from '../store/types';
 import { getVaultConfig, taskToBasename, taskToFilename } from './index';
@@ -184,15 +183,17 @@ export const writeTask = async (
 
 export const writeState = async (
     file: TFile,
-    cache: CachedMetadata,
-    state: PluginState,
-    orm: ORM<TaskORMSchema>,
-    currentInstances: ITaskInstance[],
-    isIndex = false,
+    newState: PluginState,
     init = false,
 ) => {
+    const { app: { metadataCache, workspace }, plugin } = AppHelper;
+    const { orm, state, settings } = plugin;
     const { useTab, tabSize } = getVaultConfig( file.vault );
-    const instances = pathITaskInstances( state.taskDb, orm )( file.path );
+    const instances = pathITaskInstances( newState.taskDb, orm )( file.path );
+    const currentInstances = plugin.selectFileInstances( state.taskDb, file.path );
+    const isIndex = file.path in settings.indexFiles;
+    const cache = metadataCache.getFileCache( file );
+    const cursorLine = workspace.getActiveViewOfType(MarkdownView).editor.getCursor().line;
     if ( !arraysEqual( instances, currentInstances, instanceComparer ) || isIndex ) {
         const lines = isIndex ?
                       new Array( instances.length ).fill( '' ) :
@@ -207,6 +208,8 @@ export const writeState = async (
             const taskItems = cache.listItems.filter( li => li.task );
             for ( let i = 0; i < taskItems.length; i++ ) {
                 const { line } = taskItems[ i ].position.start;
+                if (line === cursorLine)
+                    continue;
                 if ( !instances.find( newInst => newInst.line === line ) )
                     lines[ line ] = '';
             }
@@ -221,10 +224,7 @@ export const writeState = async (
 
 export const writeIndexFile = async (
     file: TFile,
-    cache: CachedMetadata,
-    state: PluginState,
-    orm: ORM<TaskORMSchema>,
-    currentInstances: ITaskInstance[]
+    newState: PluginState,
 ) => {
-    return writeState( file, cache, state, orm, currentInstances, true );
+    return writeState( file, newState);
 }
