@@ -165,7 +165,7 @@ export const updateFileInstancesReducer = (
         if ( inst.parentLine > -1 ) {
             if ( !inst.parentInstance )
                 inst.parentInstance = instances[ inst.parentLine ];
-            if ( instances[ inst.parentLine ].complete )
+            if ( inst.parentInstance.complete )
                 inst.complete = true;
         }
 

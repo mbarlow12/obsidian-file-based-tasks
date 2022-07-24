@@ -193,7 +193,7 @@ export const writeState = async (
     const currentInstances = plugin.selectFileInstances( state.taskDb, file.path );
     const isIndex = file.path in settings.indexFiles;
     const cache = metadataCache.getFileCache( file );
-    const cursorLine = workspace.getActiveViewOfType(MarkdownView).editor.getCursor().line;
+    const cursorLine = workspace.getActiveViewOfType(MarkdownView)?.editor.getCursor().line || -1;
     if ( !arraysEqual( instances, currentInstances, instanceComparer ) || isIndex ) {
         const lines = isIndex ?
                       new Array( instances.length ).fill( '' ) :

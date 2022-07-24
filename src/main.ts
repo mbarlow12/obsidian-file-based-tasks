@@ -216,7 +216,7 @@ export default class ObsidianTaskManager extends Plugin {
         this.registerEvent( this.app.vault.on( 'rename', this.handleFileRenamed.bind( this ) ) );
 
         this.registerEvent( this.app.workspace.on( 'file-open', async ( file ) => {
-            if ( this.currentFile && !this.ignorePath( this.currentFile.path ) ) {
+            if ( this.currentFile ) {
                 const cache = this.app.metadataCache.getFileCache( this.currentFile );
                 // @ts-ignore
                 if ( !this.currentFile.deleted && cache ) {
@@ -238,7 +238,7 @@ export default class ObsidianTaskManager extends Plugin {
         }, 100, true );
 
         this.registerEvent( this.app.metadataCache.on( 'changed', async ( file, data, cache ) => {
-            if ( this.app.workspace.getActiveFile() !== file || this.ignorePath( file.path ) )
+            if ( this.app.workspace.getActiveFile() !== file || this.ignorePath( file.path, false ) )
                 return;
             if ( this.readyForUpdate ) {
                 this.readyForUpdate = false;
@@ -253,8 +253,6 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     updateFileTasks( file: TFile, data: string, cache: CachedMetadata ) {
-        if ( !file || this.ignorePath( file.path ) )
-            return;
         const { parseOptions } = this.settings;
         const { taskDb } = this.store.getState();
         const instances = getFileInstances( file.path, cache, data, parseOptions );
@@ -333,11 +331,38 @@ export default class ObsidianTaskManager extends Plugin {
                 const { cache, contents } = await this.getFileData( file );
                 this.updateFromFile( file, cache, contents );
             }
-        } )
+        } );
+
+        // toggle task status
+        this.addCommand( {
+            id: 'toggle-task',
+            name: 'Toggle Task',
+            hotkeys: [],
+            editorCallback: ( editor, view ) => {
+                const cache = this.app.metadataCache.getFileCache( view.file );
+                const { line } = editor.getCursor();
+                const li = cache.listItems?.find( ( i ) => i.position.start.line === line );
+                if ( !li )
+                    return;
+                const lineStr = editor.getLine( line );
+                const match = lineStr.match( Parser.LINE_REGEX );
+                if ( !match )
+                    return;
+                const start = lineStr.indexOf( '[' ) + 1;
+                const end = lineStr.indexOf( ']' );
+                const complete = match.groups.complete !== ' ' ? ' ' : 'x';
+                this.readyForUpdate = true;
+                editor.replaceRange( complete, { line, ch: start }, { line, ch: end } );
+                // const parser = Parser.create( this.settings.parseOptions );
+                // const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
+                // if ( taskInstance && taskInstance.id > 0 )
+                //     this.store.dispatch( toggleTaskStatus( taskInstance ) );
+            }
+        } );
     }
 
     private updateFromFile( file: TFile, cache: CachedMetadata, contents: string ) {
-        if ( !file || this.ignorePath( file.path ) )
+        if ( !file || this.ignorePath( file.path, false ) )
             return;
         if ( isTaskFile( file, cache ) ) {
             this.updateTask( file, contents, cache );
@@ -347,9 +372,9 @@ export default class ObsidianTaskManager extends Plugin {
         }
     }
 
-    ignorePath( filePath: string ): boolean {
+    ignorePath( filePath: string, ignoreIdx = true ): boolean {
         if ( filePath in this.settings.indexFiles )
-            return true;
+            return ignoreIdx;
         return this.settings.ignoredPaths.reduce( ( ignored, p ) => ignored || filePath.includes( p ), false )
     }
 
@@ -376,7 +401,7 @@ export default class ObsidianTaskManager extends Plugin {
     }
 
     private async handleFileRenamed( abstractFile: TAbstractFile, oldPath: string ) {
-        if ( !abstractFile || this.ignorePath( abstractFile.path ) || !(abstractFile instanceof TFile) )
+        if ( !abstractFile || this.ignorePath( abstractFile.path, false ) || !(abstractFile instanceof TFile) )
             return;
 
         if ( abstractFile.path.includes( this.settings.tasksDirectory ) ) {
