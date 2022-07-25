@@ -50,3 +50,29 @@ export const emptyTask = (): ITask => {
     }
 }
 export const PLACEHOLDER_ID = -1;
+
+export interface StateTable<T, K extends Array<keyof T> = (keyof T)[]> {
+    fields: K;
+    key: keyof T;
+    items: Array<T[keyof T][]>;
+    index: [ string | number, number ][]
+}
+
+export interface Simple {
+    id: number;
+    name: string;
+    complete: boolean;
+    completed: number;
+    created: number;
+}
+
+const g: StateTable<Simple> = {
+    fields: [ 'id', 'name', 'complete', 'completed', 'created' ],
+    key: 'id',
+    items: [
+        [ 1, 'name 1', false, 1123123, 12313123 ]
+    ],
+    index: [
+        [ 1, 0 ]
+    ]
+};

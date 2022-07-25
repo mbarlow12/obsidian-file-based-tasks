@@ -252,7 +252,7 @@ export default class ObsidianTaskManager extends Plugin {
         this.store.dispatch( updateTaskAction( task ) );
     }
 
-    updateFileTasks( file: TFile, data: string, cache: CachedMetadata ) {
+    updateFileTasks( file: TFile, data: string, cache: CachedMetadata, removeCursorLine = true ) {
         const { parseOptions } = this.settings;
         const { taskDb } = this.store.getState();
         const instances = getFileInstances( file.path, cache, data, parseOptions );
@@ -261,7 +261,8 @@ export default class ObsidianTaskManager extends Plugin {
                 ...rec, [ mIt.line ]: iTaskInstance( mIt )
             }), {} as FileITaskInstanceRecord );
         const cursor = this.app.workspace.getActiveViewOfType( MarkdownView ).editor.getCursor();
-        delete instances[ cursor.line ];
+        if ( removeCursorLine )
+            delete instances[ cursor.line ];
         if ( !fileRecordsEqual( instances, existing ) )
             this.store.dispatch( updateFileInstances( file.path, instances ) );
     }
@@ -285,7 +286,16 @@ export default class ObsidianTaskManager extends Plugin {
             name: 'Delete Task',
             hotkeys: [],
             editorCallback: ( editor, view ) => {
-
+                const { line } = editor.getCursor();
+                const parser = Parser.create( this.settings.parseOptions );
+                const li = this.app.metadataCache.getFileCache( view.file ).listItems
+                    .find( lic => lic.position.start.line === line );
+                if ( !li )
+                    return;
+                const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
+                if ( !taskInstance || taskInstance.id <= 0 )
+                    return;
+                this.store.dispatch( deleteTask( taskInstance.id ) );
             }
         } );
         // go to task under cursor
@@ -329,7 +339,7 @@ export default class ObsidianTaskManager extends Plugin {
             editorCallback: async ( editor, view ) => {
                 const { file } = view;
                 const { cache, contents } = await this.getFileData( file );
-                this.updateFromFile( file, cache, contents );
+                this.updateFromFile( file, cache, contents, false );
             }
         } );
 
@@ -361,14 +371,14 @@ export default class ObsidianTaskManager extends Plugin {
         } );
     }
 
-    private updateFromFile( file: TFile, cache: CachedMetadata, contents: string ) {
+    private updateFromFile( file: TFile, cache: CachedMetadata, contents: string, removeCursor = true ) {
         if ( !file || this.ignorePath( file.path, false ) )
             return;
         if ( isTaskFile( file, cache ) ) {
             this.updateTask( file, contents, cache );
         }
         else {
-            this.updateFileTasks( file, contents, cache );
+            this.updateFileTasks( file, contents, cache, removeCursor );
         }
     }
 

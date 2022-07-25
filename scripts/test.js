@@ -3,6 +3,6 @@ function testFn(arg) {
     return `your arg is ${arg}`;
 }
 
-module.exports = {
+module.exports = () => ({
     testFn
-};
+});
