@@ -92,7 +92,13 @@ export const reducerCreator = ( orm: ORM<TaskORMSchema>, initialState: TasksORMS
             updateFileInstancesReducer( action.payload.path, action.payload.instances, session, settings );
             break;
         case TaskActionType.DELETE_TASK:
-            session.Task.withId( typeof action.payload === 'number' ? action.payload : action.payload.id ).delete()
+            deleteTask(
+                typeof action.payload === 'number'
+                ? action.payload
+                : action.payload.id,
+                session,
+                settings.deleteSubtaskWithTask
+            );
             break;
         case TaskActionType.UPDATE_TASK:
             break;
@@ -200,6 +206,27 @@ export const updateFileInstancesReducer = (
             throw new Error( `All ids should be valid ${inst.name} ${inst.id} ${inst.filePath}` );
         task.update( taskUpdatePropsFromITaskInstance( inst, task ) );
     }
+}
+
+const deleteTask = (
+    id: number,
+    session: TasksORMSession,
+    deleteSubtasks = false
+) => {
+    const task = session.Task.withId( id );
+    if ( !task )
+        return;
+    if ( !deleteSubtasks ) {
+        task.instances.all().toModelArray().forEach( ( i ) => {
+            i.subTaskInstances.update( {
+                parentInstance: i.parentInstance ? instancesKey(i.parentInstance.filePath, i.parentInstance.line) : undefined,
+                parentLine: i.parentLine,
+                parent: i.parent?.id
+            } );
+        } );
+    }
+    task.instances.delete();
+    task.delete();
 }
 
 const deleteFile = (

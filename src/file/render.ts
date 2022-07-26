@@ -112,9 +112,9 @@ export const renderTaskInstance = (
 }
 
 export const getIndent = ( instance: ITaskInstance, useTab = false, tabSize = 4 ) => {
-    const rawPad = instance.rawText.match( /^\s+/ );
-    if ( rawPad )
-        return rawPad[ 0 ];
+    // const rawPad = instance.rawText.match( /^\s+/ );
+    // if ( rawPad )
+    //     return rawPad[ 0 ];
 
     let pad = '';
     let { parentLine, parentInstance } = instance;
@@ -193,7 +193,7 @@ export const writeState = async (
     const currentInstances = plugin.selectFileInstances( state.taskDb, file.path );
     const isIndex = file.path in settings.indexFiles;
     const cache = metadataCache.getFileCache( file );
-    const cursorLine = workspace.getActiveViewOfType(MarkdownView)?.editor.getCursor().line || -1;
+    const cursorLine = workspace.getActiveViewOfType( MarkdownView )?.editor.getCursor().line || -1;
     if ( !arraysEqual( instances, currentInstances, instanceComparer ) || isIndex ) {
         const lines = isIndex ?
                       new Array( instances.length ).fill( '' ) :
@@ -208,14 +208,14 @@ export const writeState = async (
             const taskItems = cache.listItems.filter( li => li.task );
             for ( let i = 0; i < taskItems.length; i++ ) {
                 const { line } = taskItems[ i ].position.start;
-                if (line === cursorLine)
+                if ( line === cursorLine && !currentInstances.find( i => i.line === line ) )
                     continue;
                 if ( !instances.find( newInst => newInst.line === line ) )
-                    lines[ line ] = '';
+                    lines[ line ] = null
             }
         }
         const { mtime } = file.stat;
-        await file.vault.modify( file, lines.join( '\n' ) );
+        await file.vault.modify( file, lines.filter( l => l !== null ).join( '\n' ) );
         if ( init )
             file.stat.mtime = mtime;
     }
@@ -226,5 +226,5 @@ export const writeIndexFile = async (
     file: TFile,
     newState: PluginState,
 ) => {
-    return writeState( file, newState);
+    return writeState( file, newState );
 }
