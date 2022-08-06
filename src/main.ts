@@ -26,7 +26,14 @@ import {
     TasksORMState,
     updateFileInstances
 } from './store/orm';
-import { deleteFile, deleteTask, isTaskAction, renameFileAction, updateTaskAction } from './store/orm/actions';
+import {
+    deleteFile,
+    deleteTask,
+    isTaskAction,
+    renameFileAction,
+    toggleTaskStatus,
+    updateTaskAction
+} from './store/orm/actions';
 import { repopulateIndexFiles, updateFileInstancesReducer } from './store/orm/reducer';
 import { FileITaskInstanceRecord } from './store/orm/types';
 import { DEFAULT_SETTINGS, SettingsAction } from './store/settings';
@@ -221,7 +228,7 @@ export default class ObsidianTaskManager extends Plugin {
                 // @ts-ignore
                 if ( !this.currentFile.deleted && cache ) {
                     const contents = await this.app.vault.cachedRead( this.currentFile );
-                    this.updateFromFile( this.currentFile, cache, contents );
+                    this.updateFromFile( this.currentFile, cache, contents, false );
                 }
             }
             this.currentFile = file;
@@ -361,12 +368,11 @@ export default class ObsidianTaskManager extends Plugin {
                 const start = lineStr.indexOf( '[' ) + 1;
                 const end = lineStr.indexOf( ']' );
                 const complete = match.groups.complete !== ' ' ? ' ' : 'x';
-                this.readyForUpdate = true;
                 editor.replaceRange( complete, { line, ch: start }, { line, ch: end } );
-                // const parser = Parser.create( this.settings.parseOptions );
-                // const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
-                // if ( taskInstance && taskInstance.id > 0 )
-                //     this.store.dispatch( toggleTaskStatus( taskInstance ) );
+                const parser = Parser.create( this.settings.parseOptions );
+                const taskInstance = parser.parseInstanceFromLine( editor.getLine( line ), view.file.path, li );
+                if ( taskInstance && taskInstance.id > 0 )
+                    this.store.dispatch( toggleTaskStatus( taskInstance ) );
             }
         } );
     }
