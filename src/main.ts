@@ -1,6 +1,4 @@
-import { configureStore, createSelector, Selector, Store } from '@reduxjs/toolkit';
 import { App, CachedMetadata, debounce, MarkdownView, Plugin, PluginManifest, TAbstractFile, TFile } from 'obsidian';
-import { ORM } from 'redux-orm';
 import { deleteTaskDataFromFile, getTasksFolder, isTaskFile, removeTaskDataFromContents } from './file';
 import { taskFullPath, writeState, writeTask } from './file/render';
 import { AppHelper } from './helper';
@@ -43,16 +41,11 @@ import { TaskEditorSuggest } from './TaskSuggest';
 
 export default class ObsidianTaskManager extends Plugin {
     taskSuggest: TaskEditorSuggest;
-    store: Store<PluginState, TaskAction | SettingsAction>;
-    orm: ORM<TaskORMSchema>;
     state: PluginState;
     readyForUpdate = false;
     private currentFile: TFile;
     private vaultLoaded = false;
     private initialized = false;
-    selectFiles: Selector<TasksORMState, string[]>;
-    selectFileInstances: Selector<TasksORMState, ITaskInstance[]>;
-    selectCurrentIds: Selector<TasksORMState, number[]>
 
     constructor( app: App, manifest: PluginManifest ) {
         super( app, manifest );
@@ -66,34 +59,11 @@ export default class ObsidianTaskManager extends Plugin {
                 await this.initStore();
                 this.taskSuggest = new TaskEditorSuggest( app, this );
                 this.registerEditorSuggest( this.taskSuggest );
-                this.selectFiles = createSelector(
-                    ( s: TasksORMState ) => Object.values( s.TaskInstance.itemsById ),
-                    instRefs => instRefs.map( r => r.filePath )
-                        .filter( ( path, i, arr ) => arr.indexOf( path ) === i )
-                );
-
-                this.selectFileInstances = createSelector(
-                    [
-                        ( s: TasksORMState ) => this.orm.session( s ).TaskInstance,
-                        ( s: TasksORMState, path: string ) => path
-                    ],
-                    ( task, path ) => task.filter( t => t.filePath === path )
-                        .orderBy( [ 'line' ] )
-                        .toModelArray()
-                        .map( m => iTaskInstance( m ) )
-                );
-
-                this.selectCurrentIds = createSelector(
-                    ( s: TasksORMState ) => [ ...s.Task.items ].sort(),
-                    ids => ids
-                );
                 if ( !this.vaultLoaded )
                     await this.processVault();
                 this.registerEvents();
                 this.registerCommands();
-                this.store.subscribe( () => this.handleStoreUpdate() );
                 await this.handleStoreUpdate();
-                this.currentFile = this.app.workspace.getActiveFile();
                 this.initialized = true;
             }
         } );

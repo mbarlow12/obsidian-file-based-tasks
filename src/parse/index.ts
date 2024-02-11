@@ -3,7 +3,7 @@ import { ITaskYamlObject } from '../file';
 import { ITask, ITaskInstance } from '../store/orm';
 import { FileITaskInstanceRecord } from '../store/orm/types';
 import { ParseOptions } from '../store/settings';
-import { LOC_DELIM, pos } from '../Task';
+import { LOC_DELIM, pos } from '../util';
 import { readTaskYaml, taskYamlFromFrontmatter } from './frontmatter';
 import { Parser, TASK_BASENAME_REGEX } from './Parser';
 

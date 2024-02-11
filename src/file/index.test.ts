@@ -1,6 +1,6 @@
 import { CachedMetadata, TFile } from "obsidian";
 import { ITaskInstance } from '../store/orm';
-import { LOC_DELIM } from '../Task';
+import { LOC_DELIM } from '../util';
 
 const testContents1 = `- [ ] t1
 - [ ] t2
