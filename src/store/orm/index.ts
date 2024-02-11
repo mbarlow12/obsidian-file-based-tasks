@@ -1,7 +1,8 @@
-import { Comparer } from '@reduxjs/toolkit';
 import { MTask, Task } from './models';
 import { TasksORMSession } from './schema';
-import { FileITaskInstanceRecord, ITask, ITaskInstance } from './types';
+import { FileITaskInstanceRecord } from './types';
+import { OldTask } from "task/types";
+import { OldTaskInstance } from "task/types";
 
 export const filterUnique = <T>(
     arr: T[],
@@ -36,7 +37,7 @@ export const removeUndefined = <T extends Record<keyof T, unknown>>( obj: T ): T
     return ret;
 }
 
-export const instanceComparer: Comparer<ITaskInstance> = ( a, b ) => {
+export const instanceComparer: Comparer<OldTaskInstance> = ( a, b ) => {
     if (
         a.id !== b.id ||
         a.name !== b.name ||
@@ -50,7 +51,7 @@ export const instanceComparer: Comparer<ITaskInstance> = ( a, b ) => {
     return 1;
 };
 
-export const instancesEqual = ( a: ITaskInstance, b: ITaskInstance ) => instanceComparer( a, b ) === 1
+export const instancesEqual = ( a: OldTaskInstance, b: OldTaskInstance ) => instanceComparer( a, b ) === 1
 
 export const fileRecordsEqual = ( a: FileITaskInstanceRecord, b: FileITaskInstanceRecord ) => {
     if ( Object.keys( a ).length !== Object.keys( b ).length )
@@ -65,7 +66,7 @@ export const fileRecordsEqual = ( a: FileITaskInstanceRecord, b: FileITaskInstan
     return true;
 };
 
-export const instanceSorter = ( a: ITaskInstance, b: ITaskInstance ) => {
+export const instanceSorter = ( a: OldTaskInstance, b: OldTaskInstance ) => {
     if ( a.filePath < b.filePath )
         return -1;
     else if ( b.filePath < a.filePath )
@@ -75,22 +76,22 @@ export const instanceSorter = ( a: ITaskInstance, b: ITaskInstance ) => {
     }
 }
 
-export const iTaskComparer: Comparer<ITask> = ( a, b ) => {
+export const iTaskComparer: Comparer<OldTask> = ( a, b ) => {
     if (
         a.id !== b.id || a.name !== b.name || a.complete !== b.complete || a.dueDate !== b.dueDate
         || !arraysEqual<string>( a.tags.sort(), b.tags.sort() )
-        || !arraysEqual<ITaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ), instanceComparer )
+        || !arraysEqual<OldTaskInstance>( a.instances.sort( instanceSorter ), b.instances.sort( instanceSorter ), instanceComparer )
         || !arraysEqual( a.childIds.sort(), b.childIds.sort() ) || !arraysEqual( a.parentIds.sort(), b.parentIds.sort() )
     )
         return 0;
     return 1;
 }
 
-export const tasksEqual = ( a: ITask, b: ITask ) => {
+export const tasksEqual = ( a: OldTask, b: OldTask ) => {
     return iTaskComparer( a, b ) === 1;
 };
 
-export const instanceIsOfTask = ( instance: ITaskInstance, task: MTask ): boolean => {
+export const instanceIsOfTask = ( instance: OldTaskInstance, task: MTask ): boolean => {
     if (
         (instance.id > 0 && instance.id !== task.id)
         || instance.name !== task.name
@@ -154,7 +155,6 @@ export type {
     ITask,
     ITaskInstanceRecord,
     ITaskInstance,
-    RefFilter
 } from './types'
 export * from './selectors';
 export * from './transforms';

@@ -1,10 +1,7 @@
-import { createDraftSafeSelector, createSelector, Selector } from '@reduxjs/toolkit';
-import { createSelector as createOrmSelector, ModelType, ORM } from 'redux-orm';
 import { PluginState } from '../types';
 import { MTask, Task, TaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema';
 import { iTaskInstance } from './transforms';
-import { RefFilter } from './types';
 
 const ormSelector = <R>( selector: Selector<TasksORMState, R, [ ORM<TaskORMSchema> ]> ) => (
     s: TasksORMState,

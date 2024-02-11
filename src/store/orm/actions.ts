@@ -1,7 +1,7 @@
-import { createAction, Dictionary } from '@reduxjs/toolkit';
-import { CreateProps } from 'redux-orm';
 import { Task } from './models';
-import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
+import { FileITaskInstanceRecord, ITaskCreate } from './types';
+import { OldTask } from "task/types";
+import { OldTaskInstance } from "task/types";
 
 export enum TaskActionType {
     CREATE_TASK = 'CREATE_TASK',
@@ -39,19 +39,19 @@ export interface CreateTaskAction {
 
 export interface DeleteTaskAction {
     type: TaskActionType.DELETE_TASK,
-    payload: ITask | number
+    payload: OldTask | number
 }
 
 export interface UpdateTaskAction {
     type: TaskActionType.UPDATE_TASK,
-    payload: Partial<ITask>
+    payload: Partial<OldTask>
 }
 
 export interface DeleteFileAction {
     type: TaskActionType.DELETE_FILE,
     payload: {
         path: string,
-        data?: ITask | ITaskInstance[]
+        data?: OldTask | OldTaskInstance[]
     }
 }
 
@@ -65,27 +65,27 @@ export interface RenameFileAction {
 
 export interface ToggleTaskComplete {
     type: TaskActionType.TOGGLE_COMPLETE,
-    payload: number | ITask | ITaskInstance
+    payload: number | OldTask | OldTaskInstance
 }
 
 export interface ArchiveTasksAction {
     type: TaskActionType.ARCHIVE_TASKS,
-    payload: number[] | ITask[]
+    payload: number[] | OldTask[]
 }
 
 export interface UnarchiveTasksAction {
     type: TaskActionType.UNARCHIVE_TASKS,
-    payload: number[] | ITask[]
+    payload: number[] | OldTask[]
 }
 
 export interface RefreshRecurrencesAction {
     type: TaskActionType.REFRESH_RECURRENCES,
-    payload: Dictionary<never>
+    payload: never
 }
 
 export interface RehydrateAction {
     type: TaskActionType.REHYDRATE,
-    payload: Dictionary<never>
+    payload: never
 }
 
 export type TaskAction = CreateTaskAction
@@ -108,7 +108,7 @@ export const updateFileInstances = (
     payload: { path, instances }
 });
 
-export const createTask = ( task: ITask | CreateProps<Task> ): CreateTaskAction => {
+export const createTask = ( task: OldTask | CreateProps<Task> ): CreateTaskAction => {
     const props: ITaskCreate = {
         name: task.name,
     };

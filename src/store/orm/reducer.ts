@@ -21,7 +21,9 @@ import {
 import { instancesKey, MTask, MTaskInstance } from './models';
 import { TaskORMSchema, TasksORMSession, TasksORMState } from './schema'
 import { filePathInstances } from './selectors';
-import { FileITaskInstanceRecord, ITask, ITaskCreate, ITaskInstance } from './types';
+import { FileITaskInstanceRecord, ITaskCreate } from './types';
+import { OldTask } from "task/types";
+import { OldTaskInstance } from "task/types";
 
 export const repopulateIndexFiles = (
     session: OrmSession<TaskORMSchema>,
@@ -233,7 +235,7 @@ const deleteFile = (
     dbState: TasksORMState,
     session: TasksORMSession,
     path: string,
-    data?: ITask | ITaskInstance[] | undefined,
+    data?: OldTask | OldTaskInstance[] | undefined,
     deleteSubtasks = false,
 ) => {
     filePathInstances( session.state, session )( path ).delete();

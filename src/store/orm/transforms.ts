@@ -10,7 +10,8 @@ import {
     TaskProps
 } from './index';
 import { instancesKey, MTask, MTaskInstance, tagsEqual } from './models';
-import { ITaskCreate, ITaskInstance } from './types';
+import { ITaskCreate } from './types';
+import { OldTaskInstance } from "task/types";
 
 export const taskCreatePropsFromITask = ( iTask: ITaskCreate ): CreateProps<Task> => {
     const {
@@ -62,7 +63,7 @@ export const instancePropsFromTask = (
     } );
 }
 
-export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): CreateProps<TaskInstance> => {
+export const instancePropsFromITaskInstance = ( instance: OldTaskInstance ): CreateProps<TaskInstance> => {
     const {
         id,
         filePath,
@@ -87,7 +88,7 @@ export const instancePropsFromITaskInstance = ( instance: ITaskInstance ): Creat
     }
 }
 
-export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, InstanceFields> ): ITaskInstance => {
+export const iTaskInstance = ( instRef: SessionBoundModel<TaskInstance, InstanceFields> ): OldTaskInstance => {
     const {
         line,
         parentLine,
@@ -146,7 +147,7 @@ export const taskCreatePropsFromInstance = ( {
     complete,
     dueDate,
     completed,
-}: ITaskInstance ): TaskProps => removeUndefined( {
+}: OldTaskInstance ): TaskProps => removeUndefined( {
     name,
     complete,
     tags,
@@ -156,7 +157,7 @@ export const taskCreatePropsFromInstance = ( {
 } );
 
 export const taskUpdatePropsFromITaskInstance = (
-    { name, complete, tags, dueDate }: ITaskInstance,
+    { name, complete, tags, dueDate }: OldTaskInstance,
     task: SessionBoundModel<Task>
 ): UpdateProps<Task> => {
     const props: UpdateProps<Task> = removeUndefined( {

@@ -1,5 +1,5 @@
 import { arraysEqual } from './index';
-import { ITask } from './types';
+import { OldTask } from "task/types";
 
 export enum Operator {
     EQ = 'EQ',
@@ -12,7 +12,7 @@ export enum Operator {
     INCLUDES = 'INCLUDES',
 }
 
-type ITaskNoInst = Omit<ITask, 'instances'>
+type ITaskNoInst = Omit<OldTask, 'instances'>
 export type TaskQueryBlock = [ keyof ITaskNoInst, Operator, ITaskNoInst[keyof ITaskNoInst] ];
 
 export type TaskQuery =
@@ -25,7 +25,7 @@ export enum SortDirection {
     DESC = 'DESC'
 }
 
-export type TaskSort = [ keyof ITask, SortDirection ];
+export type TaskSort = [ keyof OldTask, SortDirection ];
 
 export type IndexSetting = {
     query: TaskQuery,

@@ -1,13 +1,13 @@
 import { emptyTask } from './models';
 import { Operator, queryToComparer, TaskQuery } from './query';
-import { ITask } from './types';
+import { OldTask } from "task/types";
 
 describe( 'TaskQuery', () => {
 
     it( 'should handle a single query block', () => {
         const q: TaskQuery = [ 'name', Operator.EQ, 'task 1' ];
         const comparer = queryToComparer( q );
-        const task: ITask = {
+        const task: OldTask = {
             ...emptyTask(),
             name: 'task 1'
         };
@@ -16,7 +16,7 @@ describe( 'TaskQuery', () => {
 
     it( 'should handle all operators', () => {
         let q: TaskQuery = [ 'id', Operator.GT, 1 ];
-        let task: ITask = {
+        let task: OldTask = {
             ...emptyTask(),
             id: 1
         };

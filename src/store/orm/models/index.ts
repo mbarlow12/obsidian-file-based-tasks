@@ -1,4 +1,5 @@
-import { ITask, ITaskInstance } from '../types';
+import { OldTask } from "task/types";
+import { OldTaskInstance } from "task/types";
 
 export { Task } from './task.model';
 export { TaskInstance } from './instance.model';
@@ -10,7 +11,7 @@ export type { TagFields, MTag } from './tag.model';
 export const MIN_ID = 10000;
 export const INSTANCE_KEY_DELIM = '||';
 export const instancesKey = (
-    pathOrInst: string | ITaskInstance,
+    pathOrInst: string | OldTaskInstance,
     line = 0,
     delimiter = INSTANCE_KEY_DELIM
 ) => {
@@ -20,7 +21,7 @@ export const instancesKey = (
     }
     return [ pathOrInst, line ].join( delimiter )
 };
-export const emptyTaskInstance = (): ITaskInstance => {
+export const emptyTaskInstance = (): OldTaskInstance => {
     return {
         id: 0,
         complete: false,
@@ -34,7 +35,7 @@ export const emptyTaskInstance = (): ITaskInstance => {
         childLines: [],
     };
 };
-export const emptyTask = (): ITask => {
+export const emptyTask = (): OldTask => {
     const { id, complete, name } = emptyTaskInstance();
     return {
         id,

@@ -1,4 +1,3 @@
-import { attr, CreateProps, fk, Model, QuerySet, SessionBoundModel } from 'redux-orm';
 import { Task } from '../models';
 
 export interface InstanceFields {
