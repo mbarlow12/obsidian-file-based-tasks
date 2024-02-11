@@ -1,10 +1,12 @@
+#VSCode
+.vscode
+
 # Intellij
 *.iml
 .idea
 
 # npm
 node_modules
-package-lock.json
 
 # build
 main.js
@@ -12,6 +14,6 @@ main.js
 
 # obsidian
 data.json
-dist.sh
-dist/
+.DS_Store
+
 local.config.js

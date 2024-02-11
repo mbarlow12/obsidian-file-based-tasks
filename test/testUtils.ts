@@ -1,6 +1,6 @@
 import { Pos } from 'obsidian';
 import { ITaskInstance } from '../src/store/orm';
-import { pos } from '../src/Task';
+import { pos } from '../src/util';
 
 export const getDate = () => {
     const d = new Date();
