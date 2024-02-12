@@ -1,4 +1,3 @@
-
 # Obsidian File-based Tasks
 
 ### Why?
